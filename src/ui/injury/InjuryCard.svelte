@@ -21,9 +21,19 @@
   const days = $derived(daysSince(injury.startDate, t));
   const outage = $derived(isOutage(injury));
   let confirmEnd = $state(false);
+  let expanded = $state(false);   // standardmäßig nur kurze Info, Details auf Tipp
 </script>
 
-<section class="card inj">
+<section class="card inj" class:compact={!expanded}>
+  <button class="summary" onclick={() => (expanded = !expanded)} aria-expanded={expanded}>
+    <span class="sdot"></span>
+    <span class="stxt">
+      <b>{outage ? 'Ernste Verletzung' : 'Verletzung'}: {injury.region}{injury.side !== 'keine' && injury.side !== 'beidseitig' ? ' ' + injury.side : ''}</b>
+      <small>Tag {days + 1} · {outage ? 'nur erlaubte Bewegungen' : `Stufe ${injury.stage + 1}/${STAGES.length}: ${STAGES[injury.stage].label}`}{hint ? ' · Hinweis beachten' : ''}</small>
+    </span>
+    <i class:rot={expanded}>›</i>
+  </button>
+  {#if expanded}
   <div class="head">
     <div>
       <span class="kicker">{outage ? 'Ernste Verletzung' : 'Verletzungsmodus'}</span>
@@ -74,10 +84,20 @@
     <button class="btn primary" onclick={next}>{injury.stage === LAST_STAGE - 1 ? 'Abschließen' : 'Nächste Stufe'}</button>
   </div>
   {/if}
+  {/if}
 </section>
 
 <style>
   .inj { border: 2px solid var(--red); }
+  .inj.compact { border-width: 0 0 0 5px; padding: 4px 16px; }
+  .summary { width: 100%; display: flex; align-items: center; gap: 10px; background: none; border: none; font: inherit; color: var(--text); text-align: left; padding: 8px 0; cursor: pointer; }
+  .sdot { width: 10px; height: 10px; border-radius: 50%; background: var(--red); flex-shrink: 0; }
+  .stxt { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+  .stxt small { font-size: 13px; color: var(--muted); }
+  .summary i { font-style: normal; color: var(--muted); font-size: 22px; transition: transform .2s; }
+  .summary i.rot { transform: rotate(90deg); }
+  .compact .summary { padding: 8px 0; }
+  .inj:not(.compact) .summary { border-bottom: 1px solid var(--line); margin-bottom: 10px; }
   .head { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
   .kicker { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--red); font-weight: 700; }
   h2 { margin: 2px 0 0; }

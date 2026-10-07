@@ -279,7 +279,7 @@ export function buildWeek(ws: string, ctx: PlanContext): PlanWeek {
 
   let out = applyEvents(sessions, ctx.events, ws);
   out = applyVacation(out, ctx.vacations ?? [], !!g);
-  if (ctx.injury) out = applyInjury(out, ctx.injury);
+  if (ctx.injury) out = applyInjury(out, ctx.injury, ws, ctx.vacations ?? []);
   out = applyEdits(out, ctx.edits);
   const used = new Set<string>();
   out = applyDone(out, ctx.activities, ctx.today, used);
@@ -349,20 +349,31 @@ function alternativeSport(inj: Injury, not: Movement): { sport: PlanSport; label
     if (m !== not && inj.movement[m] === 'geht') return { sport, label };
   return null;
 }
-export function applyInjury(list: PlanSession[], inj: Injury): PlanSession[] {
+/** Minuten-Faktor, damit eine Ersatzsportart ungefähr dieselbe Belastung bringt wie Laufen. */
+const EQUIV: Partial<Record<PlanSport, number>> = { rad: 1.3, schwimmen: 1.0, gehen: 1.5 };
+function altDetails(sport: PlanSport, intensity: Intensity, orig: string): string {
+  const base = `Ersatz für ${orig}`;
+  if (sport === 'rad') return intensity === 'hart' ? `${base}: 15 min einfahren, 4–5 × 6 min zügig (schwer atmend, aber kontrolliert), 3 min locker, ausfahren.`
+    : intensity === 'mittel' ? `${base}: gleichmäßig, darin 3 × 10 min zügig.` : `${base}: locker und gleichmäßig, hohe Trittfrequenz.`;
+  if (sport === 'schwimmen') return intensity === 'hart' ? `${base}: einschwimmen, 10 × 100 m zügig mit 20 s Pause, ausschwimmen.`
+    : `${base}: ruhig und gleichmäßig, Technik sauber halten.`;
+  return `${base}: zügig gehen/wandern, gern bergauf.`;
+}
+export function applyInjury(list: PlanSession[], inj: Injury, ws?: string, vacations: Vacation[] = []): PlanSession[] {
   const outage = isOutage(inj);
   const stage = inj.stage;
   const label = outage ? 'Ernste Verletzung' : `Verletzung, Stufe „${STAGES[stage].label}“`;
   if (!outage && stage === 0) return [];                                       // Pause: nichts planen
   const factor = outage ? 1 : STAGE_VOLUME[stage];
   const out: PlanSession[] = [];
+  let blocked = 0;   // Einheiten, die wegen der Verletzung ersetzt werden mussten oder weggefallen sind
   for (const s of list) {
     if (s.sport === 'wettkampf') { out.push({ ...s, notes: [...s.notes, `${label} – prüfe, ob der Wettkampf machbar ist.`] }); continue; }
     if (s.sport === 'kraft') {
       let gs = (s.groups ?? []).flatMap(g => (g === 'ganzkoerper' ? ['push', 'pull', 'beine', 'rumpf'] as MuscleGroup[] : [g]));
       if (inj.movement.beinkraft === 'nicht') gs = gs.filter(g => g !== 'beine');
       if (inj.movement.oberkoerper === 'nicht') gs = gs.filter(g => g !== 'push' && g !== 'pull');
-      if (!gs.length) continue;
+      if (!gs.length) { blocked++; continue; }
       const limited = (gs.includes('beine') && inj.movement.beinkraft === 'eingeschraenkt') || ((gs.includes('push') || gs.includes('pull')) && inj.movement.oberkoerper === 'eingeschraenkt');
       out.push({ ...s, groups: gs, title: `Kraft · ${gs.map(groupLabel).join(' + ')}`, intensity: limited ? 'locker' : s.intensity,
         notes: [...s.notes, `${label}: nur erlaubte Muskelgruppen${limited ? ', vorsichtig und leicht' : ''}.`] });
@@ -383,12 +394,35 @@ export function applyInjury(list: PlanSession[], inj: Injury): PlanSession[] {
         continue;
       }
     }
-    if (st === 'geht' && !notMoves && (outage || stage >= 2 || s.sport !== 'lauf')) { out.push({ ...s, minutes: r5(s.minutes * (outage ? 1 : Math.max(factor, 0.5))), notes: [...s.notes, `${label}.`] }); continue; }
+    // Nicht betroffene Sportart (z. B. Rad bei Schulterverletzung): bleibt voll – hilft, fit zu bleiben
+    if (st === 'geht' && !notMoves && (outage || stage >= 2 || s.sport !== 'lauf')) { out.push({ ...s, notes: [...s.notes, `${label}: nicht betroffen, bleibt voll.`] }); continue; }
     if (st === 'eingeschraenkt' && !notMoves) { out.push({ ...s, intensity: 'locker', minutes: r5(s.minutes * 0.7), title: s.title + ' (locker)', details: 'Nur locker und kürzer. Bei Schmerz abbrechen.', notes: [`${label}: eingeschränkt.`] }); continue; }
     const alt = alternativeSport(inj, mv);
+    blocked++;
     if (!alt) continue;
-    out.push({ ...s, sport: alt.sport, title: `${alt.label} statt ${s.title}`, intensity: 'locker', minutes: r5(s.minutes * 0.8),
-      details: `Ersatz für ${s.title}: locker und gleichmäßig.`, notes: [`${label}: ${MOVEMENTS.find(m => m.id === mv)?.label} geht nicht – Alternative.`] });
+    // Ersatz mit vergleichbarer Belastung: längere Dauer je nach Sportart, Intensität bleibt (Gehen höchstens mittel)
+    const intensity: Intensity = alt.sport === 'gehen' && s.intensity === 'hart' ? 'mittel' : s.intensity;
+    out.push({ ...s, sport: alt.sport, title: `${alt.label} statt ${s.title}`, intensity, minutes: r5(Math.min(s.minutes * (EQUIV[alt.sport] ?? 1), 240)),
+      details: altDetails(alt.sport, intensity, s.title), notes: [`${label}: ${MOVEMENTS.find(m => m.id === mv)?.label} geht nicht – gleichwertiger Ersatz.`] });
+  }
+  // Ausgleich: eine zusätzliche Einheit in einer erlaubten Sportart an einem freien Tag (nicht im Urlaub)
+  if (blocked > 0 && ws) {
+    const free = [6, 3, 1, 4, 5, 2, 0].map(i => addDays(ws, i))
+      .find(d => !out.some(x => x.date === d) && !list.some(x => x.date === d && x.sport === 'wettkampf') && !vacations.some(v => d >= v.start && d <= v.end));
+    if (free) {
+      const day = (Date.parse(free) - Date.parse(ws)) / 86400000;
+      const endu = (['rad', 'schwimmen', 'gehen'] as const).find(sp => inj.movement[sp === 'gehen' ? 'gehen' : sp] === 'geht');
+      if (endu) {
+        const sport: PlanSport = endu, mins = endu === 'rad' ? 75 : endu === 'schwimmen' ? 45 : 90;
+        out.push({ ...S(ws, day, 'ausgleich', sport, `Ausgleich: ${endu === 'rad' ? 'Rad' : endu === 'schwimmen' ? 'Schwimmen' : 'Wandern'} Grundlage`, mins, 'mittel',
+          'Gleichmäßig im Grundlagenbereich, die letzten 15 min etwas zügiger. Hält deine Ausdauer, während die Verletzung andere Einheiten blockiert.'),
+          notes: [`${label}: zusätzliche Ausgleichseinheit.`] });
+      } else {
+        const gs: MuscleGroup[] = inj.movement.oberkoerper !== 'nicht' ? ['push', 'pull', 'rumpf'] : inj.movement.beinkraft !== 'nicht' ? ['beine', 'rumpf'] : [];
+        if (gs.length) out.push({ ...kraft(ws, day, 'ausgleich', gs, false, false), title: `Ausgleich Kraft · ${gs.map(groupLabel).join(' + ')}`,
+          notes: [`${label}: zusätzliche Krafteinheit für die freien Muskelgruppen.`] });
+      }
+    }
   }
   return out;
 }

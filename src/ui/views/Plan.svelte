@@ -13,6 +13,7 @@
 
   const t = today();
   let offset = $state(0);
+  let modeOpen = $state(false);   // Wochen-/Wettkampfinfo standardmäßig eingeklappt
   const ws = $derived(addDays(weekStart(t), offset * 7));
   // Plan neu berechnen, sobald sich Woche oder Daten ändern (Aktivitäten, Ziele, Änderungen, Verletzung …)
   let planData = $state.raw<Awaited<ReturnType<typeof planWeeks>> | null>(null);
@@ -63,7 +64,23 @@
 {#if planData && planData.weeks[0].weekStart === ws}
   {@const w = planData.weeks[0]}
   {@const goal = planData.ctx.goal}
-  <section class="card mode">
+  <section class="card mode" class:compact={!modeOpen}>
+    <button class="summary" onclick={() => (modeOpen = !modeOpen)} aria-expanded={modeOpen}>
+      <span class="stxt">
+        {#if goal}
+          <b>{goalLabel(goal)} · {fmtDay(goal.date, { day: '2-digit', month: '2-digit' })}</b>
+          <small>{PHASE_LABEL[w.phase]}{w.weekNo ? ` · Woche ${w.weekNo}/${w.totalWeeks}` : ''} · noch {weeksTo(goal.date)} Wochen · ≈ {dur(w.minutes)}</small>
+        {:else}
+          <b>{w.phase === 'urlaub' ? 'Urlaubswoche' : w.phase === 'erholung' ? 'Erholungswoche' : 'Standardwoche'} · 3× Kraft · {$runs}× Laufen</b>
+          <small>≈ {dur(w.minutes)} gesamt{w.runMinutes ? ` · Laufen ${dur(w.runMinutes)}` : ''}</small>
+        {/if}
+      </span>
+      <i class:rot={modeOpen}>›</i>
+    </button>
+    {#if w.extra.length && !modeOpen}
+      <p class="extra">Außerplanmäßig: {w.extra.map(e => e.text).join(', ')}{w.adjusted ? ' → Plan angepasst' : ''}</p>
+    {/if}
+    {#if modeOpen}
     {#if goal}
       <div class="mh">
         <span class="kicker">Wettkampf · noch {weeksTo(goal.date)} Wochen</span>
@@ -87,6 +104,7 @@
       <p class="extra">Außerplanmäßig: {w.extra.map(e => `${e.text} (Belastung ${e.load})`).join(', ')}{w.adjusted ? ' → restliche Einheiten angepasst' : ''}</p>
     {/if}
     <p class="sum muted small">Diese Woche ≈ {dur(w.minutes)} gesamt{w.runMinutes ? ` · Laufen ${dur(w.runMinutes)}` : ''} · Paces {w.paces.source === 'ziel' ? 'aus Zielzeit' : w.paces.source === 'verlauf' ? 'aus deinen Läufen' : 'Standardwerte'}: locker {fmtPace(w.paces.easy)}, Schwelle {fmtPace(w.paces.threshold)} min/km</p>
+    {/if}
   </section>
 
   {#if planData.ctx.injury}
@@ -170,6 +188,14 @@
   .wnav button { border: none; background: none; color: var(--text); font: inherit; font-size: 20px; width: 38px; height: 34px; border-radius: 99px; cursor: pointer; }
   .wnav button:disabled { opacity: .3; }
   .wnav .d { width: auto; padding: 0 8px; font-size: 14px; font-weight: 600; color: var(--accent); }
+  .mode.compact { padding: 4px 16px; }
+  .summary { width: 100%; display: flex; align-items: center; gap: 10px; background: none; border: none; font: inherit; color: var(--text); text-align: left; padding: 8px 0; cursor: pointer; }
+  .stxt { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+  .stxt small { font-size: 13px; color: var(--muted); }
+  .summary i { font-style: normal; color: var(--muted); font-size: 22px; transition: transform .2s; }
+  .summary i.rot { transform: rotate(90deg); }
+  .mode:not(.compact) .summary { border-bottom: 1px solid var(--line); margin-bottom: 10px; }
+  .mode.compact .extra { margin: 0 0 10px; }
   .mh { display: flex; justify-content: space-between; align-items: baseline; }
   .kicker { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--accent); font-weight: 700; }
   .mode h2 { margin: 4px 0 2px; }
