@@ -20,10 +20,11 @@ export async function loadContext(): Promise<PlanContext> {
     db.injuries.toArray(), db.fixedEvents.toArray(), db.planEdits.toArray(), getSetting<2 | 3>('runsPerWeek'), db.vacations.toArray(),
     db.morning.orderBy('date').toArray(), getSetting<number | null>('hrMax'), getSetting<number | null>('hrRest')
   ]);
+  const kraftN = await getSetting<number>('strengthPerWeek');
   const hr = hrProfile(activities, morning.filter(m => m.restingHr != null).map(m => m.restingHr!), { max: hrMax, rest: hrRest }, today());
   return {
     today: today(), activities, strength, split: splitId ? (await db.splits.get(splitId)) ?? null : null,
-    goal, injury: activeInjury(injuries), events, edits: new Map(edits.map(e => [e.key, e])), runsPerWeek: runs ?? 3, vacations, hr
+    goal, injury: activeInjury(injuries), events, edits: new Map(edits.map(e => [e.key, e])), runsPerWeek: runs ?? 3, strengthPerWeek: kraftN ?? 3, vacations, hr
   };
 }
 
@@ -65,6 +66,7 @@ export async function saveEvent(e: Omit<FixedEvent, 'id' | 'createdAt' | 'update
 }
 export async function deleteEvent(id: string) { await db.fixedEvents.delete(id); }
 export const setRunsPerWeek = (n: 2 | 3) => setSetting('runsPerWeek', n);
+export const setStrengthPerWeek = (n: number) => setSetting('strengthPerWeek', Math.max(1, Math.min(6, Math.round(n))));
 
 /** Wenig Grundlage? (Laufumfang der letzten 4 Wochen sehr gering) → Startempfehlung früher. */
 export async function lowBase(sport: Goal['sport']): Promise<boolean> {

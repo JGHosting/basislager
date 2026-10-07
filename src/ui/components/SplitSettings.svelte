@@ -2,8 +2,9 @@
   import { liveQuery } from 'dexie';
   import { db, getSetting, setSetting } from '../../core/db';
   import { setActiveSplit } from '../../domain/strength/repo';
+  import { setStrengthPerWeek } from '../../domain/planner/repo';
   import { groupLabel } from '../../domain/strength/strength';
-  const q = liveQuery(async () => ({ splits: await db.splits.toArray(), active: (await getSetting<string | null>('activeSplit')) ?? null, goal: (await getSetting<number | null>('goalWeight')) ?? null }));
+  const q = liveQuery(async () => ({ splits: await db.splits.toArray(), active: (await getSetting<string | null>('activeSplit')) ?? null, goal: (await getSetting<number | null>('goalWeight')) ?? null, perWeek: (await getSetting<number>('strengthPerWeek')) ?? 3 }));
   let goalInput = $state(''), goalErr = $state(''), goalEdit = $state(false);
   async function saveGoal() {
     const s = goalInput.trim().replace(',', '.');
@@ -14,6 +15,12 @@
 </script>
 
 {#if $q}
+  <section class="card per">
+    <span>Krafttraining pro Woche</span>
+    <div class="seg" role="radiogroup" aria-label="Krafttraining pro Woche">
+      {#each [1, 2, 3, 4, 5, 6] as n}<button role="radio" aria-checked={$q.perWeek === n} class:on={$q.perWeek === n} onclick={() => setStrengthPerWeek(n)}>{n}×</button>{/each}
+    </div>
+  </section>
   <section class="card list">
     {#each [{ id: null, name: 'Kein fester Split', days: [] }, ...$q.splits] as sp}
       <button class="opt" class:on={$q.active === sp.id} onclick={() => setActiveSplit(sp.id)}>
@@ -22,7 +29,7 @@
       </button>
     {/each}
   </section>
-  <p class="muted hint">Mit Split schlägt die App nach jedem Krafttraining den nächsten Tag vor. Ein Tipp genügt.</p>
+  <p class="muted hint">Der Plan verteilt die Krafttage über die Woche, der Samstag bleibt für den langen Lauf frei. Vor und nach dem langen Lauf gibt es kein schweres Beintraining. Mit Split schlägt die App nach jedem Krafttraining den nächsten Tag vor. Ein Tipp genügt.</p>
 
   <h3 class="section">Körper</h3>
   <section class="card list">
@@ -41,6 +48,11 @@
 
 <style>
   .list { padding: 4px 16px; }
+  .per { padding: 14px 16px; }
+  .per > span { display: block; font-size: 15px; margin-bottom: 10px; }
+  .seg { display: grid; grid-template-columns: repeat(6, 1fr); gap: 4px; background: var(--bg); border-radius: 12px; padding: 4px; }
+  .seg button { border: none; background: none; font: inherit; font-size: 15px; font-weight: 600; color: var(--muted); padding: 9px 0; border-radius: 9px; cursor: pointer; }
+  .seg button.on { background: var(--accent); color: #fff; }
   .opt { width: 100%; display: flex; gap: 12px; align-items: center; text-align: left; background: none; border: none; border-top: 1px solid var(--line);
          padding: 12px 0; font: inherit; color: var(--text); cursor: pointer; min-height: 52px; }
   .opt:first-child { border-top: none; }

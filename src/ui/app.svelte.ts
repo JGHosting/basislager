@@ -59,7 +59,7 @@ function watchPlanChanges() {
   let first = true;
   liveQuery(() => Promise.all([
     db.planEdits.toArray(), db.goals.toArray(), db.injuries.toArray(), db.vacations.toArray(), db.fixedEvents.toArray(),
-    db.strength.count(), db.settings.where('key').anyOf('runsPerWeek', 'activeSplit', 'garmin', 'hrMax').toArray()
+    db.strength.count(), db.settings.where('key').anyOf('runsPerWeek', 'strengthPerWeek', 'activeSplit', 'garmin', 'hrMax').toArray()
   ])).subscribe(() => { if (first) { first = false; return; } schedulePush(); });
 }
 

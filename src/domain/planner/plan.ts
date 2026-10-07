@@ -41,6 +41,8 @@ export interface PlanContext {
   today: string; activities: Activity[]; strength: StrengthSession[]; split: SplitTemplate | null;
   goal: Goal | null; injury: Injury | null; events: FixedEvent[]; edits: Map<string, PlanEdit>;
   runsPerWeek: 2 | 3; vacations: Vacation[];
+  /** Krafteinheiten pro Woche (1–6, Standard 3). */
+  strengthPerWeek?: number;
   hr?: HrProfile;
 }
 
@@ -130,20 +132,37 @@ function goalPhase(g: Goal, ws: string, vacations: Vacation[]) {
 }
 
 /* ---------- Kraft ---------- */
+export const kraftCount = (ctx: PlanContext) => Math.max(1, Math.min(6, Math.round(ctx.strengthPerWeek ?? 3)));
+/** Krafttage je Anzahl (0 = Montag). Samstag (langer Lauf) bleibt immer frei. */
+export const KRAFT_DAYS: Record<number, number[]> = { 1: [0], 2: [0, 3], 3: [0, 2, 4], 4: [0, 2, 4, 6], 5: [0, 1, 2, 4, 6], 6: [0, 1, 2, 3, 4, 6] };
+/** Kein schweres Beintraining am Tag vor dem langen Lauf (Fr) und am Tag danach (So). */
+const noLegDay = (d: number) => d === 4 || d === 6;
+/**
+ * Verteilt die Split-Tage auf die Krafttage: Beintage möglichst mit mindestens einem Tag Abstand
+ * und nicht vor/nach dem langen Lauf. Was nicht passt, wird ohne schweres Beintraining geplant.
+ */
+function assignKraft(days: number[], groups: MuscleGroup[][]): { day: number; groups: MuscleGroup[]; noLegs: boolean }[] {
+  const legs = groups.filter(hasLegs), other = groups.filter(g => !hasLegs(g));
+  const legDays: number[] = [];
+  for (const d of days) if (!noLegDay(d) && legDays.length < legs.length && legDays.every(x => Math.abs(x - d) >= 2)) legDays.push(d);
+  const rest = days.filter(d => !legDays.includes(d));
+  const queue = [...other, ...legs.slice(legDays.length)];
+  const out = [...legDays.map((day, i) => ({ day, groups: legs[i], noLegs: false })),
+    ...rest.map((day, i) => ({ day, groups: queue[i], noLegs: true }))];
+  return out.sort((a, b) => a.day - b.day);
+}
 function strengthGroups(ctx: PlanContext, ws: string, count: number): MuscleGroup[][] {
   const thisWeekOffset = Math.max(0, Math.round((Date.parse(ws) - Date.parse(weekStart(ctx.today))) / 604800000));
   if (!ctx.split) return Array.from({ length: count }, () => ['ganzkoerper']);
   const before = ctx.strength.filter(s => s.date < weekStart(ctx.today));
-  const start = nextSplitDay(ctx.split, before).index + thisWeekOffset * 3;
-  const out = Array.from({ length: count }, (_, i) => [...ctx.split!.days[(start + i) % ctx.split!.days.length]]);
-  // Beine/Ganzkörper möglichst auf den ersten Krafttag (Montag) – weit weg von Qualitäts- und langen Einheiten
-  return out.sort((a, b) => Number(hasLegs(b)) - Number(hasLegs(a)));
+  const start = nextSplitDay(ctx.split, before).index + thisWeekOffset * kraftCount(ctx);
+  return Array.from({ length: count }, (_, i) => [...ctx.split!.days[(start + i) % ctx.split!.days.length]]);
 }
 const hasLegs = (g: MuscleGroup[]) => g.includes('beine') || g.includes('ganzkoerper');
 function kraft(ws: string, day: number, slot: string, groups: MuscleGroup[], light: boolean, noLegs: boolean): PlanSession {
   let gs = groups;
   const notes: string[] = [];
-  if (noLegs && hasLegs(gs)) { gs = gs.filter(g => g !== 'beine'); if (gs.includes('ganzkoerper')) gs = ['push', 'pull', 'rumpf']; if (!gs.length) gs = ['push', 'pull']; notes.push('Ohne schweres Beintraining (Wettkampf/harte Einheit steht an).'); }
+  if (noLegs && hasLegs(gs)) { gs = gs.filter(g => g !== 'beine'); if (gs.includes('ganzkoerper')) gs = ['push', 'pull', 'rumpf']; if (!gs.length || (gs.length === 1 && gs[0] === 'rumpf')) gs = ['push', 'pull', ...gs]; notes.push('Ohne schweres Beintraining (Wettkampf/harte Einheit steht an).'); }
   return {
     key: `${ws}:${slot}`, date: DAY(ws, day), origDate: DAY(ws, day), sport: 'kraft', minutes: light ? 40 : 60,
     title: `Kraft · ${gs.map(groupLabel).join(' + ')}`, groups: gs, intensity: light ? 'locker' : 'mittel',
@@ -201,8 +220,9 @@ export function buildWeek(ws: string, ctx: PlanContext): PlanWeek {
     phase = vacWeek ? 'urlaub' : recovery ? 'erholung' : 'basis';
     const recent = Math.max(90, recentMinutes(ctx.activities, weekStart(ctx.today), /Run/));
     const vol = Math.min(recent * 1.08 * Math.pow(1.05, ahead), recent * 1.5) * (recovery ? 0.75 : 1);
-    const kg = strengthGroups(ctx, ws, 3);
-    sessions.push(kraft(ws, 0, 'kraft1', kg[0], false, false), kraft(ws, 2, 'kraft2', kg[1], false, false), kraft(ws, 4, 'kraft3', kg[2], false, true));
+    const kDays = KRAFT_DAYS[kraftCount(ctx)];
+    const kg = strengthGroups(ctx, ws, kDays.length);
+    assignKraft(kDays, kg).forEach((k, i) => sessions.push(kraft(ws, k.day, `kraft${i + 1}`, k.groups, false, k.noLegs)));
     if (ctx.runsPerWeek === 3) {
       sessions.push(easyRun(ws, 1, 'run-easy', p, vol * 0.3), runQuality(ws, 3, 'run-q', phase, isoWeek(ws), p, vol * 0.3, null, false), longRun(ws, 5, 'run-long', p, Math.min(vol * 0.4, 150), phase, null, false));
     } else {
@@ -217,12 +237,13 @@ export function buildWeek(ws: string, ctx: PlanContext): PlanWeek {
     if (phase === 'taper') vol = peak * 0.65;
     if (phase === 'wettkampfwoche') vol = peak * 0.4;
     const raceDay = (Date.parse(g.date) - Date.parse(ws)) / 86400000;   // 0..6 in der Wettkampfwoche
-    // Kraft: 3×, Taper 2× leichter, Wettkampfwoche 1× leicht ohne Beine
-    const kCount = phase === 'wettkampfwoche' ? 1 : phase === 'taper' ? 2 : 3;
+    // Kraft: wie eingestellt, Taper eine weniger und leichter, Wettkampfwoche 1× leicht ohne Beine
+    const n = kraftCount(ctx);
+    const kCount = phase === 'wettkampfwoche' ? 1 : phase === 'taper' ? Math.max(1, n - 1) : n;
     const kg = strengthGroups(ctx, ws, kCount);
-    const kDays = [0, 2, 4].slice(0, kCount);
-    kDays.forEach((d, i) => sessions.push(kraft(ws, d, `kraft${i + 1}`, kg[i], phase === 'taper' || phase === 'wettkampfwoche',
-      phase === 'wettkampfwoche' || d === 4 || (phase === 'taper' && i > 0))));
+    const kDays = KRAFT_DAYS[kCount];
+    assignKraft(kDays, kg).forEach((k, i) => sessions.push(kraft(ws, k.day, `kraft${i + 1}`, k.groups, phase === 'taper' || phase === 'wettkampfwoche',
+      phase === 'wettkampfwoche' || k.noLegs || (phase === 'taper' && i > 0))));
     const trail = g.sport === 'trailrun';
 
     if (g.sport === 'lauf' || g.sport === 'trailrun') {
