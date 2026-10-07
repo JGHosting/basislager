@@ -1,0 +1,3 @@
+-rw-r--r-- 1 runner runner 14093078 Dec 11  2025 ./BLS_4_0_2025_DE/BLS_4_0_Daten_2025_DE.xlsx
+-rw-r--r-- 1 runner runner 21741 Dec 11  2025 ./BLS_4_0_2025_DE/BLS_4_0_Components_DE_EN.xlsx
+-rw-r--r-- 1 runner runner 469803 Dec 11  2025 ./BLS_4_0_2025_DE/BLS_4_0_Dokumentation_DE.pdf
