@@ -19,7 +19,9 @@
     "vite-plugin-pwa": "^2.0.0"
   },
   "dependencies": {
+    "@zxing/browser": "^0.2.1",
     "dexie": "^4.4.6",
+    "minisearch": "^7.2.0",
     "uplot": "^1.6.32"
   },
   "type": "module"

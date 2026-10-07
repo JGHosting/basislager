@@ -3,6 +3,8 @@
   import { initApp, app } from './ui/app.svelte';
   import MorningSheet from './ui/components/MorningSheet.svelte';
   import StrengthSheet from './ui/components/StrengthSheet.svelte';
+  import FoodSheet from './ui/nutrition/FoodSheet.svelte';
+  import Ernaehrung from './ui/views/Ernaehrung.svelte';
   import TabBar from './ui/components/TabBar.svelte';
   import Heute from './ui/views/Heute.svelte';
   import Mehr from './ui/views/Mehr.svelte';
@@ -21,12 +23,12 @@
   });
 </script>
 
-<main bind:this={scroller} inert={app.showMorning || !!app.strengthEdit}>
+<main bind:this={scroller} inert={app.showMorning || !!app.strengthEdit || !!app.foodSheet}>
   {#key route}
     <div class="view">
       {#if route === 'heute'}<Heute />
       {:else if route === 'plan'}<Soon title="Plan" text="Der Trainingsplaner kommt nach Kraft-Split und Verletzungsmodus." />
-      {:else if route === 'ernaehrung'}<Soon title="Ernährung" text="Kalorien- und Makro-Tracker mit BLS und Open Food Facts kommen in einem der nächsten Schritte." />
+      {:else if route === 'ernaehrung'}<Ernaehrung />
       {:else if route === 'statistik'}<Statistik />
       {:else if route === 'mehr'}<Mehr />
       {:else}<Heute />{/if}
@@ -34,7 +36,7 @@
   {/key}
 </main>
 <TabBar current={route} />
-{#if app.showMorning}<MorningSheet />{:else if app.strengthEdit}<StrengthSheet />{/if}
+{#if app.showMorning}<MorningSheet />{:else if app.strengthEdit}<StrengthSheet />{:else if app.foodSheet}<FoodSheet />{/if}
 
 <style>
   /* Einziger Scrollbereich der App */

@@ -5,6 +5,7 @@
 import { getSetting, setSetting, deleteSetting, requestPersistence, persistState, type PersistState } from '../core/db';
 import { icu, IcuError, normalizeAthleteId, type Credentials } from '../sources/intervals/client';
 import { today } from '../core/dates';
+import type { Meal, FoodLogEntry } from '../core/db';
 import { weightSince } from '../domain/morning/morning';
 import { runSync, getSyncState, resetHistory, type SyncState } from '../sources/intervals/sync';
 
@@ -22,7 +23,8 @@ export const app = $state({
   persist: 'denied' as PersistState,
   lastBackupAt: 0,
   showMorning: false,
-  strengthEdit: null as null | { activityId?: string; sessionId?: string; date?: string }
+  strengthEdit: null as null | { activityId?: string; sessionId?: string; date?: string },
+  foodSheet: null as null | { mode: 'add'; date: string; meal: Meal } | { mode: 'edit'; entry: FoodLogEntry }
 });
 
 export async function initApp() {
@@ -65,6 +67,10 @@ export function openMorning() { app.showMorning = true; }
 /* ---------- Kraft-Zuordnung ---------- */
 export function openStrength(target: { activityId?: string; sessionId?: string; date?: string }) { app.strengthEdit = target; }
 export function closeStrength() { app.strengthEdit = null; }
+
+/* ---------- Ernährung ---------- */
+export function openFood(t: NonNullable<typeof app.foodSheet>) { app.foodSheet = t; }
+export function closeFood() { app.foodSheet = null; }
 
 export async function connect(athleteInput: string, apiKey: string): Promise<string | null> {
   const c: Credentials = { athleteId: normalizeAthleteId(athleteInput), apiKey: apiKey.trim() };

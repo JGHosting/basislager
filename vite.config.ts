@@ -31,7 +31,8 @@ export default defineConfig({
       workbox: {
         // API-Aufrufe nie aus dem Cache beantworten
         navigateFallbackDenylist: [/^\/api/],
-        globPatterns: ['**/*.{js,css,html,png,svg,webmanifest}']
+        globPatterns: ['**/*.{js,css,html,png,svg,webmanifest,json}'],
+        maximumFileSizeToCacheInBytes: 3 * 1024 * 1024   // BLS-Datei (~600 KB) offline verfügbar
       }
     })
   ]

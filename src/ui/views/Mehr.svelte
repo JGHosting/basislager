@@ -18,6 +18,8 @@
   const standalone = window.matchMedia('(display-mode: standalone)').matches || (navigator as any).standalone === true;
   let confirmReload = $state(false);
   import { viewportInfo } from '../../core/viewport';
+  import { BLS_ATTRIBUTION } from '../../domain/nutrition/bls';
+  import { OFF_ATTRIBUTION } from '../../domain/nutrition/off';
   let vp = $state<ReturnType<typeof viewportInfo> | null>(null);
 </script>
 
@@ -88,6 +90,13 @@
 <button class="btn ghost wide" onclick={() => (vp = viewportInfo())}>Anzeige-Maße prüfen</button>
 {#if vp}<p class="muted small hint">Fenster {vp.innerHeight} · sichtbar {vp.visual} · Dokument {vp.docHeight} · Bildschirm {vp.screenHeight} · App {vp.appHeight} · Leiste unten {vp.navBottom} · Rand oben {vp.safeTop} · unten {vp.safeBottom}</p>{/if}
 
+<h3 class="section">Über & Lizenzen</h3>
+<section class="card lic">
+  <p><b>Bundeslebensmittelschlüssel (BLS) 4.0</b><br />{BLS_ATTRIBUTION} <a href="https://creativecommons.org/licenses/by/4.0/deed.de" target="_blank" rel="noopener">Lizenztext</a> · <a href="https://blsdb.de" target="_blank" rel="noopener">blsdb.de</a></p>
+  <p><b>Open Food Facts</b><br />{OFF_ATTRIBUTION} <a href="https://opendatacommons.org/licenses/odbl/1-0/" target="_blank" rel="noopener">ODbL</a> · <a href="https://world.openfoodfacts.org" target="_blank" rel="noopener">openfoodfacts.org</a>. An Open Food Facts wird nur der Suchbegriff bzw. Barcode gesendet.</p>
+  <p><b>intervals.icu</b><br />Aktivitäten und Morgenwerte (Quelle: Garmin) über die API von intervals.icu.</p>
+</section>
+
 <p class="muted small footer">Basislager · Version {__APP_VERSION__}</p>
 
 <style>
@@ -105,4 +114,7 @@
   .list b { font-weight: 600; text-align: right; font-variant-numeric: tabular-nums; }
   .hint { margin: 8px 4px; }
   .footer { text-align: center; margin-top: 28px; }
+  .lic p { font-size: 13px; line-height: 1.5; color: var(--muted); margin: 0 0 10px; }
+  .lic b { color: var(--text); }
+  .lic a { color: var(--accent); }
 </style>

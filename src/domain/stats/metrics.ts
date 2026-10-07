@@ -2,7 +2,8 @@
  * Statistik-Kennzahlen: reine Funktionen, die aus Aktivitäten/Morgenwerten Zeitreihen bauen.
  * Zeiträume werden in "Eimer" (Tag/Woche/Monat) gruppiert. Fehlende Werte bleiben null (keine 0!).
  */
-import type { Activity, MorningEntry, StrengthSession } from '../../core/db';
+import type { Activity, MorningEntry, StrengthSession, FoodLogEntry, NutritionDay } from '../../core/db';
+import { scale } from '../nutrition/calc';
 import { CORE_GROUPS, groupLabel, coversGroup } from '../strength/strength';
 import { addDays, weekStart, today } from '../../core/dates';
 import { activityLoad, loadSeries, ownElevation, type HrProfile, type LoadDay } from '../load/load';
@@ -69,12 +70,13 @@ export interface MetricResult {
   summary: { label: string; value: number | null; prev: number | null; better: 1 | -1 | 0; note?: string };
 }
 export interface MetricDef {
-  id: string; title: string; unit: string; digits: number; group: 'training' | 'erholung' | 'koerper';
+  id: string; title: string; unit: string; digits: number; group: 'training' | 'erholung' | 'koerper' | 'ernaehrung';
   compute: (ctx: StatsContext, r: Range) => MetricResult;
 }
 export interface StatsContext {
   activities: Activity[]; morning: MorningEntry[]; hr: HrProfile; load: LoadDay[];
   strength: StrengthSession[]; goalWeight: number | null;
+  foodlog: FoodLogEntry[]; untracked: Set<string>; kcalGoal: number | null;
 }
 
 const sum = (v: number[]) => v.reduce((a, b) => a + b, 0);
@@ -174,6 +176,10 @@ export const METRICS: MetricDef[] = [
   morningMetric('sleepscore', 'Sleep Score', '', 0, 'sleepScore', 1, 'erholung'),
   morningMetric('schlaf', 'Schlafdauer', 'h', 1, 'sleepSecs', 1, 'erholung', 1 / 3600),
   withGoal(morningMetric('gewicht', 'Gewicht', 'kg', 1, 'weight', 0, 'koerper')),
+  nutritionMetric('kalorien', 'Kalorien', 'kcal', 'kcal'),
+  nutritionMetric('protein', 'Protein', 'g', 'protein'),
+  nutritionMetric('kh', 'Kohlenhydrate', 'g', 'carbs'),
+  nutritionMetric('fett', 'Fett', 'g', 'fat'),
   {
     id: 'muskeln', title: 'Muskelgruppen', unit: '×', digits: 0, group: 'training',
     compute: (ctx, r) => {
@@ -190,6 +196,35 @@ export const METRICS: MetricDef[] = [
   }
 ];
 
+/**
+ * Ernährung je Tag: nur getrackte Tage mit Einträgen zählen. Nicht getrackt / keine Einträge = Lücke (nie 0 kcal).
+ * Wochen/Monate: Ø über die getrackten Tage.
+ */
+function nutritionMetric(id: string, title: string, unit: string, key: 'kcal' | 'protein' | 'carbs' | 'fat'): MetricDef {
+  return {
+    id, title, unit, digits: 0, group: 'ernaehrung',
+    compute: (ctx, r) => {
+      const perDay = new Map<string, number>();
+      for (const e of ctx.foodlog) {
+        if (!inRange(e.date, r) && !inRange(e.date, previousRange(r))) continue;
+        if (ctx.untracked.has(e.date)) continue;
+        const v = scale(e.snapshot, e.grams)[key];
+        if (v != null) perDay.set(e.date, (perDay.get(e.date) ?? 0) + v);
+      }
+      const x = bucketsOf(r); const b = new Map<string, number[]>();
+      for (const [d, v] of perDay) if (inRange(d, r)) (b.get(bucketKey(d, r.bucket)) ?? b.set(bucketKey(d, r.bucket), []).get(bucketKey(d, r.bucket))!).push(v);
+      const values = x.map(k => mean(b.get(k) ?? []));
+      const periodMean = (rr: Range) => mean([...perDay].filter(([d]) => inRange(d, rr)).map(([, v]) => v));
+      const days = [...perDay.keys()].filter(d => inRange(d, r)).length;
+      return {
+        x, series: [{ label: r.bucket === 'day' ? 'Tag' : 'Ø pro Tag', values, color: '--accent', kind: r.bucket === 'day' ? 'bar' : 'line' }],
+        goal: key === 'kcal' ? ctx.kcalGoal : null,
+        summary: { label: 'Ø pro getracktem Tag', value: periodMean(r), prev: periodMean(previousRange(r)), better: 0, note: `${days} ${days === 1 ? 'Tag' : 'Tage'} getrackt` }
+      };
+    }
+  };
+}
+
 function withGoal(def: MetricDef): MetricDef {
   return { ...def, compute: (ctx, r) => {
     const res = def.compute(ctx, r);
@@ -200,10 +235,12 @@ function withGoal(def: MetricDef): MetricDef {
 }
 
 /** Aktivitäten mit vorab berechneter Belastung (einmal pro Datenstand). */
-export function buildContext(activities: Activity[], morning: MorningEntry[], hr: HrProfile, strength: StrengthSession[] = [], goalWeight: number | null = null): StatsContext {
+export function buildContext(activities: Activity[], morning: MorningEntry[], hr: HrProfile, strength: StrengthSession[] = [], goalWeight: number | null = null,
+  foodlog: FoodLogEntry[] = [], nutritionDays: NutritionDay[] = [], kcalGoal: number | null = null): StatsContext {
   const intens = new Map(strength.filter(s => s.activityId).map(s => [s.activityId!, s.intensity]));
   const withLoad = activities.map(a => Object.assign({}, a, { load: activityLoad(a, hr, intens.get(a.id)).load }));
-  return { activities: withLoad as (Activity & { load: number })[], morning, hr, load: loadSeries(activities, hr, today(), intens), strength, goalWeight };
+  return { activities: withLoad as (Activity & { load: number })[], morning, hr, load: loadSeries(activities, hr, today(), intens), strength, goalWeight,
+    foodlog, untracked: new Set(nutritionDays.filter(d => !d.tracked).map(d => d.date)), kcalGoal };
 }
 
 /** Schneetage (Ski/Snowboard/Skitour) als Markierungen im Diagramm. */

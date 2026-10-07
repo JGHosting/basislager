@@ -9,6 +9,8 @@
   import AmpelCard from '../components/AmpelCard.svelte';
   import LoadCard from '../components/LoadCard.svelte';
   import StrengthCard from '../components/StrengthCard.svelte';
+  import KcalBar from '../nutrition/KcalBar.svelte';
+  import { dayView, getKcalGoal } from '../../domain/nutrition/repo';
   import { groupLabel } from '../../domain/strength/strength';
   import { openStrength } from '../app.svelte';
   import { computeToday } from '../../domain/today';
@@ -16,6 +18,7 @@
 
   // Ampel + Belastung: rechnet automatisch neu, sobald sich Aktivitäten, Morgenwerte oder Pulswerte ändern
   const calc = liveQuery(() => computeToday());
+  const food = liveQuery(async () => ({ day: await dayView(today()), goal: await getKcalGoal() }));
 
   const t = today();
   const ws = weekStart(t);
@@ -111,6 +114,14 @@
     {/if}
   </section>
 
+  {#if $food?.goal && $food.day.tracked}
+    {@const eaten = $food.day.total.kcal.value}
+    <a class="card foodmini" href="#/ernaehrung">
+      <div class="fm"><b>Ernährung</b><span>{Math.round(eaten).toLocaleString('de-DE')} / {$food.goal.toLocaleString('de-DE')} kcal · <i class:over={eaten > $food.goal}>{eaten > $food.goal ? `${Math.round(eaten - $food.goal).toLocaleString('de-DE')} drüber` : `${Math.round($food.goal - eaten).toLocaleString('de-DE')} übrig`}</i></span></div>
+      <KcalBar {eaten} goal={$food.goal} />
+    </a>
+  {/if}
+
   <StrengthCard />
 
   {#if $calc?.load}
@@ -164,6 +175,11 @@
   .card-head h2 { margin: 0; }
   .tag { border: none; font-family: inherit; cursor: pointer; font-size: 13px; color: var(--accent); background: var(--accent-soft); padding: 3px 9px; border-radius: 99px; font-weight: 600; }
   .small { font-size: 13px; }
+  .foodmini { display: block; text-decoration: none; color: var(--text); }
+  .fm { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 8px; gap: 8px; }
+  .fm span { font-size: 14px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .fm i { font-style: normal; color: var(--green); }
+  .fm i.over { color: var(--red); }
   .nudge { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 12px 18px; text-decoration: none; color: var(--muted); font-size: 14px; }
   .nudge b { color: var(--accent); white-space: nowrap; }
   .import .bar { height: 6px; border-radius: 3px; background: var(--line); overflow: hidden; margin: 12px 0 8px; }

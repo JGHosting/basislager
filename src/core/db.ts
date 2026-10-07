@@ -67,6 +67,38 @@ export const BUILTIN_SPLITS: SplitTemplate[] = [
   { id: 'split-gk', name: 'Ganzkörper', days: [['ganzkoerper']], builtin: true, createdAt: 0, updatedAt: 0 }
 ];
 
+/* ---------- Ernährung ---------- */
+export type Meal = 'fruehstueck' | 'mittag' | 'abend' | 'snack';
+export type FoodSource = 'bls' | 'off' | 'custom';
+/** Nährwerte pro 100 g bzw. 100 ml. null = unbekannt (nie als 0 behandeln). */
+export interface Nutrients {
+  kcal: number | null; protein: number | null; carbs: number | null; fat: number | null;
+  fiber: number | null; sugar: number | null; salt: number | null;
+}
+/** Lokaler Lebensmittel-Cache: genutzte BLS-/OFF-Produkte und eigene Lebensmittel. */
+export interface Food extends Nutrients {
+  id: string;                  // "bls:C133000", "off:4012345678901", "custom:<uuid>"
+  source: FoodSource; sourceId: string;
+  barcode?: string; name: string; brand?: string; category?: string;
+  per: 'g' | 'ml';
+  servingSize?: number | null; servingLabel?: string | null;   // Portion in g/ml
+  pieceGrams?: number | null;  // Gewicht für "Stück"
+  imageUrl?: string | null;
+  fav: 0 | 1; useCount: number; lastUsedAt?: number;
+  lastUpdated: number; createdAt: number; updatedAt: number;
+}
+export type FoodUnit = 'g' | 'kg' | 'ml' | 'l' | 'stk' | 'portion';
+/** Eintrag im Ernährungstagebuch. Snapshot der Nährwerte → vergangene Tage bleiben unverändert. */
+export interface FoodLogEntry {
+  id: string; date: string; meal: Meal;
+  foodId: string;
+  snapshot: Nutrients & { name: string; brand?: string; source: FoodSource; per: 'g' | 'ml' };
+  amount: number; unit: FoodUnit; grams: number;   // grams = aufgelöste Menge in g bzw. ml
+  createdAt: number; updatedAt: number;
+}
+/** Nur vorhanden, wenn ein Tag bewusst NICHT getrackt wird. */
+export interface NutritionDay { date: string; tracked: boolean; updatedAt: number }
+
 /** Interne Sicherheitskopie vor einem Import (wird selbst nicht exportiert). */
 export interface Snapshot { seq?: number; createdAt: number; reason: string; data: unknown }
 
@@ -77,6 +109,9 @@ export class BasislagerDB extends Dexie {
   snapshots!: Table<Snapshot, number>;
   strength!: Table<StrengthSession, string>;
   splits!: Table<SplitTemplate, string>;
+  foods!: Table<Food, string>;
+  foodlog!: Table<FoodLogEntry, string>;
+  nutritionDays!: Table<NutritionDay, string>;
   /** name nur für die Backup-Prüfroutine abweichend (separate Test-Datenbank). */
   constructor(name = 'basislager') {
     super(name);
@@ -94,6 +129,8 @@ export class BasislagerDB extends Dexie {
     // v5: Kraft-Split
     this.version(5).stores({ strength: 'id, &activityId, date', splits: 'id' })
       .upgrade(tx => tx.table('splits').bulkPut(BUILTIN_SPLITS));
+    // v6: Ernährung
+    this.version(6).stores({ foods: 'id, barcode, name, fav, lastUsedAt', foodlog: 'id, date, foodId', nutritionDays: 'date' });
     this.on('populate', tx => { tx.table('splits').bulkPut(BUILTIN_SPLITS); });
   }
 }

@@ -8,12 +8,12 @@
 
   // Daten einmal laden; liveQuery rechnet bei neuen Daten automatisch neu
   const ctxQ = liveQuery(async () => {
-    const [acts, morning, mMax, mRest, strength, goal] = await Promise.all([
+    const [acts, morning, mMax, mRest, strength, goal, foodlog, ndays, kcalGoal] = await Promise.all([
       db.activities.toArray(), db.morning.orderBy('date').toArray(), getSetting<number | null>('hrMax'), getSetting<number | null>('hrRest'),
-      db.strength.toArray(), getSetting<number | null>('goalWeight')
+      db.strength.toArray(), getSetting<number | null>('goalWeight'), db.foodlog.toArray(), db.nutritionDays.toArray(), getSetting<number | null>('kcalGoal')
     ]);
     const hr = hrProfile(acts, morning.filter(m => m.restingHr != null).map(m => m.restingHr!), { max: mMax, rest: mRest }, today());
-    return buildContext(acts, morning, hr, strength, goal ?? null);
+    return buildContext(acts, morning, hr, strength, goal ?? null, foodlog, ndays, kcalGoal ?? null);
   });
 
   const DEFAULT_SHOWN = ['belastung', 'zeit', 'verteilung', 'muskeln', 'hrv', 'ruhepuls', 'sleepscore', 'gewicht'];
@@ -39,7 +39,7 @@
     const next = [...shown]; [next[i], next[j]] = [next[j], next[i]]; shown = next;
     void setSetting('statsShown', $state.snapshot(shown));
   }
-  const GROUPS = { training: 'Training', erholung: 'Erholung', koerper: 'Körper' } as const;
+  const GROUPS = { training: 'Training', erholung: 'Erholung', koerper: 'Körper', ernaehrung: 'Ernährung' } as const;
 </script>
 
 <header class="page-head"><div><h1>Statistik</h1></div>
@@ -87,7 +87,7 @@
     <MetricView {def} ctx={$ctxQ} {range} />
   {/each}
   {#if !visible.length}<p class="muted">Keine Kennzahl gewählt. Tippe oben auf „Kennzahlen“.</p>{/if}
-  <p class="muted small foot">Rosa hinterlegt: Schneetage. Schmerzverlauf und Ereignisse wie Verletzung, Wettkampf oder Urlaub kommen mit den jeweiligen Bausteinen dazu.</p>
+  <p class="muted small foot">Rosa hinterlegt: Schneetage. Ernährung: nicht getrackte Tage und Tage ohne Einträge bleiben leer. Schmerzverlauf und Ereignisse wie Verletzung, Wettkampf oder Urlaub kommen mit den jeweiligen Bausteinen dazu.</p>
 {/if}
 
 <style>
