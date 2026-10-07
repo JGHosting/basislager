@@ -259,5 +259,5 @@
   .chips { display: flex; flex-wrap: wrap; gap: 6px; }
   .chips button { border: 1px solid var(--line); background: var(--bg); color: var(--text); border-radius: 10px; padding: 7px 10px; font: inherit; font-size: 13px; cursor: pointer; }
   .chips button.on { background: var(--accent); border-color: var(--accent); color: #fff; }
-  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; } .two label { margin: 0; font-size: 13px; }
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; } .two label { margin: 0; font-size: 13px; min-width: 0; }
 </style>

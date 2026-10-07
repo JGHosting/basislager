@@ -52,3 +52,8 @@ input:focus { outline: 2px solid var(--accent); border-color: transparent; }
 .btn.wide { width: 100%; margin-top: 14px; }
 form .btn.wide { margin-top: 18px; }
 input[hidden] { display: none; }
+/* iOS: Datumsfelder haben sonst eine feste Eigenbreite (ragen aus dem Raster) und zentrierten Text */
+input[type='date'] { -webkit-appearance: none; appearance: none; min-width: 0; max-width: 100%; box-sizing: border-box;
+                     min-height: 52px; line-height: 1.3; text-align: left; }
+input[type='date']::-webkit-date-and-time-value { text-align: left; margin: 0; }
+input[type='date']::-webkit-calendar-picker-indicator { margin-left: auto; }
