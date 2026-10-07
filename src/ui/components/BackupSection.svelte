@@ -101,6 +101,7 @@
         {#if preview.exportedAt}<div><span>Erstellt am</span><b>{new Date(preview.exportedAt).toLocaleString('de-DE', { dateStyle: 'medium', timeStyle: 'short' })}</b></div>{/if}
         <div><span>Aktivitäten</span><b>{num(preview.counts.activities)}</b></div>
         <div><span>Tage mit Morgenwerten</span><b>{num(preview.counts.morning)}</b></div>
+        <div><span>Krafteinheiten</span><b>{num(preview.counts.strength)}</b></div>
         <div><span>Einstellungen</span><b>{num(preview.counts.settings)}</b></div>
         {#if preview.range}<div><span>Zeitraum</span><b>{fmtDay(preview.range.from, { day: '2-digit', month: '2-digit', year: 'numeric' })} – {fmtDay(preview.range.to, { day: '2-digit', month: '2-digit', year: 'numeric' })}</b></div>{/if}
       </div>
@@ -127,7 +128,7 @@
   {#if test}
     <p class={test.ok ? 'okmsg' : 'error'}>
       {test.ok ? '✓ ' : '✗ '}{test.message}
-      {#if test.ok}<br /><small>{num(test.counts.activities)} Aktivitäten, {num(test.counts.morning)} Morgenwerte, {num(test.counts.settings)} Einstellungen verglichen · {Math.round(test.ms)} ms</small>{/if}
+      {#if test.ok}<br /><small>{num(test.counts.activities)} Aktivitäten, {num(test.counts.morning)} Morgenwerte, {num(test.counts.strength)} Krafteinheiten, {num(test.counts.settings)} Einstellungen verglichen · {Math.round(test.ms)} ms</small>{/if}
     </p>
   {/if}
   <button class="rowbtn" onclick={() => csv('activities')}><span>Aktivitäten als CSV</span><b>Teilen</b></button>

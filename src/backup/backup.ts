@@ -8,12 +8,12 @@
  * - Ein Import schreibt alles in EINER Transaktion: entweder komplett oder gar nicht.
  * - Vor jedem Import wird eine interne Sicherheitskopie angelegt.
  */
-import type { BasislagerDB, Activity, MorningEntry, SettingRow } from '../core/db';
+import type { BasislagerDB, Activity, MorningEntry, SettingRow, StrengthSession, SplitTemplate } from '../core/db';
 import { db as mainDb, BasislagerDB as DBClass, setSetting } from '../core/db';
 import Dexie from 'dexie';
 
-export const SCHEMA_VERSION = 4;
-export const BACKUP_TABLES = ['settings', 'activities', 'morning'] as const;
+export const SCHEMA_VERSION = 5;
+export const BACKUP_TABLES = ['settings', 'activities', 'morning', 'strength', 'splits'] as const;
 export const EXCLUDED_TABLES = ['snapshots'];
 /** Einstellungen, die nicht ins Backup gehören (Geheimnisse, gerätespezifisch). */
 const EXCLUDED_SETTINGS = new Set(['intervals']);
@@ -23,20 +23,22 @@ export interface BackupFile {
   app: 'basislager';
   schemaVersion: number;
   exportedAt: string;
-  tables: { settings: SettingRow[]; activities: Activity[]; morning: MorningEntry[] };
+  tables: { settings: SettingRow[]; activities: Activity[]; morning: MorningEntry[]; strength: StrengthSession[]; splits: SplitTemplate[] };
 }
 
 /* ---------- Export ---------- */
 
 export async function exportBackup(d: BasislagerDB = mainDb): Promise<BackupFile> {
-  return d.transaction('r', d.settings, d.activities, d.morning, async () => ({
+  return d.transaction('r', [d.settings, d.activities, d.morning, d.strength, d.splits], async () => ({
     app: 'basislager' as const,
     schemaVersion: SCHEMA_VERSION,
     exportedAt: new Date().toISOString(),
     tables: {
       settings: (await d.settings.toArray()).filter(s => !EXCLUDED_SETTINGS.has(s.key)),
       activities: await d.activities.toArray(),
-      morning: await d.morning.toArray()
+      morning: await d.morning.toArray(),
+      strength: await d.strength.toArray(),
+      splits: await d.splits.toArray()
     }
   }));
 }
@@ -61,7 +63,7 @@ export interface Preview {
 }
 
 const isDate = (v: unknown) => typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v);
-const empty = (): Record<TableName, number> => ({ settings: 0, activities: 0, morning: 0 });
+const empty = (): Record<TableName, number> => ({ settings: 0, activities: 0, morning: 0, strength: 0, splits: 0 });
 
 /** Bringt ältere Backups auf den aktuellen Stand. Für jede Schema-Änderung hier einen Schritt ergänzen. */
 function migrate(raw: any): any {
@@ -74,6 +76,7 @@ function migrate(raw: any): any {
     for (const m of raw.tables.morning ?? []) if (m?.date < '2026-09-07' && m.weight != null && m.sources?.weight !== 'manual') { m.weight = null; if (m.sources) delete m.sources.weight; }
     v = 4;
   }
+  if (v < 5) { raw.tables.strength ??= []; raw.tables.splits ??= []; v = 5; }
   raw.schemaVersion = v;
   return raw;
 }
@@ -103,6 +106,8 @@ export function checkBackup(text: string): Preview {
   const activities = keep<Activity>('Aktivitäten', raw.tables.activities, r =>
     typeof r.id === 'string' && typeof r.sourceId === 'string' && isDate(r.date) && typeof r.start === 'string');
   const morning = keep<MorningEntry>('Morgenwerte', raw.tables.morning, r => isDate(r.date));
+  const strength = keep<StrengthSession>('Krafteinheiten', raw.tables.strength, r => typeof r.id === 'string' && isDate(r.date) && Array.isArray(r.muscleGroups));
+  const splits = keep<SplitTemplate>('Split-Vorlagen', raw.tables.splits, r => typeof r.id === 'string' && Array.isArray(r.days));
   for (const [t, n] of Object.entries(bad)) warnings.push(`${n} fehlerhafte(r) Eintrag/Einträge bei ${t} werden übersprungen.`);
 
   const dates = [...activities.map(a => a.date), ...morning.map(m => m.date)].sort();
@@ -110,9 +115,9 @@ export function checkBackup(text: string): Preview {
     ok: true, warnings,
     schemaVersion: fromVersion,
     exportedAt: typeof raw.exportedAt === 'string' ? raw.exportedAt : undefined,
-    counts: { settings: settings.length, activities: activities.length, morning: morning.length },
+    counts: { settings: settings.length, activities: activities.length, morning: morning.length, strength: strength.length, splits: splits.length },
     range: dates.length ? { from: dates[0], to: dates[dates.length - 1] } : undefined,
-    data: { app: 'basislager', schemaVersion: SCHEMA_VERSION, exportedAt: raw.exportedAt, tables: { settings, activities, morning } }
+    data: { app: 'basislager', schemaVersion: SCHEMA_VERSION, exportedAt: raw.exportedAt, tables: { settings, activities, morning, strength, splits } }
   };
 }
 
@@ -134,14 +139,16 @@ export async function importBackup(data: BackupFile, mode: ImportMode, d: Basisl
   // Reine Kopie der Daten (entfernt UI-Proxys, die IndexedDB nicht speichern kann)
   const t: BackupFile['tables'] = JSON.parse(JSON.stringify(data.tables));
 
-  await d.transaction('rw', d.settings, d.activities, d.morning, async () => {
+  await d.transaction('rw', [d.settings, d.activities, d.morning, d.strength, d.splits], async () => {
     if (mode === 'replace') {
       const keepSettings = (await d.settings.toArray()).filter(s => EXCLUDED_SETTINGS.has(s.key));
-      await Promise.all([d.settings.clear(), d.activities.clear(), d.morning.clear()]);
+      await Promise.all([d.settings.clear(), d.activities.clear(), d.morning.clear(), d.strength.clear(), d.splits.clear()]);
       await d.settings.bulkPut([...t.settings, ...keepSettings]);
       await d.activities.bulkPut(t.activities);
       await d.morning.bulkPut(t.morning);
-      res.added = t.settings.length + t.activities.length + t.morning.length;
+      await d.strength.bulkPut(t.strength);
+      await d.splits.bulkPut(t.splits);
+      res.added = t.settings.length + t.activities.length + t.morning.length + t.strength.length + t.splits.length;
       return;
     }
     // Zusammenführen: Einstellungen nur ergänzen, nichts Vorhandenes überschreiben
@@ -167,6 +174,19 @@ export async function importBackup(data: BackupFile, mode: ImportMode, d: Basisl
       else res.unchanged++;
     }
     await d.morning.bulkPut(mPuts);
+    // Krafteinheiten + Vorlagen: über ID; bei gleicher verknüpfter Aktivität zählt der neuere Stand
+    for (const k of t.strength) {
+      const e = (await d.strength.get(k.id)) ?? (k.activityId ? await d.strength.where('activityId').equals(k.activityId).first() : undefined);
+      if (!e) { await d.strength.put(k); res.added++; }
+      else if (newer(k, e)) { await d.strength.delete(e.id); await d.strength.put(k); res.updated++; }
+      else res.unchanged++;
+    }
+    for (const sp of t.splits) {
+      const e = await d.splits.get(sp.id);
+      if (!e) { await d.splits.put(sp); res.added++; }
+      else if (newer(sp, e)) { await d.splits.put(sp); res.updated++; }
+      else res.unchanged++;
+    }
   });
   return res;
 }
@@ -189,7 +209,7 @@ export async function restoreSnapshot(seq: number) {
   if (!s) throw new Error('Sicherheitskopie nicht gefunden.');
   await importBackup(s.data as BackupFile, 'replace', mainDb, true);
 }
-const countsOf = (b: BackupFile) => ({ activities: b.tables.activities.length, morning: b.tables.morning.length });
+const countsOf = (b: BackupFile) => ({ activities: b.tables.activities.length, morning: b.tables.morning.length, strength: b.tables.strength?.length ?? 0 });
 
 /* ---------- Prüfroutine (Pflicht-Testfall) ---------- */
 
@@ -197,7 +217,7 @@ const countsOf = (b: BackupFile) => ({ activities: b.tables.activities.length, m
 export function canonical(b: BackupFile): string {
   const sortKeys = (v: any): any => Array.isArray(v) ? v.map(sortKeys)
     : v && typeof v === 'object' ? Object.fromEntries(Object.keys(v).sort().map(k => [k, sortKeys(v[k])])) : v;
-  const key: Record<TableName, (r: any) => string> = { settings: r => r.key, activities: r => r.id, morning: r => r.date };
+  const key: Record<TableName, (r: any) => string> = { settings: r => r.key, activities: r => r.id, morning: r => r.date, strength: r => r.id, splits: r => r.id };
   const tables: any = {};
   for (const t of BACKUP_TABLES) tables[t] = [...b.tables[t]].sort((x, y) => key[t](x).localeCompare(key[t](y))).map(sortKeys);
   return JSON.stringify({ schemaVersion: b.schemaVersion, tables });
@@ -229,7 +249,7 @@ export async function runRoundtripTest(): Promise<RoundtripResult> {
     const after = await exportBackup(test);
     const a = canonical(before), b = canonical(after);
     if (a !== b) {
-      const only = (x: BackupFile, t: TableName) => canonical({ ...x, tables: { settings: [], activities: [], morning: [], [t]: x.tables[t] } });
+      const only = (x: BackupFile, t: TableName) => canonical({ ...x, tables: { settings: [], activities: [], morning: [], strength: [], splits: [], [t]: x.tables[t] } });
       const diff = BACKUP_TABLES.filter(t => only(before, t) !== only(after, t));
       return { ok: false, message: `Unterschiede nach dem Import in: ${diff.join(', ') || 'unbekannt'}`, counts, ms: performance.now() - t0 };
     }

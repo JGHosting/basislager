@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import { initApp, app } from './ui/app.svelte';
   import MorningSheet from './ui/components/MorningSheet.svelte';
+  import StrengthSheet from './ui/components/StrengthSheet.svelte';
   import TabBar from './ui/components/TabBar.svelte';
   import Heute from './ui/views/Heute.svelte';
   import Mehr from './ui/views/Mehr.svelte';
@@ -20,7 +21,7 @@
   });
 </script>
 
-<main bind:this={scroller} inert={app.showMorning}>
+<main bind:this={scroller} inert={app.showMorning || !!app.strengthEdit}>
   {#key route}
     <div class="view">
       {#if route === 'heute'}<Heute />
@@ -33,7 +34,7 @@
   {/key}
 </main>
 <TabBar current={route} />
-{#if app.showMorning}<MorningSheet />{/if}
+{#if app.showMorning}<MorningSheet />{:else if app.strengthEdit}<StrengthSheet />{/if}
 
 <style>
   /* Einziger Scrollbereich der App */

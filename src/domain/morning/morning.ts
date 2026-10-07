@@ -89,3 +89,10 @@ export async function setWeightSince(since: string) {
   await setSetting('weightSince', since);
   await applyWeightCutoff(since);
 }
+
+/** Ø der Gewichtsmessungen der letzten 7 Tage (nur vorhandene Werte) und Zielgewicht. */
+export async function weightContext() {
+  const t = today();
+  const vals = (await db.morning.where('date').between(addDays(t, -6), t, true, true).toArray()).map(m => m.weight).filter((v): v is number => v != null);
+  return { avg7: vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : null, goal: (await getSetting<number | null>('goalWeight')) ?? null };
+}

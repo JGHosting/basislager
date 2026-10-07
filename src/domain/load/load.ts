@@ -32,7 +32,8 @@ const LOAD_PER_100HM = 1.5;
 const LIFT_SPORTS = /^(AlpineSki|Snowboard)$/;
 export const ownElevation = (a: Activity): number | null => (LIFT_SPORTS.test(a.sportType) ? null : a.elevationGain);
 
-export function activityLoad(a: Activity, hr: HrProfile): ActivityLoad {
+/** intensity (1–10, aus dem Kraft-Split) skaliert die Schätzung ohne Puls: 5 = Standard. */
+export function activityLoad(a: Activity, hr: HrProfile, intensity?: number | null): ActivityLoad {
   const minutes = (a.duration ?? a.elapsed ?? 0) / 60;
   if (minutes <= 0) return { load: 0, method: 'estimated', minutes: 0 };
   if (a.avgHr && a.avgHr > hr.rest && hr.max > hr.rest) {
@@ -40,6 +41,7 @@ export function activityLoad(a: Activity, hr: HrProfile): ActivityLoad {
     return { load: minutes * hrr * 0.64 * Math.exp(1.92 * hrr), method: 'trimp', minutes };
   }
   let load = minutes * (SPORT_FACTOR[a.sportType] ?? DEFAULT_FACTOR);
+  if (intensity != null) load *= 0.5 + intensity / 10;
   if (ELEVATION_SPORTS.has(a.sportType) && a.elevationGain) load += (a.elevationGain / 100) * LOAD_PER_100HM;
   return { load, method: 'estimated', minutes };
 }
@@ -66,10 +68,10 @@ export function hrProfile(activities: Activity[], restingValues: number[], manua
 export interface LoadDay { date: string; load: number; atl: number; ctl: number; tsb: number }
 
 /** Tagesreihe von der ersten Aktivität bis 'to'. ATL/CTL als exponentiell gewichtete Mittel. */
-export function loadSeries(activities: Activity[], hr: HrProfile, to: string): LoadDay[] {
+export function loadSeries(activities: Activity[], hr: HrProfile, to: string, intensities: Map<string, number | null> = new Map()): LoadDay[] {
   if (!activities.length) return [];
   const perDay = new Map<string, number>();
-  for (const a of activities) perDay.set(a.date, (perDay.get(a.date) ?? 0) + activityLoad(a, hr).load);
+  for (const a of activities) perDay.set(a.date, (perDay.get(a.date) ?? 0) + activityLoad(a, hr, intensities.get(a.id)).load);
   const first = activities.reduce((m, a) => (a.date < m ? a.date : m), activities[0].date);
   const kA = 1 - Math.exp(-1 / 7), kC = 1 - Math.exp(-1 / 42);
   const out: LoadDay[] = [];

@@ -8,14 +8,15 @@
 
   // Daten einmal laden; liveQuery rechnet bei neuen Daten automatisch neu
   const ctxQ = liveQuery(async () => {
-    const [acts, morning, mMax, mRest] = await Promise.all([
-      db.activities.toArray(), db.morning.orderBy('date').toArray(), getSetting<number | null>('hrMax'), getSetting<number | null>('hrRest')
+    const [acts, morning, mMax, mRest, strength, goal] = await Promise.all([
+      db.activities.toArray(), db.morning.orderBy('date').toArray(), getSetting<number | null>('hrMax'), getSetting<number | null>('hrRest'),
+      db.strength.toArray(), getSetting<number | null>('goalWeight')
     ]);
     const hr = hrProfile(acts, morning.filter(m => m.restingHr != null).map(m => m.restingHr!), { max: mMax, rest: mRest }, today());
-    return buildContext(acts, morning, hr);
+    return buildContext(acts, morning, hr, strength, goal ?? null);
   });
 
-  const DEFAULT_SHOWN = ['belastung', 'zeit', 'verteilung', 'hrv', 'ruhepuls', 'sleepscore', 'gewicht'];
+  const DEFAULT_SHOWN = ['belastung', 'zeit', 'verteilung', 'muskeln', 'hrv', 'ruhepuls', 'sleepscore', 'gewicht'];
   let period = $state<Period>('monat');
   let shown = $state<string[]>(DEFAULT_SHOWN);
   let picking = $state(false);
@@ -65,7 +66,7 @@
     <MetricView {def} ctx={$ctxQ} {range} />
   {/each}
   {#if !visible.length}<p class="muted">Keine Kennzahl gewählt. Tippe oben auf „Kennzahlen“.</p>{/if}
-  <p class="muted small foot">Rosa hinterlegt: Schneetage. Muskelgruppen, Schmerzverlauf und Ereignisse wie Verletzung, Wettkampf oder Urlaub kommen mit den jeweiligen Bausteinen dazu.</p>
+  <p class="muted small foot">Rosa hinterlegt: Schneetage. Schmerzverlauf und Ereignisse wie Verletzung, Wettkampf oder Urlaub kommen mit den jeweiligen Bausteinen dazu.</p>
 {/if}
 
 <style>

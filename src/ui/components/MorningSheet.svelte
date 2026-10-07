@@ -2,7 +2,7 @@
   import { liveQuery } from 'dexie';
   import { db } from '../../core/db';
   import { today, fmtDay } from '../../core/dates';
-  import { latestNight, lastWeight, saveWeight, parseKg, todaysPlan } from '../../domain/morning/morning';
+  import { latestNight, lastWeight, saveWeight, parseKg, todaysPlan, weightContext } from '../../domain/morning/morning';
   import { app, closeMorning } from '../app.svelte';
   import { num, hours, dur, km, sportName, sportColor } from '../format';
   import type { IcuEvent } from '../../sources/intervals/client';
@@ -14,6 +14,8 @@
   // Aktualisiert sich live, falls der Sync die Nachtwerte erst nach dem Öffnen liefert
   const night = liveQuery(() => latestNight());
   const todayRow = liveQuery(() => db.morning.get(t));
+  const wctx = liveQuery(() => weightContext());
+  const kg = (v: number) => v.toLocaleString('de-DE', { maximumFractionDigits: 1 });
   let prevWeight = $state<{ date: string; kg: number } | null>(null);
   let weight = $state('');
   let weightErr = $state('');
@@ -126,7 +128,13 @@
              placeholder={prevWeight ? String(prevWeight.kg).replace('.', ',') : '–'} autocomplete="off" />
       <span>kg</span>
     </div>
-    {#if prevWeight}<p class="muted small">Zuletzt {String(prevWeight.kg).replace('.', ',')} kg am {fmtDay(prevWeight.date)}</p>{/if}
+    {#if prevWeight || $wctx?.goal != null}
+      <p class="muted small">
+        {#if prevWeight}Zuletzt {kg(prevWeight.kg)} kg am {fmtDay(prevWeight.date)}{/if}
+        {#if $wctx?.avg7 != null} · Ø 7 Tage {kg($wctx.avg7)} kg{/if}
+        {#if $wctx?.goal != null} · Ziel {kg($wctx.goal)} kg{#if $wctx.avg7 != null} (noch {kg(Math.abs($wctx.avg7 - $wctx.goal))} kg){/if}{/if}
+      </p>
+    {/if}
     {#if weightErr}<p class="error small">{weightErr}</p>{/if}
   </section>
 

@@ -2,7 +2,8 @@
  * Statistik-Kennzahlen: reine Funktionen, die aus Aktivitäten/Morgenwerten Zeitreihen bauen.
  * Zeiträume werden in "Eimer" (Tag/Woche/Monat) gruppiert. Fehlende Werte bleiben null (keine 0!).
  */
-import type { Activity, MorningEntry } from '../../core/db';
+import type { Activity, MorningEntry, StrengthSession } from '../../core/db';
+import { CORE_GROUPS, groupLabel, coversGroup } from '../strength/strength';
 import { addDays, weekStart, today } from '../../core/dates';
 import { activityLoad, loadSeries, ownElevation, type HrProfile, type LoadDay } from '../load/load';
 
@@ -64,7 +65,8 @@ export interface MetricResult {
   x: string[];                 // Eimer-Start (YYYY-MM-DD)
   series: Series[];
   stacked?: boolean;
-  summary: { label: string; value: number | null; prev: number | null; better: 1 | -1 | 0 };
+  goal?: number | null;        // Ziellinie (z. B. Zielgewicht)
+  summary: { label: string; value: number | null; prev: number | null; better: 1 | -1 | 0; note?: string };
 }
 export interface MetricDef {
   id: string; title: string; unit: string; digits: number; group: 'training' | 'erholung' | 'koerper';
@@ -72,6 +74,7 @@ export interface MetricDef {
 }
 export interface StatsContext {
   activities: Activity[]; morning: MorningEntry[]; hr: HrProfile; load: LoadDay[];
+  strength: StrengthSession[]; goalWeight: number | null;
 }
 
 const sum = (v: number[]) => v.reduce((a, b) => a + b, 0);
@@ -170,13 +173,37 @@ export const METRICS: MetricDef[] = [
   morningMetric('ruhepuls', 'Ruhepuls', 'bpm', 0, 'restingHr', -1, 'erholung'),
   morningMetric('sleepscore', 'Sleep Score', '', 0, 'sleepScore', 1, 'erholung'),
   morningMetric('schlaf', 'Schlafdauer', 'h', 1, 'sleepSecs', 1, 'erholung', 1 / 3600),
-  morningMetric('gewicht', 'Gewicht', 'kg', 1, 'weight', 0, 'koerper')
+  withGoal(morningMetric('gewicht', 'Gewicht', 'kg', 1, 'weight', 0, 'koerper')),
+  {
+    id: 'muskeln', title: 'Muskelgruppen', unit: '×', digits: 0, group: 'training',
+    compute: (ctx, r) => {
+      const x = bucketsOf(r);
+      const done = ctx.strength.filter(s => !s.skipped && s.muscleGroups.length && inRange(s.date, r));
+      const colors = ['--c-ride', '--c-run', '--c-swim', '--c-strength'];
+      const series: Series[] = CORE_GROUPS.map((g, gi) => {
+        const m = new Map(x.map(k => [k, 0]));
+        for (const s of done) if (coversGroup(s, g)) { const k = bucketKey(s.date, r.bucket); m.set(k, (m.get(k) ?? 0) + 1); }
+        return { label: groupLabel(g), values: x.map(k => m.get(k) ?? 0), color: colors[gi], kind: 'bar' as const };
+      });
+      return { x, series, stacked: true, summary: { label: 'Krafteinheiten', value: done.length, prev: ctx.strength.filter(s => !s.skipped && s.muscleGroups.length && inRange(s.date, previousRange(r))).length, better: 0 } };
+    }
+  }
 ];
 
+function withGoal(def: MetricDef): MetricDef {
+  return { ...def, compute: (ctx, r) => {
+    const res = def.compute(ctx, r);
+    if (ctx.goalWeight == null) return res;
+    const cur = rolling7(ctx, [r.to], 'weight')[0];
+    return { ...res, goal: ctx.goalWeight, summary: cur != null ? { label: 'Ø 7 Tage', value: cur, prev: null, better: 0, note: `noch ${Math.abs(cur - ctx.goalWeight).toLocaleString('de-DE', { maximumFractionDigits: 1 })} kg bis Ziel (${ctx.goalWeight.toLocaleString('de-DE')} kg)` } : res.summary };
+  } };
+}
+
 /** Aktivitäten mit vorab berechneter Belastung (einmal pro Datenstand). */
-export function buildContext(activities: Activity[], morning: MorningEntry[], hr: HrProfile): StatsContext {
-  const withLoad = activities.map(a => Object.assign({}, a, { load: activityLoad(a, hr).load }));
-  return { activities: withLoad as (Activity & { load: number })[], morning, hr, load: loadSeries(activities, hr, today()) };
+export function buildContext(activities: Activity[], morning: MorningEntry[], hr: HrProfile, strength: StrengthSession[] = [], goalWeight: number | null = null): StatsContext {
+  const intens = new Map(strength.filter(s => s.activityId).map(s => [s.activityId!, s.intensity]));
+  const withLoad = activities.map(a => Object.assign({}, a, { load: activityLoad(a, hr, intens.get(a.id)).load }));
+  return { activities: withLoad as (Activity & { load: number })[], morning, hr, load: loadSeries(activities, hr, today(), intens), strength, goalWeight };
 }
 
 /** Schneetage (Ski/Snowboard/Skitour) als Markierungen im Diagramm. */

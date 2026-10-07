@@ -7,6 +7,7 @@
   import ConnectForm from '../components/ConnectForm.svelte';
   import BackupSection from '../components/BackupSection.svelte';
   import HrSettings from '../components/HrSettings.svelte';
+  import SplitSettings from '../components/SplitSettings.svelte';
   import WeightSettings from '../components/WeightSettings.svelte';
 
   const counts = liveQuery(async () => ({
@@ -61,6 +62,9 @@
     </section>
   {/if}
 {/if}
+
+<h3 class="section">Kraft-Split</h3>
+<SplitSettings />
 
 <h3 class="section">Pulswerte</h3>
 <HrSettings />

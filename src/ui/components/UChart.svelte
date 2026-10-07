@@ -65,7 +65,7 @@
       cursor: { sync: { key: 'stats' }, points: { size: 9 }, drag: { x: false, y: false }, dataIdx: (_u, _si, idx) => idx },
       legend: { show: result.series.length > 1, live: true },
       scales: { x: { time: false, range: () => [xs[0] - step * 0.6, xs[xs.length - 1] + step * 0.6] },
-                y: { range: (_u, min, max) => barCount ? [0, (max || 1) * 1.1] : [min - (max - min) * 0.15 - 0.5, max + (max - min) * 0.15 + 0.5] } },
+                y: { range: (_u, min, max) => { if (barCount) return [0, (max || 1) * 1.1]; if (result.goal != null) { min = Math.min(min, result.goal); max = Math.max(max, result.goal); } return [min - (max - min) * 0.15 - 0.5, max + (max - min) * 0.15 + 0.5]; } } },
       axes: [
         { stroke: muted, grid: { show: false }, ticks: { show: false }, size: 26, font: '11px -apple-system, system-ui',
           values: (_u, splits) => splits.map(xLabel), space: 46 },
@@ -83,6 +83,14 @@
             ctx.fillRect(x0, u.bbox.top, Math.max(2, x1 - x0), u.bbox.height);
           }
           ctx.restore();
+        }],
+        draw: [u => {
+          if (result.goal == null) return;
+          const ctx = u.ctx, y = u.valToPos(result.goal, 'y', true);
+          ctx.save(); ctx.strokeStyle = css('--green'); ctx.lineWidth = 1.5 * devicePixelRatio; ctx.setLineDash([6 * devicePixelRatio, 5 * devicePixelRatio]);
+          ctx.beginPath(); ctx.moveTo(u.bbox.left, y); ctx.lineTo(u.bbox.left + u.bbox.width, y); ctx.stroke();
+          ctx.fillStyle = css('--green'); ctx.font = `${11 * devicePixelRatio}px -apple-system, system-ui`; ctx.textAlign = 'right';
+          ctx.fillText('Ziel', u.bbox.left + u.bbox.width - 4, y - 5 * devicePixelRatio); ctx.restore();
         }],
         setCursor: [u => onhover?.(u.cursor.idx ?? null)]
       }

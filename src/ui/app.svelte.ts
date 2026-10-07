@@ -21,7 +21,8 @@ export const app = $state({
   syncState: { historyDone: false } as SyncState,
   persist: 'denied' as PersistState,
   lastBackupAt: 0,
-  showMorning: false
+  showMorning: false,
+  strengthEdit: null as null | { activityId?: string; sessionId?: string; date?: string }
 });
 
 export async function initApp() {
@@ -60,6 +61,10 @@ export async function closeMorning(done: boolean) {
   if (done) await setSetting('morningDone', today());
 }
 export function openMorning() { app.showMorning = true; }
+
+/* ---------- Kraft-Zuordnung ---------- */
+export function openStrength(target: { activityId?: string; sessionId?: string; date?: string }) { app.strengthEdit = target; }
+export function closeStrength() { app.strengthEdit = null; }
 
 export async function connect(athleteInput: string, apiKey: string): Promise<string | null> {
   const c: Credentials = { athleteId: normalizeAthleteId(athleteInput), apiKey: apiKey.trim() };

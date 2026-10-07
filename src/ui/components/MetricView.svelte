@@ -58,6 +58,7 @@
         <p class="sum">
           <span class="muted">{res.summary.label}</span>
           <b>{fmt(res.summary.value)}</b>{#if res.summary.value != null && def.unit}<small> {def.unit}</small>{/if}
+          {#if res.summary.note}<span class="delta">{res.summary.note}</span>{/if}
           {#if delta != null}
             <span class="delta" class:good={res.summary.better !== 0 && delta * res.summary.better >= 1} class:bad={res.summary.better !== 0 && delta * res.summary.better <= -1}>
               {delta > 0 ? '+' : ''}{Math.round(delta)} % zum Vorzeitraum

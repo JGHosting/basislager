@@ -8,6 +8,9 @@
   import SyncChip from '../components/SyncChip.svelte';
   import AmpelCard from '../components/AmpelCard.svelte';
   import LoadCard from '../components/LoadCard.svelte';
+  import StrengthCard from '../components/StrengthCard.svelte';
+  import { groupLabel } from '../../domain/strength/strength';
+  import { openStrength } from '../app.svelte';
   import { computeToday } from '../../domain/today';
   import { ownElevation } from '../../domain/load/load';
 
@@ -22,6 +25,7 @@
   const week = liveQuery(() => db.activities.where('date').between(ws, addDays(ws, 6), true, true).toArray());
   const recent = liveQuery(() => db.activities.orderBy('date').reverse().limit(8).toArray());
   const total = liveQuery(() => db.activities.count());
+  const strengthByAct = liveQuery(async () => new Map((await db.strength.toArray()).filter(s => s.activityId).map(s => [s.activityId!, s])));
 
   // Morgenwerte: heute + Durchschnitt der 7 Tage davor (nur vorhandene Werte)
   const todayEntry = $derived($morning?.find(m => m.date === t));
@@ -107,6 +111,8 @@
     {/if}
   </section>
 
+  <StrengthCard />
+
   {#if $calc?.load}
     <LoadCard day={$calc.load.day} text={$calc.load.text} acwr={$calc.load.acwr} recent={$calc.load.recent} level={$calc.load.state} />
   {/if}
@@ -136,11 +142,12 @@
     {/if}
     <ul class="acts">
       {#each sortedRecent as a (a.id)}
-        <li>
+        {@const ss = $strengthByAct?.get(a.id)}
+        <li class:tap={a.sportType === 'WeightTraining'} onclick={() => a.sportType === 'WeightTraining' && openStrength({ activityId: a.id })}>
           <span class="dot" style="background: {sportColor(a.sportType)}"></span>
           <div class="main">
-            <strong>{sportName(a.sportType)}</strong>
-            <span class="muted">{fmtDay(a.date)}{a.name ? ' · ' + a.name : ''}</span>
+            <strong>{sportName(a.sportType)}{ss && !ss.skipped ? ' · ' + ss.muscleGroups.map(groupLabel).join(' + ') : ''}</strong>
+            <span class="muted">{fmtDay(a.date)}{ss?.intensity ? ` · Intensität ${ss.intensity}/10` : a.name ? ' · ' + a.name : ''}</span>
           </div>
           <div class="right">
             <span>{dur(a.duration ?? a.elapsed)}</span>
@@ -186,6 +193,7 @@
   .acts { list-style: none; margin: 0; padding: 0; }
   .acts li { display: flex; align-items: center; gap: 12px; padding: 12px 0; border-top: 1px solid var(--line); }
   .acts li:first-child { border-top: none; padding-top: 4px; }
+  .acts li.tap { cursor: pointer; }
   .dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
   .main, .right { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
   .main { flex: 1; }
