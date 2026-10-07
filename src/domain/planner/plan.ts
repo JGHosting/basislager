@@ -394,9 +394,9 @@ export function applyInjury(list: PlanSession[], inj: Injury, ws?: string, vacat
     if (s.sport === 'kraft') {
       let gs = (s.groups ?? []).flatMap(g => (g === 'ganzkoerper' ? ['push', 'pull', 'beine', 'rumpf'] as MuscleGroup[] : [g]));
       if (inj.movement.beinkraft === 'nicht') gs = gs.filter(g => g !== 'beine');
-      if (inj.movement.oberkoerper === 'nicht') gs = gs.filter(g => g !== 'push' && g !== 'pull');
+      if (inj.movement.oberkoerper === 'nicht') gs = gs.filter(g => g !== 'push' && g !== 'pull' && g !== 'arme');
       if (!gs.length) { blocked++; continue; }
-      const limited = (gs.includes('beine') && inj.movement.beinkraft === 'eingeschraenkt') || ((gs.includes('push') || gs.includes('pull')) && inj.movement.oberkoerper === 'eingeschraenkt');
+      const limited = (gs.includes('beine') && inj.movement.beinkraft === 'eingeschraenkt') || ((gs.includes('push') || gs.includes('pull') || gs.includes('arme')) && inj.movement.oberkoerper === 'eingeschraenkt');
       out.push({ ...s, groups: gs, title: `Kraft · ${gs.map(groupLabel).join(' + ')}`, intensity: limited ? 'locker' : s.intensity,
         notes: [...s.notes, `${label}: nur erlaubte Muskelgruppen${limited ? ', vorsichtig und leicht' : ''}.`] });
       continue;

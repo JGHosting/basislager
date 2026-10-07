@@ -187,7 +187,7 @@ export const METRICS: MetricDef[] = [
     compute: (ctx, r) => {
       const x = bucketsOf(r);
       const done = ctx.strength.filter(s => !s.skipped && s.muscleGroups.length && inRange(s.date, r));
-      const colors = ['--c-ride', '--c-run', '--c-swim', '--c-strength'];
+      const colors = ['--c-ride', '--c-run', '--c-snow', '--c-swim', '--c-strength'];
       const series: Series[] = CORE_GROUPS.map((g, gi) => {
         const m = new Map(x.map(k => [k, 0]));
         for (const s of done) if (coversGroup(s, g)) { const k = bucketKey(s.date, r.bucket); m.set(k, (m.get(k) ?? 0) + 1); }

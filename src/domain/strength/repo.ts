@@ -1,5 +1,5 @@
 /** Speichern/Laden von Krafteinheiten und Split-Einstellung. */
-import { db, getSetting, setSetting, type StrengthSession, type MuscleGroup, type SplitTemplate } from '../../core/db';
+import { db, getSetting, setSetting, BUILTIN_SPLITS, type StrengthSession, type MuscleGroup, type SplitTemplate } from '../../core/db';
 import { newId } from '../../core/ids';
 
 export async function activeSplit(): Promise<SplitTemplate | null> {
@@ -26,3 +26,8 @@ export async function saveSession(input: { id?: string; activityId?: string; dat
   return row;
 }
 export async function deleteSession(id: string) { await db.strength.delete(id); }
+
+/** Feste Split-Vorlagen ergänzen, falls sie fehlen (z. B. nach Import eines älteren Backups). */
+export async function ensureBuiltinSplits() {
+  for (const s of BUILTIN_SPLITS) if (!(await db.splits.get(s.id))) await db.splits.put(s);
+}

@@ -56,7 +56,7 @@ export interface MorningEntry {
   updatedAt: number;
 }
 
-export type MuscleGroup = 'push' | 'pull' | 'beine' | 'rumpf' | 'ganzkoerper';
+export type MuscleGroup = 'push' | 'pull' | 'arme' | 'beine' | 'rumpf' | 'ganzkoerper';
 
 /** Krafteinheit: nur Muskelgruppen + gefühlte Intensität, keine einzelnen Übungen. */
 export interface StrengthSession {
@@ -76,6 +76,7 @@ export interface SplitTemplate { id: string; name: string; days: MuscleGroup[][]
 export const BUILTIN_SPLITS: SplitTemplate[] = [
   { id: 'split-ppl', name: 'Push / Pull / Beine', days: [['push'], ['pull'], ['beine']], builtin: true, createdAt: 0, updatedAt: 0 },
   { id: 'split-ou', name: 'Ober- / Unterkörper', days: [['push', 'pull'], ['beine', 'rumpf']], builtin: true, createdAt: 0, updatedAt: 0 },
+  { id: 'split-ppa', name: 'Push / Pull / Arme', days: [['push'], ['pull'], ['arme']], builtin: true, createdAt: 0, updatedAt: 0 },
   { id: 'split-gk', name: 'Ganzkörper', days: [['ganzkoerper']], builtin: true, createdAt: 0, updatedAt: 0 }
 ];
 
@@ -210,6 +211,8 @@ export class BasislagerDB extends Dexie {
     });
     // v10: Mahlzeit-Vorlagen
     this.version(10).stores({ mealTemplates: 'id, name' });
+    // v11: neuer fester Split (Push / Pull / Arme) – fehlende Vorlagen ergänzen, eigene bleiben unberührt
+    this.version(11).stores({}).upgrade(async tx => { for (const s of BUILTIN_SPLITS) if (!(await tx.table('splits').get(s.id))) await tx.table('splits').put(s); });
     this.on('populate', tx => { tx.table('splits').bulkPut(BUILTIN_SPLITS); });
   }
 }

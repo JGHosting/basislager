@@ -12,12 +12,13 @@ import { addDays } from '../../core/dates';
 export const GROUPS: { id: MuscleGroup; label: string; hint: string }[] = [
   { id: 'push', label: 'Push', hint: 'Brust, Schulter, Trizeps' },
   { id: 'pull', label: 'Pull', hint: 'Rücken, Bizeps' },
+  { id: 'arme', label: 'Arme', hint: 'Bizeps, Trizeps, Unterarme' },
   { id: 'beine', label: 'Beine', hint: 'Oberschenkel, Po, Waden' },
   { id: 'rumpf', label: 'Rumpf', hint: 'Bauch, unterer Rücken' },
   { id: 'ganzkoerper', label: 'Ganzkörper', hint: 'alles in einer Einheit' }
 ];
-/** Die vier "echten" Gruppen; Ganzkörper zählt für alle vier. */
-export const CORE_GROUPS: MuscleGroup[] = ['push', 'pull', 'beine', 'rumpf'];
+/** Die "echten" Gruppen; Ganzkörper zählt für alle. */
+export const CORE_GROUPS: MuscleGroup[] = ['push', 'pull', 'arme', 'beine', 'rumpf'];
 export const groupLabel = (g: MuscleGroup) => GROUPS.find(x => x.id === g)?.label ?? g;
 export const coversGroup = (s: StrengthSession, g: MuscleGroup) => s.muscleGroups.includes(g) || s.muscleGroups.includes('ganzkoerper');
 

@@ -12,6 +12,7 @@ import { weightSince } from '../domain/morning/morning';
 import { runSync, getSyncState, resetHistory, type SyncState } from '../sources/intervals/sync';
 import { pushPlan, type PushResult } from '../domain/planner/garmin';
 import { refreshCurves } from '../domain/planner/besttimes';
+import { ensureBuiltinSplits } from '../domain/strength/repo';
 import { liveQuery } from 'dexie';
 
 const AUTO_SYNC_AFTER_MS = 10 * 60 * 1000;
@@ -65,6 +66,7 @@ function watchPlanChanges() {
 
 export async function initApp() {
   await weightSince();
+  await ensureBuiltinSplits();
   const cred = await getSetting<Credentials>('intervals');
   app.connected = !!cred;
   app.athleteName = (await getSetting<string>('athleteName')) ?? '';
@@ -190,6 +192,7 @@ export async function askPersist() {
 
 /** Nach jedem Import/Backup aufrufen, damit Anzeige und Sync-Status stimmen. */
 export async function refreshAfterImport() {
+  await ensureBuiltinSplits();
   app.syncState = await getSyncState();
   app.athleteName = (await getSetting<string>('athleteName')) ?? app.athleteName;
   app.lastBackupAt = (await getSetting<number>('lastBackupAt')) ?? 0;

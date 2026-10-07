@@ -1,7 +1,7 @@
 <script lang="ts">
   import { liveQuery } from 'dexie';
   import { db } from '../../core/db';
-  import { today, fmtDay } from '../../core/dates';
+  import { today, fmtDay, addDays } from '../../core/dates';
   import { openStrengthActivities, groupStatus, neglectWarnings, nextSplitDay, groupLabel } from '../../domain/strength/strength';
   import { activeSplit } from '../../domain/strength/repo';
   import { recentlyOnVacation } from '../../domain/vacation/vacation';
@@ -13,7 +13,9 @@
     const [acts, sessions, split, vacs] = await Promise.all([
       db.activities.where('sportType').equals('WeightTraining').toArray(), db.strength.toArray(), activeSplit(), db.vacations.toArray()
     ]);
-    const status = groupStatus(sessions, acts, t);
+    // Arme nur zeigen, wenn sie im aktiven Split vorkommen oder in den letzten 60 Tagen trainiert wurden
+    const armsUsed = !!split?.days.flat().includes('arme') || sessions.some(s => !s.skipped && s.muscleGroups.includes('arme') && s.date >= addDays(t, -60));
+    const status = groupStatus(sessions, acts, t).filter(s => s.group !== 'arme' || armsUsed);
     return {
       open: openStrengthActivities(acts, sessions, t),
       status, split,
@@ -39,7 +41,7 @@
       </button>
     {/if}
 
-    <div class="groups">
+    <div class="groups" style="grid-template-columns: repeat({$data.status.length}, 1fr)">
       {#each $data.status as s}
         <div class="g" class:ready={s.recovered && s.lastDate} class:rest={!s.recovered}>
           <b>{groupLabel(s.group)}</b>
