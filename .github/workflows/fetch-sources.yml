@@ -14,7 +14,7 @@ jobs:
       - uses: actions/checkout@v4
       - name: Probe Open Food Facts
         run: |
-          cd raw
+          mkdir -p raw && cd raw
           UA="Basislager/1.0 (jakob+claude@greimel.com)"
           {
             echo "== v2 product"; curl -sS -D - -A "$UA" -H "Origin: https://jghosting.github.io" "https://world.openfoodfacts.org/api/v2/product/3017624010701.json?fields=product_name,nutriments,serving_size,brands" | head -c 3000; echo
