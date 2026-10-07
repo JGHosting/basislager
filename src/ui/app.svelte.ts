@@ -17,7 +17,8 @@ export const app = $state({
   syncCount: { activities: 0, days: 0 },
   syncError: '',
   syncState: { historyDone: false } as SyncState,
-  persist: 'denied' as PersistState
+  persist: 'denied' as PersistState,
+  lastBackupAt: 0
 });
 
 export async function initApp() {
@@ -26,6 +27,7 @@ export async function initApp() {
   app.athleteName = (await getSetting<string>('athleteName')) ?? '';
   app.syncState = await getSyncState();
   app.persist = await persistState();
+  app.lastBackupAt = (await getSetting<number>('lastBackupAt')) ?? 0;
   app.ready = true;
   const stale = !app.syncState.lastSyncAt || Date.now() - app.syncState.lastSyncAt > AUTO_SYNC_AFTER_MS;
   if (app.connected && navigator.onLine && (stale || !app.syncState.historyDone)) void sync();
@@ -84,4 +86,11 @@ export async function reloadHistory() {
 
 export async function askPersist() {
   app.persist = await requestPersistence();
+}
+
+/** Nach jedem Import/Backup aufrufen, damit Anzeige und Sync-Status stimmen. */
+export async function refreshAfterImport() {
+  app.syncState = await getSyncState();
+  app.athleteName = (await getSetting<string>('athleteName')) ?? app.athleteName;
+  app.lastBackupAt = (await getSetting<number>('lastBackupAt')) ?? 0;
 }

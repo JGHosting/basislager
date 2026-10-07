@@ -5,6 +5,7 @@
   import { app, sync, disconnect, reloadHistory, askPersist } from '../app.svelte';
   import { num } from '../format';
   import ConnectForm from '../components/ConnectForm.svelte';
+  import BackupSection from '../components/BackupSection.svelte';
 
   const counts = liveQuery(async () => ({
     activities: await db.activities.count(),
@@ -57,6 +58,9 @@
   {/if}
 {/if}
 
+<h3 class="section">Backup</h3>
+<BackupSection />
+
 <h3 class="section">Gerät</h3>
 <section class="card list">
   <div><span>Als App installiert</span><b>{standalone ? 'ja' : 'nein, läuft im Browser'}</b></div>
@@ -64,7 +68,7 @@
 </section>
 {#if app.persist === 'denied'}
   <button class="btn ghost wide" onclick={askPersist}>Dauerhaften Speicher erneut anfragen</button>
-  <p class="muted small hint">Safari entscheidet selbst und gewährt ihn oft erst nach einiger Nutzung. Bis dahin schützen dich Backups (kommt im nächsten Schritt).</p>
+  <p class="muted small hint">Safari entscheidet selbst und gewährt ihn oft erst nach einiger Nutzung. Bis dahin schützen dich regelmäßige Backups.</p>
 {/if}
 
 <p class="muted small footer">Basislager · Version {__APP_VERSION__}</p>

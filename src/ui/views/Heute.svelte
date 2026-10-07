@@ -61,6 +61,12 @@
       <p class="small muted">Du kannst die App dabei schließen. Beim nächsten Öffnen geht es an derselben Stelle weiter.</p>
     </section>
   {/if}
+  {#if ($total ?? 0) > 0 && (!app.lastBackupAt || Date.now() - app.lastBackupAt > 30 * 86400000)}
+    <a class="card nudge" href="#/mehr">
+      <span>{app.lastBackupAt ? `Letztes Backup vor ${Math.floor((Date.now() - app.lastBackupAt) / 86400000)} Tagen` : 'Noch kein Backup deiner Daten'}</span>
+      <b>Sichern →</b>
+    </a>
+  {/if}
   {#if app.syncError}
     <p class="card error">{app.syncError}</p>
   {/if}
@@ -138,6 +144,8 @@
   .card-head h2 { margin: 0; }
   .tag { font-size: 12px; color: var(--accent); background: var(--accent-soft); padding: 3px 9px; border-radius: 99px; font-weight: 600; }
   .small { font-size: 13px; }
+  .nudge { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 12px 18px; text-decoration: none; color: var(--muted); font-size: 14px; }
+  .nudge b { color: var(--accent); white-space: nowrap; }
   .import .bar { height: 6px; border-radius: 3px; background: var(--line); overflow: hidden; margin: 12px 0 8px; }
   .import .bar span { display: block; height: 100%; width: 35%; background: var(--accent); border-radius: 3px; animation: slide 1.4s ease-in-out infinite; }
   @keyframes slide { from { transform: translateX(-100%); } to { transform: translateX(290%); } }

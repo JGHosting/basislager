@@ -38,3 +38,4 @@ input:focus { outline: 2px solid var(--accent); border-color: transparent; }
 .btn.ghost { background: transparent; }
 .btn.wide { width: 100%; margin-top: 14px; }
 form .btn.wide { margin-top: 18px; }
+input[hidden] { display: none; }

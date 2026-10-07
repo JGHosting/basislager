@@ -44,18 +44,24 @@ export interface MorningEntry {
   updatedAt: number;
 }
 
+/** Interne Sicherheitskopie vor einem Import (wird selbst nicht exportiert). */
+export interface Snapshot { seq?: number; createdAt: number; reason: string; data: unknown }
+
 export class BasislagerDB extends Dexie {
   settings!: Table<SettingRow, string>;
   activities!: Table<Activity, string>;
   morning!: Table<MorningEntry, string>;
-  constructor() {
-    super('basislager');
+  snapshots!: Table<Snapshot, number>;
+  /** name nur für die Backup-Prüfroutine abweichend (separate Test-Datenbank). */
+  constructor(name = 'basislager') {
+    super(name);
     this.version(1).stores({ settings: 'key' });
     this.version(2).stores({
       settings: 'key',
       activities: 'id, &sourceId, date, sportType',
       morning: 'date'
     });
+    this.version(3).stores({ snapshots: '++seq, createdAt' });
   }
 }
 
