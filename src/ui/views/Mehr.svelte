@@ -6,6 +6,7 @@
   import { num } from '../format';
   import ConnectForm from '../components/ConnectForm.svelte';
   import BackupSection from '../components/BackupSection.svelte';
+  import HrSettings from '../components/HrSettings.svelte';
 
   const counts = liveQuery(async () => ({
     activities: await db.activities.count(),
@@ -57,6 +58,9 @@
     </section>
   {/if}
 {/if}
+
+<h3 class="section">Pulswerte</h3>
+<HrSettings />
 
 <h3 class="section">Backup</h3>
 <BackupSection />

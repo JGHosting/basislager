@@ -6,6 +6,12 @@
   import { sportName, sportColor, dur, km, num, hours } from '../format';
   import ConnectForm from '../components/ConnectForm.svelte';
   import SyncChip from '../components/SyncChip.svelte';
+  import AmpelCard from '../components/AmpelCard.svelte';
+  import LoadCard from '../components/LoadCard.svelte';
+  import { computeToday } from '../../domain/today';
+
+  // Ampel + Belastung: rechnet automatisch neu, sobald sich Aktivitäten, Morgenwerte oder Pulswerte ändern
+  const calc = liveQuery(() => computeToday());
 
   const t = today();
   const ws = weekStart(t);
@@ -71,6 +77,8 @@
     <p class="card error">{app.syncError}</p>
   {/if}
 
+  {#if $calc}<AmpelCard rec={$calc.recovery} />{/if}
+
   <section class="card">
     <div class="card-head"><h2>Morgenwerte</h2><button class="tag" onclick={openMorning}>{todayEntry?.weight != null ? `${String(todayEntry.weight).replace('.', ',')} kg` : '+ Gewicht'}</button></div>
     {#if !todayEntry}
@@ -97,6 +105,10 @@
       </div>
     {/if}
   </section>
+
+  {#if $calc?.load}
+    <LoadCard day={$calc.load.day} text={$calc.load.text} acwr={$calc.load.acwr} recent={$calc.load.recent} level={$calc.load.state} />
+  {/if}
 
   <section class="card">
     <div class="card-head"><h2>Diese Woche</h2><span class="muted small">{fmtDay(ws, { day: '2-digit', month: '2-digit' })} – {fmtDay(addDays(ws, 6), { day: '2-digit', month: '2-digit' })}</span></div>

@@ -6,6 +6,9 @@
   import { app, closeMorning } from '../app.svelte';
   import { num, hours, dur, km, sportName, sportColor } from '../format';
   import type { IcuEvent } from '../../sources/intervals/client';
+  import { computeToday } from '../../domain/today';
+  import AmpelRing from './AmpelRing.svelte';
+  const calc = liveQuery(() => computeToday());
 
   const t = today();
   // Aktualisiert sich live, falls der Sync die Nachtwerte erst nach dem Öffnen liefert
@@ -57,6 +60,17 @@
   <div class="grab"></div>
   <p class="eyebrow">{fmtDay(t, { weekday: 'long', day: 'numeric', month: 'long' })}</p>
   <h2 class="title">{greet}{app.athleteName ? `, ${app.athleteName}` : ''}</h2>
+
+  {#if $calc}
+    <section class="amp">
+      <AmpelRing score={$calc.recovery.score} light={$calc.recovery.light} size={64} />
+      <div>
+        <b class={$calc.recovery.light}>{{ gruen: 'Gut erholt', gelb: 'Mittel erholt', rot: 'Wenig erholt', grau: 'Keine Bewertung' }[$calc.recovery.light]}</b>
+        <span>{$calc.recovery.advice}</span>
+        {#if $calc.recovery.buildingBaseline}<small class="muted">Baseline wird noch aufgebaut</small>{/if}
+      </div>
+    </section>
+  {/if}
 
   <section>
     <h3>{isToday || !$night ? 'Letzte Nacht' : `Letzte Werte vom ${fmtDay($night.entry.date)}`}</h3>
@@ -154,5 +168,9 @@
   .weight span { font-size: 18px; color: var(--muted); }
   .small { font-size: 13px; margin: 8px 0 0; }
   .muted { color: var(--muted); }
+  .amp { display: flex; gap: 14px; align-items: center; }
+  .amp div { display: flex; flex-direction: column; gap: 2px; font-size: 14px; }
+  .amp b { font-size: 17px; }
+  .amp b.gruen { color: var(--green); } .amp b.gelb { color: var(--yellow); } .amp b.rot { color: var(--red); }
   .actions { display: grid; grid-template-columns: 1fr 2fr; gap: 10px; margin-top: 6px; }
 </style>
