@@ -10,6 +10,9 @@ import { db, type Meal, type FoodLogEntry, type MorningEntry } from '../core/db'
 import { addDays } from '../core/dates';
 import { weightSince } from '../domain/morning/morning';
 import { runSync, getSyncState, resetHistory, type SyncState } from '../sources/intervals/sync';
+import { pushPlan, type PushResult } from '../domain/planner/garmin';
+import { refreshCurves } from '../domain/planner/besttimes';
+import { liveQuery } from 'dexie';
 
 const AUTO_SYNC_AFTER_MS = 10 * 60 * 1000;
 
@@ -29,8 +32,36 @@ export const app = $state({
   foodSheet: null as null | { mode: 'add'; date: string; meal: Meal } | { mode: 'edit'; entry: FoodLogEntry },
   injurySheet: null as null | { id?: string },
   goalSheet: null as null | { id?: string },
-  activitySheet: null as null | { id: string }
+  activitySheet: null as null | { id: string },
+  garmin: { busy: false, error: '', last: null as PushResult | null }
 });
+
+/* ---------- Plan → Garmin (über intervals.icu) ---------- */
+let pushTimer: ReturnType<typeof setTimeout> | undefined;
+/** Planänderungen gesammelt nach kurzer Pause an intervals.icu schicken. */
+export function schedulePush(delay = 4000) {
+  clearTimeout(pushTimer);
+  pushTimer = setTimeout(() => { void pushNow(); }, delay);
+}
+export async function pushNow(): Promise<PushResult | null> {
+  if (!app.connected || !navigator.onLine) return null;
+  app.garmin.busy = true; app.garmin.error = '';
+  try {
+    const r = await pushPlan();
+    if (r) app.garmin.last = r;
+    return r;
+  } catch (e) {
+    app.garmin.error = e instanceof Error ? e.message : String(e);
+    return null;
+  } finally { app.garmin.busy = false; }
+}
+function watchPlanChanges() {
+  let first = true;
+  liveQuery(() => Promise.all([
+    db.planEdits.toArray(), db.goals.toArray(), db.injuries.toArray(), db.vacations.toArray(), db.fixedEvents.toArray(),
+    db.strength.count(), db.settings.where('key').anyOf('runsPerWeek', 'activeSplit', 'garmin', 'hrMax').toArray()
+  ])).subscribe(() => { if (first) { first = false; return; } schedulePush(); });
+}
 
 export async function initApp() {
   await weightSince();
@@ -40,7 +71,9 @@ export async function initApp() {
   app.syncState = await getSyncState();
   app.persist = await persistState();
   app.lastBackupAt = (await getSetting<number>('lastBackupAt')) ?? 0;
+  app.garmin.last = (await getSetting<PushResult>('garminLast')) ?? null;
   app.ready = true;
+  watchPlanChanges();
   const stale = !app.syncState.lastSyncAt || Date.now() - app.syncState.lastSyncAt > AUTO_SYNC_AFTER_MS;
   if (app.connected && navigator.onLine && (stale || !app.syncState.historyDone)) void sync();
   void maybeShowMorning();
@@ -141,6 +174,7 @@ export async function sync(userTriggered = false) {
   } finally {
     app.syncing = false;
     void maybeShowMorning();
+    if (!app.syncError) { schedulePush(500); refreshCurves().catch(() => { /* Bestzeiten notfalls aus ganzen Aktivitäten */ }); }
   }
 }
 

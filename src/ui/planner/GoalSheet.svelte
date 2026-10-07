@@ -5,6 +5,7 @@
   import { SPORTS, DISTANCE_PRESETS, TRI, recommendedStart, parseTime, fmtTime } from '../../domain/planner/goals';
   import { saveGoal, archiveGoal, lowBase } from '../../domain/planner/repo';
   import { app, closeGoal } from '../app.svelte';
+  import { predictFor } from '../../domain/planner/besttimes';
 
   const target = app.goalSheet!;
   let existing = $state<Goal | null>(null);
@@ -27,6 +28,22 @@
   const hasElev = $derived(SPORTS.find(s => s.id === sport)!.hasElevation);
   const rec = $derived(date > today() ? recommendedStart({ sport, distanceKm: km, triDistance: tri, elevation: Number(elevation) || null, date }, low, today()) : null);
   $effect(() => { if (rec && !startTouched) planStart = rec.start; });
+
+  // Zielzeit-Vorschlag aus Bestzeiten (Straßenlauf; Triathlon: Laufteil mit Zuschlag fürs Laufen nach dem Rad)
+  let pred = $state<{ now: number; goal: number; from: string; weekKm: number } | null>(null);
+  $effect(() => {
+    const k = sport === 'lauf' ? km : sport === 'triathlon' ? TRI[tri].run : null;
+    const d = date, sp = sport;
+    if (!k || !(k > 0)) { pred = null; return; }
+    predictFor(k).then(p => {
+      if (!p) { pred = null; return; }
+      const now = p.secs * (sp === 'triathlon' ? 1.06 : 1);
+      const weeks = Math.max(0, (Date.parse(d) - Date.parse(today())) / 604800000);
+      const gain = Math.min(0.04, weeks * 0.003);        // vorsichtig: bis zu 4 % schneller durch die Vorbereitung
+      pred = { now, goal: now * (1 - gain), from: p.from, weekKm: p.weekKm };
+    });
+  });
+  const setPred = (v: number) => { const t = fmtTime(Math.round(v / 15) * 15); if (sport === 'triathlon') tRun = t; else time = t; };
 
   async function save() {
     err = '';
@@ -81,6 +98,16 @@
     {:else}
       <input bind:value={time} placeholder="egal  (z. B. 1:45:00)" inputmode="numeric" />
     {/if}
+    {#if pred}
+      <div class="pred">
+        <p>Nach deinen Bestzeiten (Basis: {pred.from}) aktuell realistisch: <b>{fmtTime(Math.round(pred.now / 15) * 15)}</b>{sport === 'triathlon' ? ' im Laufteil' : ''}.
+          {#if pred.goal < pred.now - 20}Mit der Vorbereitung bis zum Wettkampf ambitioniert: <b>{fmtTime(Math.round(pred.goal / 15) * 15)}</b>.{/if}</p>
+        <div class="pbtn">
+          <button class="link" onclick={() => setPred(pred!.now)}>Realistisch übernehmen</button>
+          {#if pred.goal < pred.now - 20}<button class="link" onclick={() => setPred(pred!.goal)}>Ambitioniert übernehmen</button>{/if}
+        </div>
+      </div>
+    {/if}
     <p class="muted small">Format h:mm:ss oder h:mm. Mit Zielzeit richten sich die Lauf-Paces danach, sonst nach deinen bisherigen Läufen.</p>
   </section>
 
@@ -118,6 +145,10 @@
   .chips button small { font-size: 11px; color: var(--muted); }
   .chips button.on { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; } .chips button.on small { color: #fff; }
   label { margin-top: 12px; font-size: 13px; }
+  .pred { background: var(--accent-soft); border-radius: 12px; padding: 10px 12px; margin-top: 10px; }
+  .pred p { margin: 0; font-size: 14px; line-height: 1.45; }
+  .pbtn { display: flex; gap: 0 18px; flex-wrap: wrap; margin-top: 4px; }
+  .pbtn .link { margin: 0; }
   .grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; } .grid3 label { margin-top: 0; }
   .small { font-size: 13px; }
   .rec { font-size: 14px; margin: 0 0 4px; line-height: 1.45; }

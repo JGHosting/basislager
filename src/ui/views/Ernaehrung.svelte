@@ -1,7 +1,9 @@
 <script lang="ts">
   import { liveQuery } from 'dexie';
   import { today, addDays, fmtDay } from '../../core/dates';
-  import { dayView, recentDays, setTracked, getKcalGoal, setKcalGoal } from '../../domain/nutrition/repo';
+  import { dayView, recentDays, setTracked, getKcalGoal, setKcalGoal, getMacroGoals, setMacroGoals } from '../../domain/nutrition/repo';
+  import { db } from '../../core/db';
+  import MealQuick from '../nutrition/MealQuick.svelte';
   import { MEALS, scale, fmtG, unitLabel } from '../../domain/nutrition/calc';
   import { openFood } from '../app.svelte';
   import KcalBar from '../nutrition/KcalBar.svelte';
@@ -18,6 +20,15 @@
     return () => sub.unsubscribe();
   });
   const goalQ = liveQuery(() => getKcalGoal());
+  const macroQ = liveQuery(() => getMacroGoals());
+  const weightQ = liveQuery(async () => (await db.morning.orderBy('date').reverse().filter(m => m.weight != null).first())?.weight ?? null);
+  let mP = $state(''), mC = $state(''), mF = $state('');
+  const parseG = (v: string) => { const n = Math.round(Number(v.replace(',', '.'))); return v.trim() && n > 0 && n < 1000 ? n : null; };
+  function startEdit() {
+    goalInput = $goalQ ? String($goalQ) : '';
+    mP = $macroQ?.protein ? String($macroQ.protein) : ''; mC = $macroQ?.carbs ? String($macroQ.carbs) : ''; mF = $macroQ?.fat ? String($macroQ.fat) : '';
+    goalEdit = true;
+  }
   const history = liveQuery(() => recentDays(7, today()));
 
   let open = $state<Record<Meal, boolean>>({ fruehstueck: true, mittag: true, abend: true, snack: true });
@@ -25,7 +36,9 @@
   async function saveGoal() {
     const n = Math.round(Number(goalInput.replace(/\./g, '').replace(',', '.')));
     if (!(n >= 800 && n <= 8000)) { goalErr = 'Bitte ein Ziel zwischen 800 und 8000 kcal.'; return; }
-    await setKcalGoal(n); goalEdit = false; goalErr = '';
+    await setKcalGoal(n);
+    if (goalEdit) await setMacroGoals({ protein: parseG(mP), carbs: parseG(mC), fat: parseG(mF) });
+    goalEdit = false; goalErr = '';
   }
   const kcal = (v: number) => Math.round(v).toLocaleString('de-DE');
 </script>
@@ -54,19 +67,30 @@
         <h2>{goalEdit ? 'Kalorienziel ändern' : 'Tägliches Kalorienziel festlegen'}</h2>
         <form class="goalform" onsubmit={e => { e.preventDefault(); saveGoal(); }}>
           <input bind:value={goalInput} inputmode="numeric" placeholder="z. B. 2200" /><span>kcal</span>
-          <button class="btn primary">Speichern</button>
+          {#if !goalEdit}<button class="btn primary">Speichern</button>{/if}
         </form>
+        {#if goalEdit}
+          <p class="mlabel">Makroziele (optional, in g pro Tag)</p>
+          <div class="mgrid">
+            <label>Protein<input bind:value={mP} inputmode="numeric" placeholder="–" /></label>
+            <label>Kohlenhydrate<input bind:value={mC} inputmode="numeric" placeholder="–" /></label>
+            <label>Fett<input bind:value={mF} inputmode="numeric" placeholder="–" /></label>
+          </div>
+          {#if $weightQ}<p class="muted small">Orientierung Protein bei Training: 1,6–2,0 g pro kg → {Math.round($weightQ * 1.6)}–{Math.round($weightQ * 2)} g. <button type="button" class="link inl" onclick={() => (mP = String(Math.round($weightQ * 1.8)))}>{Math.round($weightQ * 1.8)} g übernehmen</button></p>{/if}
+          <button class="btn primary wide" onclick={saveGoal}>Speichern</button>
+        {/if}
         {#if goalErr}<p class="error small">{goalErr}</p>{/if}
         {#if goalEdit}<button class="link" onclick={() => (goalEdit = false)}>Abbrechen</button>{/if}
       {:else}
         {@const eaten = v.total.kcal.value}
         <div class="big">
-          <span><b>{kcal(eaten)}</b> / <button class="goal" onclick={() => { goalInput = String($goalQ); goalEdit = true; }}>{kcal($goalQ)}</button> kcal</span>
+          <span><b>{kcal(eaten)}</b> / <button class="goal" onclick={startEdit}>{kcal($goalQ)}</button> kcal</span>
           <span class="rest" class:over={eaten > $goalQ}>{eaten > $goalQ ? `${kcal(eaten - $goalQ)} kcal über dem Ziel` : `${kcal($goalQ - eaten)} kcal übrig`}</span>
         </div>
         <KcalBar {eaten} goal={$goalQ} />
         {#if v.total.kcal.known < v.total.kcal.total}<p class="warn small">{v.total.kcal.total - v.total.kcal.known} Einträge ohne Kalorienangabe sind nicht mitgezählt.</p>{/if}
-        <div class="mac"><MacroLine sum={v.total} big /></div>
+        <div class="mac"><MacroLine sum={v.total} big goals={$macroQ} /></div>
+        {#if !$macroQ?.protein && !$macroQ?.carbs && !$macroQ?.fat}<button class="link" onclick={startEdit}>Makroziele festlegen</button>{/if}
       {/if}
     </section>
 
@@ -90,6 +114,7 @@
             </ul>
           {/if}
           <button class="add" onclick={() => openFood({ mode: 'add', date, meal: m.id })}>+ Lebensmittel hinzufügen</button>
+          <MealQuick {date} meal={m.id} entries={meal.entries} />
         {/if}
       </section>
     {/each}
@@ -130,6 +155,12 @@
   .goalform { display: flex; gap: 8px; align-items: center; } .goalform input { margin: 0; flex: 1; font-size: 20px; font-weight: 650; }
   .goalform span { color: var(--muted); }
   .link { background: none; border: none; color: var(--accent); font: inherit; font-weight: 600; cursor: pointer; padding: 8px 0 0; }
+  .mlabel { font-size: 13px; font-weight: 600; color: var(--muted); margin: 16px 0 6px; }
+  .mgrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .mgrid label { font-size: 12px; color: var(--muted); }
+  .mgrid input { margin: 4px 0 0; width: 100%; font-weight: 650; }
+  .inl { padding: 0; font-size: 13px; }
+  .goalform + .mlabel { margin-top: 14px; }
   .untracked h2 { margin-bottom: 4px; }
   .meal { padding: 6px 16px; }
   .mhead { width: 100%; display: flex; justify-content: space-between; align-items: center; gap: 10px; background: none; border: none; font: inherit; color: var(--text);

@@ -9,6 +9,7 @@
   import HrSettings from '../components/HrSettings.svelte';
   import SplitSettings from '../components/SplitSettings.svelte';
   import WeightSettings from '../components/WeightSettings.svelte';
+  import GarminSettings from '../components/GarminSettings.svelte';
 
   const counts = liveQuery(async () => ({
     activities: await db.activities.count(),
@@ -64,6 +65,9 @@
     </section>
   {/if}
 {/if}
+
+<h3 class="section">Garmin-Uhr</h3>
+<GarminSettings />
 
 <h3 class="section">Kraft-Split</h3>
 <SplitSettings />

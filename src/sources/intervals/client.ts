@@ -42,6 +42,7 @@ export interface IcuEvent {
   distance?: number | null;
   icu_training_load?: number | null;
   description?: string | null;
+  external_id?: string | null;
 }
 
 export class IcuError extends Error {
@@ -50,12 +51,12 @@ export class IcuError extends Error {
   }
 }
 
-async function get<T>(cred: Credentials, path: string): Promise<T> {
+async function get<T>(cred: Credentials, path: string, method = 'GET', body?: unknown): Promise<T> {
   let res: Response;
   try {
-    res = await fetch(BASE + path, {
-      headers: { Authorization: 'Basic ' + btoa('API_KEY:' + cred.apiKey.trim()) }
-    });
+    const headers: Record<string, string> = { Authorization: 'Basic ' + btoa('API_KEY:' + cred.apiKey.trim()) };
+    if (body !== undefined) headers['Content-Type'] = 'application/json';
+    res = await fetch(BASE + path, { method, headers, body: body === undefined ? undefined : JSON.stringify(body) });
   } catch {
     throw new IcuError('Keine Verbindung zu intervals.icu. Bist du offline?', 'network');
   }
@@ -64,7 +65,8 @@ async function get<T>(cred: Credentials, path: string): Promise<T> {
   if (res.status === 404) throw new IcuError('Athlete-ID nicht gefunden.', 'notfound');
   if (res.status === 429) throw new IcuError('Zu viele Anfragen. Bitte in einer Minute nochmal.', 'ratelimit');
   if (!res.ok) throw new IcuError(`intervals.icu antwortet mit Fehler ${res.status}.`, 'other');
-  return res.json() as Promise<T>;
+  const text = await res.text();
+  return (text ? JSON.parse(text) : null) as T;
 }
 
 export const icu = {
@@ -80,8 +82,24 @@ export const icu = {
   streams: (c: Credentials, id: string, types: string[]) =>
     get<{ type: string; data: (number | null)[] }[]>(c, `/activity/${encodeURIComponent(id)}/streams?types=${types.join(',')}`),
   wellness: (c: Credentials, oldest: string, newest: string) =>
-    get<IcuWellness[]>(c, `/athlete/${c.athleteId}/wellness?oldest=${oldest}&newest=${newest}`)
+    get<IcuWellness[]>(c, `/athlete/${c.athleteId}/wellness?oldest=${oldest}&newest=${newest}`),
+  /** Beste Pace-Kurven (Laufen) über die angegebenen Zeiträume, z. B. ['all', '1y']. */
+  paceCurves: (c: Credentials, curves: string[]) =>
+    get<{ list?: { id?: string; label?: string; distance?: number[]; values?: number[]; secs?: number[]; activity_id?: string[] }[]; activities?: Record<string, unknown> }>(
+      c, `/athlete/${c.athleteId}/pace-curves.json?type=Run&curves=${curves.join(',')}`),
+  /** Geplante Workouts anlegen/aktualisieren (Abgleich über external_id). */
+  upsertEvents: (c: Credentials, events: IcuEventIn[]) =>
+    get<IcuEvent[]>(c, `/athlete/${c.athleteId}/events/bulk?upsert=true`, 'POST', events),
+  updateEvent: (c: Credentials, id: number | string, ev: IcuEventIn) =>
+    get<IcuEvent>(c, `/athlete/${c.athleteId}/events/${id}`, 'PUT', ev),
+  deleteEvents: (c: Credentials, refs: ({ id: number | string } | { external_id: string })[]) =>
+    get<unknown>(c, `/athlete/${c.athleteId}/events/bulk-delete`, 'PUT', refs)
 };
+
+export interface IcuEventIn {
+  category: 'WORKOUT'; start_date_local: string; type: string; name: string;
+  description: string; moving_time: number; external_id: string;
+}
 
 /** Normalisiert die Eingabe: "i123456", "123456" oder ganze URL → "i123456". */
 export function normalizeAthleteId(input: string): string {

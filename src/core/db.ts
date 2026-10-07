@@ -112,6 +112,12 @@ export interface FoodLogEntry {
 }
 /** Nur vorhanden, wenn ein Tag bewusst NICHT getrackt wird. */
 export interface NutritionDay { date: string; tracked: boolean; updatedAt: number }
+/** Gespeicherte Mahlzeit (z. B. "Standard-Frühstück"): mit einem Tipp komplett eintragen. */
+export interface MealTemplate {
+  id: string; name: string; meal?: Meal;
+  items: Pick<FoodLogEntry, 'foodId' | 'snapshot' | 'amount' | 'unit' | 'grams'>[];
+  useCount: number; createdAt: number; updatedAt: number;
+}
 
 /* ---------- Verletzung ---------- */
 export type Movement = 'gehen' | 'laufen' | 'bergab' | 'springen' | 'rad' | 'schwimmen' | 'beinkraft' | 'oberkoerper';
@@ -170,6 +176,7 @@ export class BasislagerDB extends Dexie {
   planEdits!: Table<PlanEdit, string>;
   fixedEvents!: Table<FixedEvent, string>;
   vacations!: Table<Vacation, string>;
+  mealTemplates!: Table<MealTemplate, string>;
   /** name nur für die Backup-Prüfroutine abweichend (separate Test-Datenbank). */
   constructor(name = 'basislager') {
     super(name);
@@ -201,6 +208,8 @@ export class BasislagerDB extends Dexie {
         await tx.table('fixedEvents').delete(e.id);
       }
     });
+    // v10: Mahlzeit-Vorlagen
+    this.version(10).stores({ mealTemplates: 'id, name' });
     this.on('populate', tx => { tx.table('splits').bulkPut(BUILTIN_SPLITS); });
   }
 }

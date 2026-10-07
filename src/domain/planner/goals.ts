@@ -61,6 +61,7 @@ export function parseTime(s: string): number | null {
 }
 export function fmtTime(sec: number | null | undefined): string {
   if (sec == null) return 'egal';
+  sec = Math.round(sec);
   const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60), s = Math.round(sec % 60);
   return h ? `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}` : `${m}:${String(s).padStart(2, '0')}`;
 }

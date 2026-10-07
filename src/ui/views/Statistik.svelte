@@ -5,6 +5,7 @@
   import { hrProfile } from '../../domain/load/load';
   import { METRICS, PERIODS, rangeFor, buildContext, type Period } from '../../domain/stats/metrics';
   import MetricView from '../components/MetricView.svelte';
+  import BestTimes from '../components/BestTimes.svelte';
 
   // Daten einmal laden; liveQuery rechnet bei neuen Daten automatisch neu
   const ctxQ = liveQuery(async () => {
@@ -18,17 +19,25 @@
     return buildContext(acts, morning, hr, strength, goal ?? null, foodlog, ndays, kcalGoal ?? null, injuries, vacations);
   });
 
-  const DEFAULT_SHOWN = ['belastung', 'zeit', 'verteilung', 'muskeln', 'hrv', 'ruhepuls', 'sleepscore', 'gewicht'];
+  const DEFAULT_SHOWN = ['bestzeiten', 'belastung', 'zeit', 'verteilung', 'muskeln', 'hrv', 'ruhepuls', 'sleepscore', 'gewicht'];
   let period = $state<Period>('monat');
   let shown = $state<string[]>(DEFAULT_SHOWN);
   let picking = $state(false);
   getSetting<Period>('statsPeriod').then(p => p && (period = p));
-  getSetting<string[]>('statsShown').then(s => s && (shown = s));
+  getSetting<string[]>('statsShown').then(async s => {
+    if (!s) return;
+    // Bestzeiten einmalig für bestehende Auswahl ergänzen
+    if (!(await getSetting<boolean>('statsBestAdded')) && !s.includes('bestzeiten')) { s = ['bestzeiten', ...s]; void setSetting('statsShown', s); }
+    void setSetting('statsBestAdded', true);
+    shown = s;
+  });
+  const EXTRA = [{ id: 'bestzeiten', title: 'Bestzeiten & Prognose', group: 'training' }] as const;
+  type Item = (typeof METRICS)[number] | (typeof EXTRA)[number];
 
   const earliest = $derived($ctxQ?.activities.reduce<string | undefined>((m, a) => (!m || a.date < m ? a.date : m), undefined));
   const range = $derived(rangeFor(period, earliest));
   // Reihenfolge = Reihenfolge in 'shown' (vom Nutzer sortierbar)
-  const visible = $derived(shown.map(id => METRICS.find(m => m.id === id)).filter((m): m is (typeof METRICS)[number] => !!m));
+  const visible = $derived(shown.map(id => (METRICS as readonly Item[]).concat(EXTRA).find(m => m.id === id)).filter((m): m is Item => !!m));
 
   function setPeriod(p: Period) { period = p; void setSetting('statsPeriod', p); }
   function toggle(id: string) {
@@ -74,7 +83,7 @@
     {#each Object.entries(GROUPS) as [g, gl]}
       <h3>{gl}</h3>
       <div class="chips">
-        {#each METRICS.filter(m => m.group === g) as m}
+        {#each (METRICS as readonly Item[]).concat(EXTRA).filter(m => m.group === g) as m}
           <button class:on={shown.includes(m.id)} onclick={() => toggle(m.id)}>{m.title}</button>
         {/each}
       </div>
@@ -86,7 +95,7 @@
   <p class="muted">Lade …</p>
 {:else}
   {#each visible as def (def.id)}
-    <MetricView {def} ctx={$ctxQ} {range} />
+    {#if def.id === 'bestzeiten'}<BestTimes activities={$ctxQ.activities} />{:else}<MetricView def={def as (typeof METRICS)[number]} ctx={$ctxQ} {range} />{/if}
   {/each}
   {#if !visible.length}<p class="muted">Keine Kennzahl gewählt. Tippe oben auf „Kennzahlen“.</p>{/if}
   <p class="muted small foot">Rosa hinterlegt: Schneetage, rötlich: Verletzungsphasen, blau: Urlaub. Ernährung: nicht getrackte Tage und Tage ohne Einträge bleiben leer. Schmerzverlauf und Ereignisse wie Verletzung, Wettkampf oder Urlaub kommen mit den jeweiligen Bausteinen dazu.</p>

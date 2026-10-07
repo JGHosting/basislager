@@ -1,5 +1,5 @@
 /** Ernährungstagebuch: Einträge, Cache, Favoriten, Tracking-Status, Tagessummen. */
-import { db, getSetting, setSetting, type Food, type FoodLogEntry, type FoodUnit, type Meal } from '../../core/db';
+import { db, getSetting, setSetting, type Food, type FoodLogEntry, type FoodUnit, type Meal, type MealTemplate } from '../../core/db';
 import { newId } from '../../core/ids';
 import { addDays } from '../../core/dates';
 import { vacationOn } from '../vacation/vacation';
@@ -76,6 +76,56 @@ export async function setTracked(date: string, tracked: boolean) {
 /* ---------- Ziel ---------- */
 export const getKcalGoal = async () => (await getSetting<number | null>('kcalGoal')) ?? null;
 export const setKcalGoal = (v: number | null) => setSetting('kcalGoal', v);
+
+/* ---------- Makroziele (optional, je Wert einzeln) ---------- */
+export interface MacroGoals { protein: number | null; carbs: number | null; fat: number | null }
+export const getMacroGoals = async (): Promise<MacroGoals> => ({ protein: null, carbs: null, fat: null, ...(await getSetting<MacroGoals>('macroGoals')) });
+export const setMacroGoals = (g: MacroGoals) => setSetting('macroGoals', { ...g });
+
+/* ---------- Schnell eintragen: kopieren & Vorlagen ---------- */
+type Item = MealTemplate['items'][number];
+const toItem = (e: Item): Item => ({ foodId: e.foodId, snapshot: plain(e.snapshot), amount: e.amount, unit: e.unit, grams: e.grams });
+
+/** Einträge (z. B. die Mahlzeit von gestern oder eine Vorlage) in einen Tag/eine Mahlzeit übernehmen. Gibt die neuen IDs zurück (für "Rückgängig"). */
+export async function addItems(items: Item[], date: string, meal: Meal): Promise<string[]> {
+  const now = Date.now(); const ids: string[] = [];
+  await db.transaction('rw', db.foods, db.foodlog, async () => {
+    let i = 0;
+    for (const it of items.map(toItem)) {
+      const id = newId(); ids.push(id);
+      await db.foodlog.put({ ...it, id, date, meal, createdAt: now + i, updatedAt: now + i });
+      i++;
+      const f = await db.foods.get(it.foodId);
+      if (f) await db.foods.put({ ...f, useCount: f.useCount + 1, lastUsedAt: now, updatedAt: now });
+    }
+  });
+  return ids;
+}
+export async function removeEntries(ids: string[]) { await db.foodlog.bulkDelete(ids); }
+
+/** Letzter Tag vor `date` (bis 7 Tage zurück), an dem diese Mahlzeit eingetragen wurde. */
+export async function lastMeal(date: string, meal: Meal): Promise<{ date: string; entries: FoodLogEntry[] } | null> {
+  for (let i = 1; i <= 7; i++) {
+    const d = addDays(date, -i);
+    const es = (await db.foodlog.where('date').equals(d).toArray()).filter(e => e.meal === meal).sort((a, b) => a.createdAt - b.createdAt);
+    if (es.length) return { date: d, entries: es };
+  }
+  return null;
+}
+
+export const listTemplates = () => db.mealTemplates.toArray().then(l => l.sort((a, b) => b.useCount - a.useCount || a.name.localeCompare(b.name)));
+export async function saveTemplate(name: string, entries: Item[], meal?: Meal): Promise<MealTemplate> {
+  const now = Date.now();
+  const t: MealTemplate = { id: newId(), name: name.trim(), meal, items: entries.map(toItem), useCount: 0, createdAt: now, updatedAt: now };
+  await db.mealTemplates.put(t); return t;
+}
+export async function useTemplate(t: MealTemplate, date: string, meal: Meal): Promise<string[]> {
+  const ids = await addItems(t.items, date, meal);
+  const cur = await db.mealTemplates.get(t.id);
+  if (cur) await db.mealTemplates.put({ ...cur, useCount: cur.useCount + 1, updatedAt: Date.now() });
+  return ids;
+}
+export async function deleteTemplate(id: string) { await db.mealTemplates.delete(id); }
 
 /* ---------- Tag ---------- */
 export interface DayView { date: string; tracked: boolean; vacation: boolean; entries: FoodLogEntry[]; total: Sums; meals: Record<Meal, { entries: FoodLogEntry[]; sum: Sums }> }
