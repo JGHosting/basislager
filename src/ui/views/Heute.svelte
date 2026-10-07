@@ -2,7 +2,7 @@
   import { liveQuery } from 'dexie';
   import { db } from '../../core/db';
   import { today, addDays, weekStart, fmtDay } from '../../core/dates';
-  import { app } from '../app.svelte';
+  import { app, openMorning } from '../app.svelte';
   import { sportName, sportColor, dur, km, num, hours } from '../format';
   import ConnectForm from '../components/ConnectForm.svelte';
   import SyncChip from '../components/SyncChip.svelte';
@@ -72,7 +72,7 @@
   {/if}
 
   <section class="card">
-    <div class="card-head"><h2>Morgenwerte</h2><span class="tag">Ampel folgt</span></div>
+    <div class="card-head"><h2>Morgenwerte</h2><button class="tag" onclick={openMorning}>{todayEntry?.weight != null ? `${String(todayEntry.weight).replace('.', ',')} kg` : '+ Gewicht'}</button></div>
     {#if !todayEntry}
       <p class="muted">Für heute noch keine Werte. Die Uhr überträgt sie meist kurz nach dem Aufwachen, sobald Garmin Connect synchronisiert.</p>
     {:else}
@@ -142,7 +142,7 @@
 <style>
   .card-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-bottom: 10px; }
   .card-head h2 { margin: 0; }
-  .tag { font-size: 12px; color: var(--accent); background: var(--accent-soft); padding: 3px 9px; border-radius: 99px; font-weight: 600; }
+  .tag { border: none; font-family: inherit; cursor: pointer; font-size: 13px; color: var(--accent); background: var(--accent-soft); padding: 3px 9px; border-radius: 99px; font-weight: 600; }
   .small { font-size: 13px; }
   .nudge { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 12px 18px; text-decoration: none; color: var(--muted); font-size: 14px; }
   .nudge b { color: var(--accent); white-space: nowrap; }

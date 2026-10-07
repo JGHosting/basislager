@@ -4,6 +4,7 @@
  */
 import { getSetting, setSetting, deleteSetting, requestPersistence, persistState, type PersistState } from '../core/db';
 import { icu, IcuError, normalizeAthleteId, type Credentials } from '../sources/intervals/client';
+import { today } from '../core/dates';
 import { runSync, getSyncState, resetHistory, type SyncState } from '../sources/intervals/sync';
 
 const AUTO_SYNC_AFTER_MS = 10 * 60 * 1000;
@@ -18,7 +19,8 @@ export const app = $state({
   syncError: '',
   syncState: { historyDone: false } as SyncState,
   persist: 'denied' as PersistState,
-  lastBackupAt: 0
+  lastBackupAt: 0,
+  showMorning: false
 });
 
 export async function initApp() {
@@ -31,13 +33,31 @@ export async function initApp() {
   app.ready = true;
   const stale = !app.syncState.lastSyncAt || Date.now() - app.syncState.lastSyncAt > AUTO_SYNC_AFTER_MS;
   if (app.connected && navigator.onLine && (stale || !app.syncState.historyDone)) void sync();
+  void maybeShowMorning();
   // Beim Zurückkehren in die App ebenfalls abgleichen, wenn es länger her ist
   document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState !== 'visible' || !app.connected || app.syncing) return;
+    if (document.visibilityState !== 'visible' || !app.connected) return;
+    void maybeShowMorning();
+    if (app.syncing) return;
     const last = app.syncState.lastSyncAt ?? 0;
     if (Date.now() - last > AUTO_SYNC_AFTER_MS) void sync();
   });
 }
+
+/* ---------- Morgenpopup ---------- */
+
+/** Zeigt das Popup beim ersten Öffnen des Tages, solange es heute nicht mit "Fertig" geschlossen wurde. */
+async function maybeShowMorning() {
+  if (!app.connected || app.showMorning) return;
+  const done = await getSetting<string>('morningDone');
+  if (done !== today()) app.showMorning = true;
+}
+/** done=true: für heute erledigt. done=false ("Später"): beim nächsten Öffnen wieder. */
+export async function closeMorning(done: boolean) {
+  app.showMorning = false;
+  if (done) await setSetting('morningDone', today());
+}
+export function openMorning() { app.showMorning = true; }
 
 export async function connect(athleteInput: string, apiKey: string): Promise<string | null> {
   const c: Credentials = { athleteId: normalizeAthleteId(athleteInput), apiKey: apiKey.trim() };

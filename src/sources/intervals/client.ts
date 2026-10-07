@@ -31,6 +31,19 @@ export interface IcuWellness {
   weight?: number | null;
 }
 
+/** Kalendereintrag (geplantes Training, Notiz, Wettkampf). */
+export interface IcuEvent {
+  id: number | string;
+  start_date_local: string;
+  category: string;          // WORKOUT, NOTE, RACE_A/B/C, HOLIDAY, SICK …
+  name?: string;
+  type?: string;             // Sportart bei WORKOUT
+  moving_time?: number | null;
+  distance?: number | null;
+  icu_training_load?: number | null;
+  description?: string | null;
+}
+
 export class IcuError extends Error {
   constructor(message: string, public kind: 'auth' | 'notfound' | 'network' | 'ratelimit' | 'other') {
     super(message);
@@ -59,6 +72,8 @@ export const icu = {
   /** Aktivitäten zwischen zwei Tagen (jeweils inklusive). */
   activities: (c: Credentials, oldest: string, newest: string) =>
     get<IcuActivity[]>(c, `/athlete/${c.athleteId}/activities?oldest=${oldest}&newest=${newest}`),
+  events: (c: Credentials, oldest: string, newest: string) =>
+    get<IcuEvent[]>(c, `/athlete/${c.athleteId}/events?oldest=${oldest}&newest=${newest}`),
   wellness: (c: Credentials, oldest: string, newest: string) =>
     get<IcuWellness[]>(c, `/athlete/${c.athleteId}/wellness?oldest=${oldest}&newest=${newest}`)
 };

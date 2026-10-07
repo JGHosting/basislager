@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { initApp } from './ui/app.svelte';
+  import { initApp, app } from './ui/app.svelte';
+  import MorningSheet from './ui/components/MorningSheet.svelte';
   import TabBar from './ui/components/TabBar.svelte';
   import Heute from './ui/views/Heute.svelte';
   import Mehr from './ui/views/Mehr.svelte';
@@ -30,6 +31,7 @@
   {/key}
 </main>
 <TabBar current={route} />
+{#if app.showMorning}<MorningSheet />{/if}
 
 <style>
   main { padding-bottom: calc(env(safe-area-inset-bottom) + 84px); max-width: 640px; margin: 0 auto; }
