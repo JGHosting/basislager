@@ -20,8 +20,9 @@ body {
   font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif;
   -webkit-font-smoothing: antialiased; -webkit-tap-highlight-color: transparent;
 }
-/* Füllt immer exakt den Bildschirm (vh/dvh sind in installierten iOS-Web-Apps unzuverlässig) */
-#app { position: fixed; inset: 0; display: flex; flex-direction: column; }
+/* Höhe kommt aus main.ts (--app-h): In installierten iOS-Web-Apps melden vh/dvh/100 % teils
+   eine zu kleine Höhe, dann endet die Menüleiste über dem unteren Rand. */
+#app { position: fixed; top: 0; left: 0; right: 0; height: var(--app-h, 100%); display: flex; flex-direction: column; }
 input, button { font: inherit; }
 h1 { margin: 0; font-size: 34px; letter-spacing: -0.025em; font-weight: 750; }
 h2 { margin: 0 0 10px; font-size: 18px; letter-spacing: -0.01em; }

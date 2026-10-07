@@ -15,6 +15,8 @@
   }));
   const standalone = window.matchMedia('(display-mode: standalone)').matches || (navigator as any).standalone === true;
   let confirmReload = $state(false);
+  import { viewportInfo } from '../../core/viewport';
+  let vp = $state<ReturnType<typeof viewportInfo> | null>(null);
 </script>
 
 <header class="page-head"><div><h1>Mehr</h1></div></header>
@@ -74,6 +76,9 @@
   <button class="btn ghost wide" onclick={askPersist}>Dauerhaften Speicher erneut anfragen</button>
   <p class="muted small hint">Safari entscheidet selbst und gewährt ihn oft erst nach einiger Nutzung. Bis dahin schützen dich regelmäßige Backups.</p>
 {/if}
+
+<button class="btn ghost wide" onclick={() => (vp = viewportInfo())}>Anzeige-Maße prüfen</button>
+{#if vp}<p class="muted small hint">Fenster {vp.innerHeight} · Bildschirm {vp.screenHeight} · App {vp.appHeight} · Leiste unten {vp.navBottom} · Rand oben {vp.safeTop} · unten {vp.safeBottom}</p>{/if}
 
 <p class="muted small footer">Basislager · Version {__APP_VERSION__}</p>
 

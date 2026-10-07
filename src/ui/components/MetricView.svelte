@@ -32,7 +32,12 @@
     return ((value - prev) / Math.abs(prev)) * 100;
   });
   const hoverText = $derived.by(() => {
-    if (hover == null || res.series.length !== 1 && !res.series.some(s => s.kind === 'points')) return null;
+    if (hover == null) return null;
+    if (res.stacked) {
+      const tot = res.series.reduce((t, s) => t + (s.values[hover!] ?? 0), 0);
+      return `${label(res.x[hover])}: ${fmt(tot)} ${def.unit} gesamt`;
+    }
+    if (res.series.length !== 1 && !res.series.some(s => s.kind === 'points')) return null;
     const v = res.series[0].values[hover];
     return `${label(res.x[hover])}: ${fmt(v)} ${v != null ? def.unit : ''}`;
   });

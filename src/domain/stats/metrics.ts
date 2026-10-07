@@ -4,7 +4,7 @@
  */
 import type { Activity, MorningEntry } from '../../core/db';
 import { addDays, weekStart, today } from '../../core/dates';
-import { activityLoad, loadSeries, type HrProfile, type LoadDay } from '../load/load';
+import { activityLoad, loadSeries, ownElevation, type HrProfile, type LoadDay } from '../load/load';
 
 export type Period = 'woche' | 'monat' | 'saison' | 'jahr' | 'alles';
 export type Bucket = 'day' | 'week' | 'month';
@@ -142,26 +142,9 @@ const isRun = (a: Activity) => /Run/.test(a.sportType) && !!a.distance && !!a.du
 
 export const METRICS: MetricDef[] = [
   sumMetric('belastung', 'Belastung', '', 0, a => a.load ?? null),
-  {
-    id: 'fitness', title: 'Fitness & Ermüdung', unit: '', digits: 0, group: 'training',
-    compute: (ctx, r) => {
-      const x = bucketsOf(r);
-      const byDate = new Map(ctx.load.map(d => [d.date, d]));
-      // Wert am Ende jedes Eimers (letzter Eimer: heute)
-      const at = (i: number) => byDate.get(x[i + 1] ? addDays(x[i + 1], -1) : r.to);
-      const last = byDate.get(r.to), prevEnd = byDate.get(addDays(r.from, -1));
-      return {
-        x, series: [
-          { label: 'Fitness', values: x.map((_, i) => at(i)?.ctl ?? null), color: '--c-ride', kind: 'line' },
-          { label: 'Ermüdung', values: x.map((_, i) => at(i)?.atl ?? null), color: '--accent', kind: 'line' }
-        ],
-        summary: { label: 'Fitness heute', value: last?.ctl ?? null, prev: prevEnd?.ctl ?? null, better: 1 }
-      };
-    }
-  },
   sumMetric('zeit', 'Trainingszeit', 'h', 1, a => (a.duration ?? a.elapsed ?? 0) / 3600),
   sumMetric('distanz', 'Distanz', 'km', 0, a => (a.distance ? a.distance / 1000 : null)),
-  sumMetric('hoehe', 'Höhenmeter', 'm', 0, a => a.elevationGain),
+  sumMetric('hoehe', 'Höhenmeter', 'm', 0, a => ownElevation(a)),
   {
     id: 'pace', title: 'Lauf-Pace', unit: 'min/km', digits: 2, group: 'training',
     compute: (ctx, r) => {

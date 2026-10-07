@@ -15,7 +15,7 @@
     return buildContext(acts, morning, hr);
   });
 
-  const DEFAULT_SHOWN = ['belastung', 'fitness', 'zeit', 'verteilung', 'hrv', 'ruhepuls', 'sleepscore', 'gewicht'];
+  const DEFAULT_SHOWN = ['belastung', 'zeit', 'verteilung', 'hrv', 'ruhepuls', 'sleepscore', 'gewicht'];
   let period = $state<Period>('monat');
   let shown = $state<string[]>(DEFAULT_SHOWN);
   let picking = $state(false);

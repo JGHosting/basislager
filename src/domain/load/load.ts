@@ -28,6 +28,10 @@ const DEFAULT_FACTOR = 0.8;
 const ELEVATION_SPORTS = new Set(['Hike', 'TrailRun', 'BackcountrySki', 'MountainBikeRide', 'RockClimbing']);
 const LOAD_PER_100HM = 1.5;
 
+/** Selbst erarbeitete Höhenmeter. Bei Ski alpin und Snowboard kommen sie vom Lift → zählen nicht. */
+const LIFT_SPORTS = /^(AlpineSki|Snowboard)$/;
+export const ownElevation = (a: Activity): number | null => (LIFT_SPORTS.test(a.sportType) ? null : a.elevationGain);
+
 export function activityLoad(a: Activity, hr: HrProfile): ActivityLoad {
   const minutes = (a.duration ?? a.elapsed ?? 0) / 60;
   if (minutes <= 0) return { load: 0, method: 'estimated', minutes: 0 };

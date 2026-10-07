@@ -36,7 +36,7 @@
     let data: (number | null)[][] = result.series.map(s => s.values);
     if (result.stacked) {
       const acc = xs.map(() => 0);
-      data = result.series.map(s => s.values.map((v, i) => (acc[i] += v ?? 0) || null));
+      data = result.series.map(s => s.values.map((v, i) => (acc[i] += v ?? 0)));
     }
     const barCount = result.series.filter(s => s.kind === 'bar').length;
     const bars = uPlot.paths.bars!({ size: [0.72, 28], radius: 0.25, gap: xs.length > 40 ? 0.5 : 1 });
@@ -61,7 +61,8 @@
 
     plot = new uPlot({
       width, height: 190, padding: [8, 4, 0, 0],
-      cursor: { sync: { key: 'stats' }, points: { size: 9 }, drag: { x: false, y: false } },
+      // dataIdx: immer genau den angetippten Zeitpunkt zeigen (uPlot springt sonst zum nächsten Wert ≠ leer)
+      cursor: { sync: { key: 'stats' }, points: { size: 9 }, drag: { x: false, y: false }, dataIdx: (_u, _si, idx) => idx },
       legend: { show: result.series.length > 1, live: true },
       scales: { x: { time: false, range: () => [xs[0] - step * 0.6, xs[xs.length - 1] + step * 0.6] },
                 y: { range: (_u, min, max) => barCount ? [0, (max || 1) * 1.1] : [min - (max - min) * 0.15 - 0.5, max + (max - min) * 0.15 + 0.5] } },
@@ -109,6 +110,7 @@
   .uchart :global(.u-legend .u-series:first-child) { display: none; }
   .uchart :global(.u-legend .u-marker) { width: 10px; height: 10px; border-radius: 3px; border-width: 0 !important; }
   .uchart :global(.u-legend th) { font-weight: 500; color: var(--muted); }
+  .uchart :global(.u-inline.u-live th::after) { content: none; }
   .uchart :global(.u-legend td) { color: var(--text); font-variant-numeric: tabular-nums; padding-left: 4px; }
   .uchart :global(.u-cursor-x) { border-right: 1px dashed var(--muted); }
   .uchart :global(.u-cursor-y) { display: none; }

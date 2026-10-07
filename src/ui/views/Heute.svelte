@@ -9,6 +9,7 @@
   import AmpelCard from '../components/AmpelCard.svelte';
   import LoadCard from '../components/LoadCard.svelte';
   import { computeToday } from '../../domain/today';
+  import { ownElevation } from '../../domain/load/load';
 
   // Ampel + Belastung: rechnet automatisch neu, sobald sich Aktivitäten, Morgenwerte oder Pulswerte ändern
   const calc = liveQuery(() => computeToday());
@@ -40,7 +41,7 @@
       count: list.length,
       time: list.reduce((s, a) => s + (a.duration ?? a.elapsed ?? 0), 0),
       dist: list.reduce((s, a) => s + (a.distance ?? 0), 0),
-      elev: list.reduce((s, a) => s + (a.elevationGain ?? 0), 0),
+      elev: list.reduce((s, a) => s + (ownElevation(a) ?? 0), 0),
       perDay, max: Math.max(3600, ...perDay)
     };
   });
@@ -143,7 +144,7 @@
           </div>
           <div class="right">
             <span>{dur(a.duration ?? a.elapsed)}</span>
-            <span class="muted">{[km(a.distance), a.elevationGain ? Math.round(a.elevationGain) + ' hm' : '', a.avgHr ? '♥ ' + Math.round(a.avgHr) : ''].filter(Boolean).join(' · ')}</span>
+            <span class="muted">{[km(a.distance), ownElevation(a) ? Math.round(ownElevation(a)!) + ' hm' : '', a.avgHr ? '♥ ' + Math.round(a.avgHr) : ''].filter(Boolean).join(' · ')}</span>
           </div>
         </li>
       {/each}
