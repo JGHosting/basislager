@@ -21,7 +21,8 @@
 
 <style>
   nav {
-    position: fixed; left: 0; right: 0; bottom: 0; z-index: 10;
+    /* Kein position:fixed – die Leiste ist Teil des Gerüsts und bleibt immer unten */
+    flex-shrink: 0; z-index: 10;
     display: grid; grid-template-columns: repeat(5, 1fr);
     padding: 6px 4px calc(env(safe-area-inset-bottom) + 4px);
     background: color-mix(in srgb, var(--bg) 82%, transparent);

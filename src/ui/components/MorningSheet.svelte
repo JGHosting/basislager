@@ -123,8 +123,8 @@
 </div>
 
 <style>
-  .backdrop { position: fixed; inset: 0; background: rgba(0,0,0,.45); z-index: 20; animation: fade .2s; }
-  .sheet { position: fixed; left: 0; right: 0; bottom: 0; z-index: 21; max-height: 92vh; overflow-y: auto;
+  .backdrop { position: fixed; inset: 0; touch-action: none; background: rgba(0,0,0,.45); z-index: 20; animation: fade .2s; }
+  .sheet { position: fixed; left: 0; right: 0; bottom: 0; z-index: 21; max-height: 92vh; max-height: 92dvh; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch;
            background: var(--bg); border-radius: 26px 26px 0 0; padding: 8px 20px calc(env(safe-area-inset-bottom) + 16px);
            max-width: 640px; margin: 0 auto; animation: up .3s cubic-bezier(.2,.9,.3,1); }
   @keyframes up { from { transform: translateY(100%); } }

@@ -10,15 +10,16 @@
   // Einfaches Hash-Routing (#/heute, #/mehr …) – funktioniert auf GitHub Pages ohne Server
   const parse = () => (location.hash.replace(/^#\/?/, '').split('/')[0] || 'heute');
   let route = $state(parse());
+  let scroller: HTMLElement;
   onMount(() => {
-    const on = () => { route = parse(); window.scrollTo(0, 0); };
+    const on = () => { route = parse(); scroller?.scrollTo(0, 0); };
     window.addEventListener('hashchange', on);
     initApp();
     return () => window.removeEventListener('hashchange', on);
   });
 </script>
 
-<main>
+<main bind:this={scroller} inert={app.showMorning}>
   {#key route}
     <div class="view">
       {#if route === 'heute'}<Heute />
@@ -34,7 +35,10 @@
 {#if app.showMorning}<MorningSheet />{/if}
 
 <style>
-  main { padding-bottom: calc(env(safe-area-inset-bottom) + 84px); max-width: 640px; margin: 0 auto; }
+  /* Einziger Scrollbereich der App */
+  main { flex: 1; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior-y: contain;
+         padding: env(safe-area-inset-top) 16px 24px; }
+  main > .view { max-width: 640px; margin: 0 auto; }
   .view { animation: fade .2s ease-out; }
   @keyframes fade { from { opacity: 0; transform: translateY(4px); } }
 </style>

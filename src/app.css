@@ -11,13 +11,14 @@
           --accent: #f0804a; --accent-soft: #3a261d; }
 }
 * { box-sizing: border-box; }
-html, body { margin: 0; background: var(--bg); color: var(--text); }
+/* App-Gerüst: Die Seite selbst scrollt nie. Nur der Inhaltsbereich (main) scrollt.
+   Dadurch verrutschen Menüleiste und Popups auf iOS nicht. */
+html, body { margin: 0; height: 100%; overflow: hidden; background: var(--bg); color: var(--text); overscroll-behavior: none; }
 body {
   font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif;
   -webkit-font-smoothing: antialiased; -webkit-tap-highlight-color: transparent;
-  padding: env(safe-area-inset-top) 16px 0;
-  overscroll-behavior-y: none;
 }
+#app { display: flex; flex-direction: column; height: 100vh; height: 100dvh; }
 input, button { font: inherit; }
 h1 { margin: 0; font-size: 34px; letter-spacing: -0.025em; font-weight: 750; }
 h2 { margin: 0 0 10px; font-size: 18px; letter-spacing: -0.01em; }
