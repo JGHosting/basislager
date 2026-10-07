@@ -2,7 +2,7 @@
   import { liveQuery } from 'dexie';
   import { db, type Injury } from '../../core/db';
   import { today, addDays, fmtDay } from '../../core/dates';
-  import { STAGES, LAST_STAGE, MOVEMENTS, STATUS_LABEL, daysSince, doctorHint, advanceCheck, isOutage } from '../../domain/injury/injury';
+  import { STAGES, LAST_STAGE, MOVEMENTS, SHOWN_MOVEMENTS, STATUS_LABEL, daysSince, doctorHint, advanceCheck, isOutage } from '../../domain/injury/injury';
   import { setStage, endInjury, switchToStages } from '../../domain/injury/repo';
   import { openInjury } from '../app.svelte';
 
@@ -54,7 +54,7 @@
 
   <p class="legend muted">✓ geht · ~ eingeschränkt · ✕ geht nicht</p>
   <div class="moves">
-    {#each MOVEMENTS as m}<span class="mv {injury.movement[m.id]}" title={STATUS_LABEL[injury.movement[m.id]]}><i>{injury.movement[m.id] === 'geht' ? '✓' : injury.movement[m.id] === 'eingeschraenkt' ? '~' : '✕'}</i>{m.label}</span>{/each}
+    {#each SHOWN_MOVEMENTS as m}<span class="mv {injury.movement[m.id]}" title={STATUS_LABEL[injury.movement[m.id]]}><i>{injury.movement[m.id] === 'geht' ? '✓' : injury.movement[m.id] === 'eingeschraenkt' ? '~' : '✕'}</i>{m.label}</span>{/each}
   </div>
 
   {#if pains.length}

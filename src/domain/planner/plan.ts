@@ -385,22 +385,14 @@ export function applyInjury(list: PlanSession[], inj: Injury, ws?: string, vacat
   const outage = isOutage(inj);
   const stage = inj.stage;
   const label = outage ? 'Ernste Verletzung' : `Verletzung, Stufe „${STAGES[stage].label}“`;
-  if (!outage && stage === 0) return [];                                       // Pause: nichts planen
+  // Pause: keine Ausdauer. Krafttraining bleibt immer wie geplant – das entscheidest du im Training selbst.
+  if (!outage && stage === 0) return list.filter(s => s.sport === 'kraft');
   const factor = outage ? 1 : STAGE_VOLUME[stage];
   const out: PlanSession[] = [];
   let blocked = 0;   // Einheiten, die wegen der Verletzung ersetzt werden mussten oder weggefallen sind
   for (const s of list) {
     if (s.sport === 'wettkampf') { out.push({ ...s, notes: [...s.notes, `${label} – prüfe, ob der Wettkampf machbar ist.`] }); continue; }
-    if (s.sport === 'kraft') {
-      let gs = (s.groups ?? []).flatMap(g => (g === 'ganzkoerper' ? ['push', 'pull', 'beine', 'rumpf'] as MuscleGroup[] : [g]));
-      if (inj.movement.beinkraft === 'nicht') gs = gs.filter(g => g !== 'beine');
-      if (inj.movement.oberkoerper === 'nicht') gs = gs.filter(g => g !== 'push' && g !== 'pull' && g !== 'arme');
-      if (!gs.length) { blocked++; continue; }
-      const limited = (gs.includes('beine') && inj.movement.beinkraft === 'eingeschraenkt') || ((gs.includes('push') || gs.includes('pull') || gs.includes('arme')) && inj.movement.oberkoerper === 'eingeschraenkt');
-      out.push({ ...s, groups: gs, title: `Kraft · ${gs.map(groupLabel).join(' + ')}`, intensity: limited ? 'locker' : s.intensity,
-        notes: [...s.notes, `${label}: nur erlaubte Muskelgruppen${limited ? ', vorsichtig und leicht' : ''}.`] });
-      continue;
-    }
+    if (s.sport === 'kraft') { out.push(s); continue; }          // Kraft wird nicht an die Verletzung angepasst
     const mv = ENDURANCE_MOVE[s.sport]!;
     const st = inj.movement[mv];
     const notMoves = s.sport === 'trail' && (inj.movement.bergab === 'nicht' || inj.movement.springen === 'nicht');
@@ -439,10 +431,6 @@ export function applyInjury(list: PlanSession[], inj: Injury, ws?: string, vacat
         out.push({ ...S(ws, day, 'ausgleich', sport, `Ausgleich: ${endu === 'rad' ? 'Rad' : endu === 'schwimmen' ? 'Schwimmen' : 'Wandern'} Grundlage`, mins, 'mittel',
           'Gleichmäßig im Grundlagenbereich, die letzten 15 min etwas zügiger. Hält deine Ausdauer, während die Verletzung andere Einheiten blockiert.'),
           notes: [`${label}: zusätzliche Ausgleichseinheit.`] });
-      } else {
-        const gs: MuscleGroup[] = inj.movement.oberkoerper !== 'nicht' ? ['push', 'pull', 'rumpf'] : inj.movement.beinkraft !== 'nicht' ? ['beine', 'rumpf'] : [];
-        if (gs.length) out.push({ ...kraft(ws, day, 'ausgleich', gs, false, false), title: `Ausgleich Kraft · ${gs.map(groupLabel).join(' + ')}`,
-          notes: [`${label}: zusätzliche Krafteinheit für die freien Muskelgruppen.`] });
       }
     }
   }

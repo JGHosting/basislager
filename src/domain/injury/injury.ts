@@ -15,6 +15,8 @@ export const MOVEMENTS: { id: Movement; label: string }[] = [
   { id: 'springen', label: 'Springen' }, { id: 'rad', label: 'Radfahren' }, { id: 'schwimmen', label: 'Schwimmen' },
   { id: 'beinkraft', label: 'Beinkraft' }, { id: 'oberkoerper', label: 'Oberkörperkraft' }
 ];
+/** Im Dialog gezeigte Bewegungen. Kraft wird nicht an Verletzungen angepasst (entscheidest du im Training). */
+export const SHOWN_MOVEMENTS = MOVEMENTS.filter(m => m.id !== 'beinkraft' && m.id !== 'oberkoerper');
 export const STATUS_LABEL: Record<MoveStatus, string> = { geht: 'geht', eingeschraenkt: 'eingeschränkt', nicht: 'geht nicht' };
 
 export const allBlocked = (): Record<Movement, MoveStatus> =>

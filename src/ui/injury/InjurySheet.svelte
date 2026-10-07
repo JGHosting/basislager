@@ -2,7 +2,7 @@
   import { swipeDismiss } from '../actions/swipeDismiss';
   import { db, type Movement, type MoveStatus, type Injury } from '../../core/db';
   import { today } from '../../core/dates';
-  import { REGIONS, MOVEMENTS, STATUS_LABEL, movementPreset, allBlocked } from '../../domain/injury/injury';
+  import { REGIONS, MOVEMENTS, SHOWN_MOVEMENTS, STATUS_LABEL, movementPreset, allBlocked } from '../../domain/injury/injury';
   import { saveInjury, deleteInjury } from '../../domain/injury/repo';
   import { app, closeInjury } from '../app.svelte';
 
@@ -68,8 +68,8 @@
 
   <section>
     <h3>{mode === 'ausfall' ? 'Was geht trotzdem?' : 'Was geht gerade?'}</h3>
-    {#if mode === 'ausfall'}<p class="muted small">Alles ist gesperrt. Tippe ✓ bei dem, was trotz Verletzung geht (z. B. Oberkörperkraft).</p>{/if}
-    {#each MOVEMENTS as m}
+    {#if mode === 'ausfall'}<p class="muted small">Alles ist gesperrt. Tippe ✓ bei dem, was trotz Verletzung geht (z. B. Rad oder Schwimmen). Krafttraining bleibt im Plan, das entscheidest du im Training.</p>{/if}
+    {#each SHOWN_MOVEMENTS as m}
       <div class="mrow">
         <span>{m.label}</span>
         <div class="tri">
