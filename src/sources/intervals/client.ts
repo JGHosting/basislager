@@ -74,6 +74,8 @@ export const icu = {
     get<IcuActivity[]>(c, `/athlete/${c.athleteId}/activities?oldest=${oldest}&newest=${newest}`),
   events: (c: Credentials, oldest: string, newest: string) =>
     get<IcuEvent[]>(c, `/athlete/${c.athleteId}/events?oldest=${oldest}&newest=${newest}`),
+  /** Vollständige Daten einer Aktivität (Zonen, Trittfrequenz, Leistung, Kalorien …). */
+  activity: (c: Credentials, id: string) => get<Record<string, unknown>>(c, `/activity/${encodeURIComponent(id)}`),
   wellness: (c: Credentials, oldest: string, newest: string) =>
     get<IcuWellness[]>(c, `/athlete/${c.athleteId}/wellness?oldest=${oldest}&newest=${newest}`)
 };

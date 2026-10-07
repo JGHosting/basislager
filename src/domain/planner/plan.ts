@@ -25,6 +25,7 @@ export interface PlanSession {
   key: string; date: string; origDate: string; sport: PlanSport; title: string; minutes: number;
   intensity: Intensity; details: string; groups?: MuscleGroup[]; elevation?: number;
   status: 'offen' | 'erledigt' | 'ausgelassen'; autoDone?: boolean; moved?: boolean; notes: string[];
+  activityId?: string;   // passende Garmin-Aktivität (bei automatisch erledigt)
 }
 export type Phase = 'basis' | 'grundlage' | 'aufbau' | 'spitze' | 'taper' | 'wettkampfwoche' | 'erholung' | 'urlaub';
 export const PHASE_LABEL: Record<Phase, string> = {
@@ -437,11 +438,12 @@ function applyEdits(list: PlanSession[], edits: Map<string, PlanEdit>): PlanSess
 const FAMILY: Record<PlanSport, RegExp> = { kraft: /Weight|Workout/, lauf: /Run/, trail: /Run/, rad: /Ride/, schwimmen: /Swim/, gehen: /Hike|Walk/, wettkampf: /./ };
 function applyDone(list: PlanSession[], acts: Activity[], today: string, used: Set<string>): PlanSession[] {
   return list.map(s => {
-    if (s.status !== 'offen' || s.date > today) return s;
+    if (s.status === 'ausgelassen' || s.date > today) return s;
     const a = acts.find(x => x.date === s.date && !used.has(x.id) && FAMILY[s.sport].test(x.sportType));
     if (!a) return s;
+    if (s.status === 'erledigt') { used.add(a.id); return { ...s, activityId: a.id }; }
     used.add(a.id);
-    return { ...s, status: 'erledigt', autoDone: true };
+    return { ...s, status: 'erledigt', autoDone: true, activityId: a.id };
   });
 }
 

@@ -8,6 +8,8 @@
   import { computeToday } from '../../domain/today';
   import { openGoal, openInjury } from '../app.svelte';
   import SessionCard from '../planner/SessionCard.svelte';
+  import { openActivity } from '../app.svelte';
+  import { sportName, sportColor, dur as fdur, km } from '../format';
   import { saveVacation, deleteVacation, TRAINING_LABEL } from '../../domain/vacation/vacation';
   import type { Vacation } from '../../core/db';
 
@@ -55,8 +57,8 @@
 <header class="page-head">
   <div><p class="eyebrow">KW {isoWeek(ws)} · {fmtDay(ws, { day: '2-digit', month: '2-digit' })} – {fmtDay(addDays(ws, 6), { day: '2-digit', month: '2-digit' })}</p><h1>Plan</h1></div>
   <div class="wnav">
-    <button aria-label="Vorherige Woche" onclick={() => offset--} disabled={offset <= -1}>‹</button>
-    <button class="d" onclick={() => (offset = 0)}>{offset === 0 ? 'Diese Woche' : offset === 1 ? 'Nächste' : offset === -1 ? 'Letzte' : `+${offset}`}</button>
+    <button aria-label="Vorherige Woche" onclick={() => offset--} disabled={offset <= -13}>‹</button>
+    <button class="d" onclick={() => (offset = 0)}>{offset === 0 ? 'Diese Woche' : offset === 1 ? 'Nächste' : offset === -1 ? 'Letzte' : offset > 0 ? `+${offset}` : `${offset}`}</button>
     <button aria-label="Nächste Woche" onclick={() => offset++}>›</button>
   </div>
 </header>
@@ -64,6 +66,13 @@
 {#if planData && planData.weeks[0].weekStart === ws}
   {@const w = planData.weeks[0]}
   {@const goal = planData.ctx.goal}
+  {#if offset < 0}
+    {@const wa = planData.ctx.activities.filter(a => a.date >= ws && a.date <= addDays(ws, 6))}
+    <section class="card">
+      <b>Rückblick KW {isoWeek(ws)}</b>
+      <p class="muted small">{wa.length} Aktivitäten · {dur(wa.reduce((t, a) => t + (a.duration ?? a.elapsed ?? 0) / 60, 0))} gesamt</p>
+    </section>
+  {:else}
   <section class="card mode" class:compact={!modeOpen}>
     <button class="summary" onclick={() => (modeOpen = !modeOpen)} aria-expanded={modeOpen}>
       <span class="stxt">
@@ -106,6 +115,7 @@
     <p class="sum muted small">Diese Woche ≈ {dur(w.minutes)} gesamt{w.runMinutes ? ` · Laufen ${dur(w.runMinutes)}` : ''} · Paces {w.paces.source === 'ziel' ? 'aus Zielzeit' : w.paces.source === 'verlauf' ? 'aus deinen Läufen' : 'Standardwerte'}: locker {fmtPace(w.paces.easy)}, Schwelle {fmtPace(w.paces.threshold)} min/km</p>
     {/if}
   </section>
+  {/if}
 
   {#if planData.ctx.injury}
     <section class="card injb">
@@ -122,8 +132,11 @@
     </section>
   {/if}
 
+  {#if offset < 0}<p class="muted small past-note">Rückblick: Hier siehst du, was du tatsächlich gemacht hast. Antippen für Details.</p>{/if}
   {#each days as d}
-    {@const list = w.sessions.filter(s => s.date === d)}
+    {@const list = offset < 0 ? [] : w.sessions.filter(s => s.date === d)}
+    {@const linked = new Set(w.sessions.map(s => s.activityId).filter(Boolean))}
+    {@const acts = planData.ctx.activities.filter(a => a.date === d && (offset < 0 || !linked.has(a.id))).sort((a, b) => a.start.localeCompare(b.start))}
     {@const evs = w.events.filter(e => d >= e.start && d <= e.end)}
     {@const vday = ($vacations ?? []).find(v => d >= v.start && d <= v.end)}
     <section class="card day" class:today={d === t} class:past={d < t}>
@@ -133,7 +146,14 @@
       {#each list as s (s.key)}
         <SessionCard s={d === t && $calc ? adaptToLight(s, $calc.recovery.light) : s} />
       {/each}
-      {#if !list.length && !evs.length && !vday}<p class="muted small rest">Ruhetag</p>{/if}
+      {#each acts as a (a.id)}
+        <button class="actrow" onclick={() => openActivity(a.id)}>
+          <span class="adot" style="background: {sportColor(a.sportType)}"></span>
+          <span class="atxt"><b>{sportName(a.sportType)}{a.name ? ' · ' + a.name : ''}</b><small>{offset < 0 ? '' : 'außerplanmäßig · '}{fdur(a.duration ?? a.elapsed)}{a.distance ? ' · ' + km(a.distance) : ''}</small></span>
+          <span class="chev">›</span>
+        </button>
+      {/each}
+      {#if !list.length && !evs.length && !vday && !acts.length}<p class="muted small rest">{offset < 0 ? 'Kein Training' : 'Ruhetag'}</p>{/if}
     </section>
   {/each}
 
@@ -217,6 +237,11 @@
   .day.past { opacity: .75; }
   .dh { display: flex; justify-content: space-between; align-items: baseline; }
   .rest { margin: 6px 0 0; }
+  .past-note { margin: 0 4px 10px; }
+  .actrow { width: 100%; display: flex; align-items: center; gap: 10px; background: var(--bg); border: 1px dashed var(--line); border-radius: 14px; padding: 9px 12px; margin-top: 8px; font: inherit; color: var(--text); text-align: left; cursor: pointer; }
+  .adot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+  .atxt { flex: 1; display: flex; flex-direction: column; min-width: 0; } .atxt b { font-weight: 600; font-size: 15px; } .atxt small { font-size: 12px; color: var(--muted); }
+  .chev { color: var(--muted); font-size: 20px; }
   .ev { margin: 8px 0 0; font-size: 14px; font-weight: 600; color: var(--c-snow); }
   .vac { margin: 8px 0 0; font-size: 14px; font-weight: 600; color: var(--c-ride); }
   .evtxt { flex: 1; display: flex; flex-direction: column; align-items: flex-start; background: none !important; border: none; width: auto !important; height: auto !important; font: inherit; color: var(--text) !important; text-align: left; cursor: pointer; padding: 0; }

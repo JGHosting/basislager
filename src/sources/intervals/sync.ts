@@ -64,6 +64,7 @@ async function storeActivities(list: IcuActivity[]): Promise<{ stored: number; s
       avgHr: a.average_heartrate ?? null,
       maxHr: a.max_heartrate ?? null,
       sourceLoad: a.icu_training_load ?? null,
+      ...(prev?.extra ? { extra: prev.extra } : {}),   // geladene Detaildaten beim Abgleich behalten
       createdAt: prev?.createdAt ?? now,
       updatedAt: now
     });

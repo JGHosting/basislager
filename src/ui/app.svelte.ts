@@ -6,7 +6,8 @@ import { getSetting, setSetting, deleteSetting, requestPersistence, persistState
 import { icu, IcuError, normalizeAthleteId, type Credentials } from '../sources/intervals/client';
 import { today } from '../core/dates';
 import { vacationToday } from '../domain/vacation/vacation';
-import type { Meal, FoodLogEntry } from '../core/db';
+import { db, type Meal, type FoodLogEntry, type MorningEntry } from '../core/db';
+import { addDays } from '../core/dates';
 import { weightSince } from '../domain/morning/morning';
 import { runSync, getSyncState, resetHistory, type SyncState } from '../sources/intervals/sync';
 
@@ -27,7 +28,8 @@ export const app = $state({
   strengthEdit: null as null | { activityId?: string; sessionId?: string; date?: string },
   foodSheet: null as null | { mode: 'add'; date: string; meal: Meal } | { mode: 'edit'; entry: FoodLogEntry },
   injurySheet: null as null | { id?: string },
-  goalSheet: null as null | { id?: string }
+  goalSheet: null as null | { id?: string },
+  activitySheet: null as null | { id: string }
 });
 
 export async function initApp() {
@@ -60,7 +62,20 @@ async function maybeShowMorning() {
   const done = await getSetting<string>('morningDone');
   if (done === today()) return;
   if (await vacationToday()) return;          // Urlaub: kein automatisches Popup
+  if (!(await nightDataReady())) return;      // erst wenn Garmin die Schlafwerte von heute geliefert hat
+  if (app.showMorning || app.strengthEdit || app.foodSheet || app.injurySheet || app.goalSheet || app.activitySheet) return;
   app.showMorning = true;
+}
+/**
+ * Schlafwerte von heute vorhanden? Erst dann ist "Guten Morgen" sinnvoll (nicht schon um Mitternacht).
+ * Fallback für Nächte ohne Uhr: Gab es 7 Tage lang gar keine Schlafwerte, kommt das Popup ab 7 Uhr.
+ */
+async function nightDataReady(): Promise<boolean> {
+  const t = today();
+  const has = (m?: MorningEntry) => !!m && (m.sleepSecs != null || m.sleepScore != null || m.hrv != null);
+  if (has(await db.morning.get(t))) return true;
+  const recent = await db.morning.where('date').between(addDays(t, -7), t, true, false).toArray();
+  return !recent.some(has) && new Date().getHours() >= 7;
 }
 /** done=true: für heute erledigt. done=false ("Später"): beim nächsten Öffnen wieder. */
 export async function closeMorning(done: boolean) {
@@ -84,6 +99,10 @@ export function closeInjury() { app.injurySheet = null; }
 /* ---------- Planer ---------- */
 export function openGoal(t: { id?: string } = {}) { app.goalSheet = t; }
 export function closeGoal() { app.goalSheet = null; }
+
+/* ---------- Aktivitäts-Details ---------- */
+export function openActivity(id: string) { app.activitySheet = { id }; }
+export function closeActivity() { app.activitySheet = null; }
 
 export async function connect(athleteInput: string, apiKey: string): Promise<string | null> {
   const c: Credentials = { athleteId: normalizeAthleteId(athleteInput), apiKey: apiKey.trim() };
@@ -121,6 +140,7 @@ export async function sync(userTriggered = false) {
     app.syncState = await getSyncState();
   } finally {
     app.syncing = false;
+    void maybeShowMorning();
   }
 }
 

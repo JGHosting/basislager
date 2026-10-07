@@ -23,8 +23,18 @@ export interface Activity {
   avgHr: number | null;
   maxHr: number | null;
   sourceLoad: number | null;  // Belastungswert von intervals.icu (nur zur Info)
+  /** Zusatzdaten, beim ersten Öffnen der Detailansicht von intervals.icu geladen und gespeichert. */
+  extra?: ActivityExtra;
   createdAt: number;
   updatedAt: number;
+}
+
+export interface ActivityExtra {
+  calories?: number | null; avgSpeed?: number | null; maxSpeed?: number | null; cadence?: number | null;
+  avgWatts?: number | null; npWatts?: number | null; elevLoss?: number | null; altMin?: number | null; altMax?: number | null;
+  avgTemp?: number | null; hrZoneTimes?: number[] | null; hrZones?: number[] | null; intensity?: number | null;
+  rpe?: number | null; feel?: number | null; device?: string | null; laps?: number | null; description?: string | null;
+  fetchedAt: number;
 }
 
 export type MorningField = 'hrv' | 'restingHr' | 'sleepScore' | 'sleepSecs' | 'weight';

@@ -2,7 +2,7 @@
   import type { PlanSession } from '../../domain/planner/plan';
   import { editSession } from '../../domain/planner/repo';
   import { addDays, weekStart, fmtDay, today } from '../../core/dates';
-  import { openStrength } from '../app.svelte';
+  import { openStrength, openActivity } from '../app.svelte';
   let { s, compact = false }: { s: PlanSession; compact?: boolean } = $props();
   let open = $state(false), moving = $state(false);
   const COLOR: Record<string, string> = { kraft: 'var(--c-strength)', lauf: 'var(--c-run)', trail: 'var(--c-mountain)', rad: 'var(--c-ride)', schwimmen: 'var(--c-swim)', gehen: 'var(--c-mountain)', wettkampf: 'var(--red)' };
@@ -27,6 +27,7 @@
     {#if s.notes.length && compact}{#each s.notes as n}<p class="note">{n}</p>{/each}{/if}
     {#if !moving}
       <div class="acts">
+        {#if s.activityId}<button class="pri" onclick={() => openActivity(s.activityId!)}>Aktivität ansehen</button>{/if}
         {#if s.status !== 'erledigt'}<button onclick={() => editSession(s.key, { status: 'erledigt' })}>Erledigt</button>{/if}
         {#if s.status !== 'ausgelassen'}<button onclick={() => editSession(s.key, { status: 'ausgelassen' })}>Auslassen</button>{/if}
         {#if s.sport !== 'wettkampf'}<button onclick={() => (moving = true)}>Verschieben</button>{/if}
@@ -56,6 +57,7 @@
   .acts, .days { display: flex; flex-wrap: wrap; gap: 6px; padding-bottom: 10px; }
   .acts button, .days button { border: 1px solid var(--line); background: var(--card); color: var(--text); border-radius: 10px; padding: 7px 10px; font: inherit; font-size: 13px; cursor: pointer; min-height: 36px; }
   .days button { display: flex; flex-direction: column; align-items: center; min-width: 52px; } .days small { font-size: 11px; color: var(--muted); }
+  .acts button.pri { border-color: var(--accent); color: var(--accent); font-weight: 600; }
   .days button.on { border-color: var(--accent); color: var(--accent); }
   .cancel { background: none; border: none; color: var(--muted); font: inherit; font-size: 13px; padding: 0 0 10px; cursor: pointer; }
 </style>

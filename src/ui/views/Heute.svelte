@@ -18,7 +18,7 @@
   import { openInjury } from '../app.svelte';
   import { dayView, getKcalGoal } from '../../domain/nutrition/repo';
   import { groupLabel } from '../../domain/strength/strength';
-  import { openStrength } from '../app.svelte';
+  import { openStrength, openActivity } from '../app.svelte';
   import { computeToday } from '../../domain/today';
   import { ownElevation } from '../../domain/load/load';
 
@@ -182,7 +182,7 @@
     <ul class="acts">
       {#each sortedRecent as a (a.id)}
         {@const ss = $strengthByAct?.get(a.id)}
-        <li class:tap={a.sportType === 'WeightTraining'} onclick={() => a.sportType === 'WeightTraining' && openStrength({ activityId: a.id })}>
+        <li class="tap" role="button" tabindex="0" onclick={() => openActivity(a.id)} onkeydown={e => e.key === 'Enter' && openActivity(a.id)}>
           <span class="dot" style="background: {sportColor(a.sportType)}"></span>
           <div class="main">
             <strong>{sportName(a.sportType)}{ss && !ss.skipped ? ' · ' + ss.muscleGroups.map(groupLabel).join(' + ') : ''}</strong>
