@@ -25,7 +25,8 @@ export const app = $state({
   showMorning: false,
   strengthEdit: null as null | { activityId?: string; sessionId?: string; date?: string },
   foodSheet: null as null | { mode: 'add'; date: string; meal: Meal } | { mode: 'edit'; entry: FoodLogEntry },
-  injurySheet: null as null | { id?: string }
+  injurySheet: null as null | { id?: string },
+  goalSheet: null as null | { id?: string }
 });
 
 export async function initApp() {
@@ -76,6 +77,10 @@ export function closeFood() { app.foodSheet = null; }
 /* ---------- Verletzung ---------- */
 export function openInjury(t: { id?: string } = {}) { app.injurySheet = t; }
 export function closeInjury() { app.injurySheet = null; }
+
+/* ---------- Planer ---------- */
+export function openGoal(t: { id?: string } = {}) { app.goalSheet = t; }
+export function closeGoal() { app.goalSheet = null; }
 
 export async function connect(athleteInput: string, apiKey: string): Promise<string | null> {
   const c: Credentials = { athleteId: normalizeAthleteId(athleteInput), apiKey: apiKey.trim() };

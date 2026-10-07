@@ -11,7 +11,12 @@
   let date = $state(today());
   const t = today();
   // Neu berechnen, wenn sich Datum oder Daten ändern
-  const view = $derived(liveQuery(() => dayView(date)));
+  let dayData = $state.raw<Awaited<ReturnType<typeof dayView>> | null>(null);
+  $effect(() => {
+    const d = date;
+    const sub = liveQuery(() => dayView(d)).subscribe(v => { if (v.date === d) dayData = v; });
+    return () => sub.unsubscribe();
+  });
   const goalQ = liveQuery(() => getKcalGoal());
   const history = liveQuery(() => recentDays(7, today()));
 
@@ -34,8 +39,8 @@
   </div>
 </header>
 
-{#if $view}
-  {@const v = $view}
+{#if dayData && dayData.date === date}
+  {@const v = dayData}
   {#if !v.tracked}
     <section class="card untracked">
       <h2>{date === t ? 'Heute wird nicht getrackt.' : 'Dieser Tag wurde nicht getrackt.'}</h2>

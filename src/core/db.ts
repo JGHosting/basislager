@@ -118,6 +118,25 @@ export interface Injury {
   createdAt: number; updatedAt: number;
 }
 
+/* ---------- Planer ---------- */
+export type GoalSport = 'lauf' | 'trailrun' | 'rad' | 'schwimmen' | 'triathlon';
+export type TriDistance = 'sprint' | 'olympisch' | '70.3' | 'lang';
+/** Wettkampfziel. Zielzeiten in Sekunden; null = "egal". */
+export interface Goal {
+  id: string; name?: string;
+  sport: GoalSport; date: string; planStart: string;
+  distanceKm?: number | null; elevation?: number | null;
+  triDistance?: TriDistance | null;
+  targetTime?: number | null;
+  targetTimes?: { swim: number | null; bike: number | null; run: number | null } | null;
+  archived?: boolean;
+  createdAt: number; updatedAt: number;
+}
+/** Eigene Änderung an einer geplanten Einheit (verschoben, erledigt, ausgelassen). */
+export interface PlanEdit { key: string; movedTo?: string; status?: 'erledigt' | 'ausgelassen'; updatedAt: number }
+/** Fixtermin: an diesen Tagen wird nichts geplant (Skiwochenende, Hochtour, Urlaub …). */
+export interface FixedEvent { id: string; type: 'ski' | 'hochtour' | 'urlaub' | 'sonstiges'; title?: string; start: string; end: string; createdAt: number; updatedAt: number }
+
 /** Interne Sicherheitskopie vor einem Import (wird selbst nicht exportiert). */
 export interface Snapshot { seq?: number; createdAt: number; reason: string; data: unknown }
 
@@ -132,6 +151,9 @@ export class BasislagerDB extends Dexie {
   foodlog!: Table<FoodLogEntry, string>;
   nutritionDays!: Table<NutritionDay, string>;
   injuries!: Table<Injury, string>;
+  goals!: Table<Goal, string>;
+  planEdits!: Table<PlanEdit, string>;
+  fixedEvents!: Table<FixedEvent, string>;
   /** name nur für die Backup-Prüfroutine abweichend (separate Test-Datenbank). */
   constructor(name = 'basislager') {
     super(name);
@@ -153,6 +175,8 @@ export class BasislagerDB extends Dexie {
     this.version(6).stores({ foods: 'id, barcode, name, fav, lastUsedAt', foodlog: 'id, date, foodId', nutritionDays: 'date' });
     // v7: Verletzungsmodus
     this.version(7).stores({ injuries: 'id, startDate' });
+    // v8: Planer
+    this.version(8).stores({ goals: 'id, date', planEdits: 'key', fixedEvents: 'id, start' });
     this.on('populate', tx => { tx.table('splits').bulkPut(BUILTIN_SPLITS); });
   }
 }

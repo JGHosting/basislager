@@ -11,6 +11,9 @@
   import StrengthCard from '../components/StrengthCard.svelte';
   import KcalBar from '../nutrition/KcalBar.svelte';
   import InjuryCard from '../injury/InjuryCard.svelte';
+  import SessionCard from '../planner/SessionCard.svelte';
+  import { sessionsOn } from '../../domain/planner/repo';
+  import { adaptToLight } from '../../domain/planner/plan';
   import { openInjury } from '../app.svelte';
   import { dayView, getKcalGoal } from '../../domain/nutrition/repo';
   import { groupLabel } from '../../domain/strength/strength';
@@ -20,6 +23,7 @@
 
   // Ampel + Belastung: rechnet automatisch neu, sobald sich Aktivitäten, Morgenwerte oder Pulswerte ändern
   const calc = liveQuery(() => computeToday());
+  const todayPlan = liveQuery(async () => (await sessionsOn(today())).sessions);
   const food = liveQuery(async () => ({ day: await dayView(today()), goal: await getKcalGoal() }));
 
   const t = today();
@@ -89,6 +93,14 @@
 
   {#if $calc?.injury}<InjuryCard injury={$calc.injury} />{/if}
   {#if $calc}<AmpelCard rec={$calc.recovery} injury={!!$calc.injury} />{/if}
+  {#if $todayPlan}
+    <section class="card">
+      <div class="card-head"><h2>Heute geplant</h2><a class="more" href="#/plan">Wochenplan →</a></div>
+      {#if !$todayPlan.length}<p class="muted">Ruhetag.</p>{/if}
+      {#each $todayPlan as sess (sess.key)}<SessionCard s={$calc ? adaptToLight(sess, $calc.recovery.light) : sess} />{/each}
+    </section>
+  {/if}
+
   {#if $calc && !$calc.injury}
     <button class="injbtn" onclick={() => openInjury()}>
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v16 M4 12h16" /></svg> Verletzung melden
@@ -183,6 +195,7 @@
   .card-head h2 { margin: 0; }
   .tag { border: none; font-family: inherit; cursor: pointer; font-size: 13px; color: var(--accent); background: var(--accent-soft); padding: 3px 9px; border-radius: 99px; font-weight: 600; }
   .small { font-size: 13px; }
+  .more { color: var(--accent); font-weight: 600; font-size: 14px; text-decoration: none; }
   .injbtn { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; margin: -2px 0 12px; padding: 12px; border-radius: 14px;
             border: 1px dashed color-mix(in srgb, var(--red) 55%, var(--line)); background: none; color: var(--red); font: inherit; font-weight: 600; font-size: 15px; cursor: pointer; }
   .injbtn svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2.6; stroke-linecap: round; }

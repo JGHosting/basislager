@@ -3,13 +3,15 @@
   import { liveQuery } from 'dexie';
   import { db } from '../../core/db';
   import { today, fmtDay } from '../../core/dates';
-  import { latestNight, lastWeight, saveWeight, parseKg, todaysPlan, weightContext } from '../../domain/morning/morning';
+  import { latestNight, lastWeight, saveWeight, parseKg, weightContext } from '../../domain/morning/morning';
+  import { sessionsOn } from '../../domain/planner/repo';
+  import { adaptToLight } from '../../domain/planner/plan';
+  import SessionCard from '../planner/SessionCard.svelte';
   import { app, closeMorning } from '../app.svelte';
   import { num, hours, dur, km, sportName, sportColor } from '../format';
-  import type { IcuEvent } from '../../sources/intervals/client';
   import { computeToday } from '../../domain/today';
   import AmpelRing from './AmpelRing.svelte';
-  import { checkSport, STAGES, isOutage } from '../../domain/injury/injury';
+  import { STAGES, isOutage } from '../../domain/injury/injury';
   import { savePain } from '../../domain/injury/repo';
   let pain = $state<number | null>(null);
   let painInit = false;
@@ -24,13 +26,12 @@
   let prevWeight = $state<{ date: string; kg: number } | null>(null);
   let weight = $state('');
   let weightErr = $state('');
-  let plan = $state<IcuEvent[] | null | undefined>(undefined);
+  const todayPlan = liveQuery(async () => { await db.planEdits.count(); return (await sessionsOn(t)).sessions; });
   let saving = $state(false);
   let initialised = false;
 
   $effect(() => {
     lastWeight().then(w => (prevWeight = w));
-    todaysPlan().then(p => (plan = p));
   });
   // Bereits eingetragenes Gewicht von heute ins Feld übernehmen
   $effect(() => {
@@ -59,8 +60,6 @@
     closeMorning(true);
   }
 
-  const planned = $derived((plan ?? []).filter(e => e.category === 'WORKOUT' || e.category.startsWith('RACE')));
-  const notes = $derived((plan ?? []).filter(e => !(e.category === 'WORKOUT' || e.category.startsWith('RACE'))));
   const hour = new Date().getHours();
   const greet = hour < 11 ? 'Guten Morgen' : hour < 17 ? 'Hallo' : 'Guten Abend';
 </script>
@@ -110,30 +109,14 @@
 
   <section>
     <h3>Heute auf dem Plan</h3>
-    {#if plan === undefined}
+    {#if $todayPlan === undefined}
       <p class="muted">Lade …</p>
-    {:else if plan === null}
-      <p class="muted">Offline, Plan nicht verfügbar.</p>
-    {:else if planned.length === 0}
-      <p class="muted">Nichts geplant{notes.length ? '' : ', freier Tag'}.</p>
+    {:else if !$todayPlan.length}
+      <p class="muted">Ruhetag – nichts geplant.</p>
+    {:else}
+      {#if $calc?.injury}<p class="injnote">{isOutage($calc.injury) ? 'Ernste Verletzung: nur erlaubte Bewegungen' : `Verletzungsmodus: Stufe „${STAGES[$calc.injury.stage].label}“`}</p>{/if}
+      {#each $todayPlan as sess (sess.key)}<SessionCard s={$calc ? adaptToLight(sess, $calc.recovery.light) : sess} compact />{/each}
     {/if}
-    {#if $calc?.injury && planned.length}
-      <p class="injnote">{isOutage($calc.injury) ? 'Ernste Verletzung: nur erlaubte Bewegungen' : `Verletzungsmodus: Stufe „${STAGES[$calc.injury.stage].label}“`}</p>
-    {/if}
-    {#each planned as e}
-      {@const chk = $calc?.injury ? checkSport($calc.injury, e.type ?? '') : null}
-      <div class="plan">
-        <span class="dot" style="background: {sportColor(e.type ?? '')}"></span>
-        <div>
-          <b>{e.name || sportName(e.type ?? 'Training')}</b>
-          <span class="muted">{[e.type ? sportName(e.type) : '', e.moving_time ? dur(e.moving_time) : '', km(e.distance)].filter(Boolean).join(' · ')}</span>
-          {#if chk && chk.status !== 'geht'}
-            <span class="conflict {chk.status}">{chk.status === 'nicht' ? ($calc?.injury?.stage === 0 && !isOutage($calc.injury) ? 'Pause laut Verletzungsmodus' : 'Heute nicht erlaubt') : /Weight|Workout/.test(e.type ?? '') ? 'Nur erlaubte Muskelgruppen' : 'Nur eingeschränkt: locker und kürzer'}{chk.status === 'nicht' && chk.alternatives.length ? ` · Alternative: ${chk.alternatives.join(', ')}` : ''}</span>
-          {/if}
-        </div>
-      </div>
-    {/each}
-    {#each notes as e}<p class="note">{e.name}</p>{/each}
   </section>
 
   {#if $calc?.injury}
