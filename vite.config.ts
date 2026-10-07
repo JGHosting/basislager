@@ -5,6 +5,8 @@ import { VitePWA } from 'vite-plugin-pwa';
 // base './' = relative Pfade, funktioniert unter jghosting.github.io/basislager/
 export default defineConfig({
   base: './',
+  // Versionsanzeige in "Mehr": Datum des Builds
+  define: { __APP_VERSION__: JSON.stringify(new Date().toISOString().slice(0, 16).replace('T', ' ')) },
   plugins: [
     svelte(),
     VitePWA({

@@ -13,13 +13,13 @@ export interface IcuActivity {
   start_date_local: string;
   type: string;
   name?: string;
-  moving_time?: number;      // Sekunden
-  elapsed_time?: number;
-  distance?: number;         // Meter
-  total_elevation_gain?: number;
-  average_heartrate?: number;
-  max_heartrate?: number;
-  icu_training_load?: number;
+  moving_time?: number | null;
+  elapsed_time?: number | null;
+  distance?: number | null;
+  total_elevation_gain?: number | null;
+  average_heartrate?: number | null;
+  max_heartrate?: number | null;
+  icu_training_load?: number | null;
   source?: string;
 }
 export interface IcuWellness {
@@ -32,7 +32,7 @@ export interface IcuWellness {
 }
 
 export class IcuError extends Error {
-  constructor(message: string, public kind: 'auth' | 'notfound' | 'network' | 'other') {
+  constructor(message: string, public kind: 'auth' | 'notfound' | 'network' | 'ratelimit' | 'other') {
     super(message);
   }
 }
@@ -44,24 +44,23 @@ async function get<T>(cred: Credentials, path: string): Promise<T> {
       headers: { Authorization: 'Basic ' + btoa('API_KEY:' + cred.apiKey.trim()) }
     });
   } catch {
-    throw new IcuError('Keine Verbindung zu intervals.icu (offline oder vom Browser blockiert).', 'network');
+    throw new IcuError('Keine Verbindung zu intervals.icu. Bist du offline?', 'network');
   }
   if (res.status === 401 || res.status === 403)
     throw new IcuError('API-Schlüssel oder Athlete-ID passen nicht zusammen.', 'auth');
   if (res.status === 404) throw new IcuError('Athlete-ID nicht gefunden.', 'notfound');
+  if (res.status === 429) throw new IcuError('Zu viele Anfragen. Bitte in einer Minute nochmal.', 'ratelimit');
   if (!res.ok) throw new IcuError(`intervals.icu antwortet mit Fehler ${res.status}.`, 'other');
   return res.json() as Promise<T>;
 }
 
-const iso = (d: Date) => d.toISOString().slice(0, 10);
-const daysAgo = (n: number) => { const d = new Date(); d.setDate(d.getDate() - n); return d; };
-
 export const icu = {
   athlete: (c: Credentials) => get<IcuAthlete>(c, `/athlete/${c.athleteId}`),
-  activities: (c: Credentials, days = 30) =>
-    get<IcuActivity[]>(c, `/athlete/${c.athleteId}/activities?oldest=${iso(daysAgo(days))}&newest=${iso(new Date())}`),
-  wellness: (c: Credentials, days = 7) =>
-    get<IcuWellness[]>(c, `/athlete/${c.athleteId}/wellness?oldest=${iso(daysAgo(days))}&newest=${iso(new Date())}`)
+  /** Aktivitäten zwischen zwei Tagen (jeweils inklusive). */
+  activities: (c: Credentials, oldest: string, newest: string) =>
+    get<IcuActivity[]>(c, `/athlete/${c.athleteId}/activities?oldest=${oldest}&newest=${newest}`),
+  wellness: (c: Credentials, oldest: string, newest: string) =>
+    get<IcuWellness[]>(c, `/athlete/${c.athleteId}/wellness?oldest=${oldest}&newest=${newest}`)
 };
 
 /** Normalisiert die Eingabe: "i123456", "123456" oder ganze URL → "i123456". */

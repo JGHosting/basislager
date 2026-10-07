@@ -1,7 +1,8 @@
 :root {
-  --bg: #f4f2ee; --card: #ffffff; --text: #1b1e23; --muted: #6b7079; --line: #e4e1db;
+  --bg: #f4f2ee; --card: #ffffff; --text: #1b1e23; --muted: #6b7079; --line: #e7e3dc;
   --accent: #e0662f; --accent-soft: #fbe6dc;
   --green: #2f9e6b; --yellow: #d9a21b; --red: #d64545;
+  --c-run: #e0662f; --c-ride: #3b82c4; --c-swim: #22a3b8; --c-strength: #8a63d2; --c-snow: #7aa7d9; --c-mountain: #4f9a5c;
   --radius: 20px;
   color-scheme: light dark;
 }
@@ -14,6 +15,26 @@ html, body { margin: 0; background: var(--bg); color: var(--text); }
 body {
   font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif;
   -webkit-font-smoothing: antialiased; -webkit-tap-highlight-color: transparent;
-  padding: env(safe-area-inset-top) 16px calc(env(safe-area-inset-bottom) + 24px);
+  padding: env(safe-area-inset-top) 16px 0;
+  overscroll-behavior-y: none;
 }
 input, button { font: inherit; }
+h1 { margin: 0; font-size: 34px; letter-spacing: -0.025em; font-weight: 750; }
+h2 { margin: 0 0 10px; font-size: 18px; letter-spacing: -0.01em; }
+p { margin: 6px 0; line-height: 1.45; }
+.page-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; padding: 18px 4px 14px; }
+.eyebrow { margin: 0 0 2px; color: var(--muted); font-size: 14px; font-weight: 500; }
+.card { background: var(--card); border-radius: var(--radius); padding: 18px 20px; margin-bottom: 12px; box-shadow: 0 1px 2px rgba(0,0,0,.04); }
+.muted { color: var(--muted); }
+.error { color: var(--red); font-weight: 500; }
+label { display: block; margin: 14px 0 0; font-size: 14px; color: var(--muted); }
+input { display: block; width: 100%; margin-top: 6px; padding: 14px; font-size: 17px; border-radius: 14px;
+        border: 1px solid var(--line); background: var(--bg); color: var(--text); }
+input:focus { outline: 2px solid var(--accent); border-color: transparent; }
+.btn { min-height: 48px; padding: 0 18px; border-radius: 14px; border: 1px solid var(--line);
+       background: var(--bg); color: var(--text); font-weight: 600; font-size: 16px; cursor: pointer; }
+.btn:disabled { opacity: .6; }
+.btn.primary { background: var(--accent); border-color: transparent; color: #fff; }
+.btn.ghost { background: transparent; }
+.btn.wide { width: 100%; margin-top: 14px; }
+form .btn.wide { margin-top: 18px; }

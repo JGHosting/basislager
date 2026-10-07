@@ -1,0 +1,173 @@
+<script lang="ts">
+  import { liveQuery } from 'dexie';
+  import { db } from '../../core/db';
+  import { today, addDays, weekStart, fmtDay } from '../../core/dates';
+  import { app } from '../app.svelte';
+  import { sportName, sportColor, dur, km, num, hours } from '../format';
+  import ConnectForm from '../components/ConnectForm.svelte';
+  import SyncChip from '../components/SyncChip.svelte';
+
+  const t = today();
+  const ws = weekStart(t);
+  const weekDays = Array.from({ length: 7 }, (_, i) => addDays(ws, i));
+
+  const morning = liveQuery(() => db.morning.where('date').between(addDays(t, -14), t, true, true).toArray());
+  const week = liveQuery(() => db.activities.where('date').between(ws, addDays(ws, 6), true, true).toArray());
+  const recent = liveQuery(() => db.activities.orderBy('date').reverse().limit(8).toArray());
+  const total = liveQuery(() => db.activities.count());
+
+  // Morgenwerte: heute + Durchschnitt der 7 Tage davor (nur vorhandene Werte)
+  const todayEntry = $derived($morning?.find(m => m.date === t));
+  function avg7(field: 'hrv' | 'restingHr' | 'sleepScore' | 'sleepSecs') {
+    const vals = ($morning ?? []).filter(m => m.date < t && m.date >= addDays(t, -7)).map(m => m[field]).filter((v): v is number => v != null);
+    return vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : null;
+  }
+  function delta(v: number | null | undefined, a: number | null) {
+    if (v == null || a == null || a === 0) return null;
+    return Math.round(((v - a) / a) * 100);
+  }
+
+  const wk = $derived.by(() => {
+    const list = $week ?? [];
+    const perDay = weekDays.map(d => list.filter(a => a.date === d).reduce((s, a) => s + (a.duration ?? a.elapsed ?? 0), 0));
+    return {
+      count: list.length,
+      time: list.reduce((s, a) => s + (a.duration ?? a.elapsed ?? 0), 0),
+      dist: list.reduce((s, a) => s + (a.distance ?? 0), 0),
+      elev: list.reduce((s, a) => s + (a.elevationGain ?? 0), 0),
+      perDay, max: Math.max(3600, ...perDay)
+    };
+  });
+
+  const sortedRecent = $derived(($recent ?? []).slice().sort((a, b) => b.start.localeCompare(a.start)));
+</script>
+
+<header class="page-head">
+  <div>
+    <p class="eyebrow">{fmtDay(t, { weekday: 'long', day: 'numeric', month: 'long' })}</p>
+    <h1>Heute</h1>
+  </div>
+  <SyncChip />
+</header>
+
+{#if app.ready && !app.connected}
+  <ConnectForm />
+{:else}
+  {#if app.syncing && !app.syncState.historyDone}
+    <section class="card import">
+      <h2>Historie wird importiert</h2>
+      <p class="muted">{app.syncLabel} · {app.syncCount.activities} Aktivitäten, {app.syncCount.days} Tage mit Morgenwerten bisher</p>
+      <div class="bar"><span></span></div>
+      <p class="small muted">Du kannst die App dabei schließen. Beim nächsten Öffnen geht es an derselben Stelle weiter.</p>
+    </section>
+  {/if}
+  {#if app.syncError}
+    <p class="card error">{app.syncError}</p>
+  {/if}
+
+  <section class="card">
+    <div class="card-head"><h2>Morgenwerte</h2><span class="tag">Ampel folgt</span></div>
+    {#if !todayEntry}
+      <p class="muted">Für heute noch keine Werte. Die Uhr überträgt sie meist kurz nach dem Aufwachen, sobald Garmin Connect synchronisiert.</p>
+    {:else}
+      <div class="metrics">
+        {#each [
+          { l: 'HRV', v: todayEntry.hrv, a: avg7('hrv'), u: 'ms', good: 1 },
+          { l: 'Ruhepuls', v: todayEntry.restingHr, a: avg7('restingHr'), u: 'bpm', good: -1 },
+          { l: 'Sleep Score', v: todayEntry.sleepScore, a: avg7('sleepScore'), u: '', good: 1 },
+          { l: 'Schlaf', v: todayEntry.sleepSecs, a: avg7('sleepSecs'), u: 'h', good: 1 }
+        ] as m}
+          {@const d = delta(m.v, m.a)}
+          <div class="metric">
+            <span class="m-label">{m.l}</span>
+            <span class="m-value">{m.l === 'Schlaf' ? hours(m.v).replace(' h', '') : num(m.v)}<small>{m.u}</small></span>
+            {#if d != null}
+              <span class="m-delta" class:up={d * m.good > 0} class:down={d * m.good < 0}>{d > 0 ? '+' : ''}{d} % zu Ø 7 T</span>
+            {:else}
+              <span class="m-delta">–</span>
+            {/if}
+          </div>
+        {/each}
+      </div>
+    {/if}
+  </section>
+
+  <section class="card">
+    <div class="card-head"><h2>Diese Woche</h2><span class="muted small">{fmtDay(ws, { day: '2-digit', month: '2-digit' })} – {fmtDay(addDays(ws, 6), { day: '2-digit', month: '2-digit' })}</span></div>
+    <div class="week">
+      {#each weekDays as d, i}
+        <div class="wd" class:today={d === t}>
+          <div class="col"><span style="height: {Math.round((wk.perDay[i] / wk.max) * 100)}%"></span></div>
+          <small>{fmtDay(d, { weekday: 'narrow' })}</small>
+        </div>
+      {/each}
+    </div>
+    <div class="stats">
+      <div><b>{wk.count}</b><span>Einheiten</span></div>
+      <div><b>{dur(wk.time)}</b><span>Zeit</span></div>
+      <div><b>{km(wk.dist, 0) || '0 km'}</b><span>Distanz</span></div>
+      <div><b>{num(wk.elev)} m</b><span>Höhe</span></div>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="card-head"><h2>Letzte Aktivitäten</h2><span class="muted small">{num($total ?? 0)} gespeichert</span></div>
+    {#if sortedRecent.length === 0}
+      <p class="muted">Noch keine Aktivitäten gespeichert.</p>
+    {/if}
+    <ul class="acts">
+      {#each sortedRecent as a (a.id)}
+        <li>
+          <span class="dot" style="background: {sportColor(a.sportType)}"></span>
+          <div class="main">
+            <strong>{sportName(a.sportType)}</strong>
+            <span class="muted">{fmtDay(a.date)}{a.name ? ' · ' + a.name : ''}</span>
+          </div>
+          <div class="right">
+            <span>{dur(a.duration ?? a.elapsed)}</span>
+            <span class="muted">{[km(a.distance), a.elevationGain ? Math.round(a.elevationGain) + ' hm' : '', a.avgHr ? '♥ ' + Math.round(a.avgHr) : ''].filter(Boolean).join(' · ')}</span>
+          </div>
+        </li>
+      {/each}
+    </ul>
+  </section>
+{/if}
+
+<style>
+  .card-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-bottom: 10px; }
+  .card-head h2 { margin: 0; }
+  .tag { font-size: 12px; color: var(--accent); background: var(--accent-soft); padding: 3px 9px; border-radius: 99px; font-weight: 600; }
+  .small { font-size: 13px; }
+  .import .bar { height: 6px; border-radius: 3px; background: var(--line); overflow: hidden; margin: 12px 0 8px; }
+  .import .bar span { display: block; height: 100%; width: 35%; background: var(--accent); border-radius: 3px; animation: slide 1.4s ease-in-out infinite; }
+  @keyframes slide { from { transform: translateX(-100%); } to { transform: translateX(290%); } }
+
+  .metrics { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .metric { background: var(--bg); border-radius: 14px; padding: 12px 14px; display: flex; flex-direction: column; gap: 2px; }
+  .m-label { font-size: 13px; color: var(--muted); }
+  .m-value { font-size: 28px; font-weight: 700; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+  .m-value small { font-size: 14px; font-weight: 500; color: var(--muted); margin-left: 3px; }
+  .m-delta { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .m-delta.up { color: var(--green); }
+  .m-delta.down { color: var(--red); }
+
+  .week { display: grid; grid-template-columns: repeat(7, 1fr); gap: 8px; height: 92px; margin: 4px 0 14px; }
+  .wd { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+  .col { flex: 1; width: 100%; max-width: 26px; background: var(--bg); border-radius: 8px; display: flex; align-items: flex-end; overflow: hidden; }
+  .col span { width: 100%; background: var(--accent); border-radius: 8px; min-height: 0; transition: height .4s ease; }
+  .wd small { color: var(--muted); font-size: 12px; }
+  .wd.today small { color: var(--accent); font-weight: 700; }
+  .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; }
+  .stats div { display: flex; flex-direction: column; }
+  .stats b { font-size: 17px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .stats span { font-size: 12px; color: var(--muted); }
+
+  .acts { list-style: none; margin: 0; padding: 0; }
+  .acts li { display: flex; align-items: center; gap: 12px; padding: 12px 0; border-top: 1px solid var(--line); }
+  .acts li:first-child { border-top: none; padding-top: 4px; }
+  .dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+  .main, .right { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+  .main { flex: 1; }
+  .acts .muted { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .right { text-align: right; align-items: flex-end; flex-shrink: 0; font-variant-numeric: tabular-nums; max-width: 50%; }
+</style>
