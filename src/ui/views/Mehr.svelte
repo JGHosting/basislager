@@ -7,6 +7,7 @@
   import ConnectForm from '../components/ConnectForm.svelte';
   import BackupSection from '../components/BackupSection.svelte';
   import HrSettings from '../components/HrSettings.svelte';
+  import WeightSettings from '../components/WeightSettings.svelte';
 
   const counts = liveQuery(async () => ({
     activities: await db.activities.count(),
@@ -64,6 +65,9 @@
 <h3 class="section">Pulswerte</h3>
 <HrSettings />
 
+<h3 class="section">Gewicht</h3>
+<WeightSettings />
+
 <h3 class="section">Backup</h3>
 <BackupSection />
 
@@ -78,7 +82,7 @@
 {/if}
 
 <button class="btn ghost wide" onclick={() => (vp = viewportInfo())}>Anzeige-Maße prüfen</button>
-{#if vp}<p class="muted small hint">Fenster {vp.innerHeight} · Bildschirm {vp.screenHeight} · App {vp.appHeight} · Leiste unten {vp.navBottom} · Rand oben {vp.safeTop} · unten {vp.safeBottom}</p>{/if}
+{#if vp}<p class="muted small hint">Fenster {vp.innerHeight} · sichtbar {vp.visual} · Dokument {vp.docHeight} · Bildschirm {vp.screenHeight} · App {vp.appHeight} · Leiste unten {vp.navBottom} · Rand oben {vp.safeTop} · unten {vp.safeBottom}</p>{/if}
 
 <p class="muted small footer">Basislager · Version {__APP_VERSION__}</p>
 

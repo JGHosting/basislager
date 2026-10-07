@@ -33,7 +33,8 @@ export function viewportInfo() {
   document.body.appendChild(probe);
   const cs = getComputedStyle(probe);
   const info = {
-    innerHeight: innerHeight, screenHeight: screen.height,
+    innerHeight: innerHeight, screenHeight: screen.height, visual: Math.round(visualViewport?.height ?? 0),
+    docHeight: document.documentElement.clientHeight,
     appHeight: Math.round(document.getElementById('app')?.getBoundingClientRect().height ?? 0),
     navBottom: Math.round(document.querySelector('nav')?.getBoundingClientRect().bottom ?? 0),
     safeTop: parseFloat(cs.paddingTop), safeBottom: parseFloat(cs.paddingBottom)

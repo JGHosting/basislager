@@ -26,6 +26,8 @@ export interface SyncState {
 export interface SyncProgress { phase: 'history' | 'recent'; label: string; activities: number; days: number }
 
 const BLOCK_DAYS = 365;
+/** Gewichte aus Garmin vor diesem Datum sind veraltet und werden ignoriert (Jakobs Wunsch). */
+export const WEIGHT_SINCE = '2026-09-07';
 const MAX_EMPTY_BLOCKS = 2;
 const EARLIEST = '2005-01-01';
 
@@ -76,7 +78,9 @@ const FIELD_MAP: [MorningField, keyof IcuWellness][] = [
 
 async function storeWellness(list: IcuWellness[]): Promise<number> {
   const now = Date.now();
-  const withData = list.filter(w => FIELD_MAP.some(([, k]) => w[k] != null));
+  // Gewicht aus Garmin erst ab Stichtag übernehmen (sehr alte Werte ignorieren)
+  const weightSince = (await getSetting<string>('weightSince')) ?? '0000';
+  const withData = list.filter(w => FIELD_MAP.some(([f, k]) => w[k] != null && !(f === 'weight' && w.id < WEIGHT_SINCE)));
   if (!withData.length) return 0;
   const existing = await db.morning.bulkGet(withData.map(w => w.id));
   const rows: MorningEntry[] = withData.map((w, i) => {
@@ -89,6 +93,8 @@ async function storeWellness(list: IcuWellness[]): Promise<number> {
       if (row.sources[field] === 'manual') continue;        // eigene Eingabe hat Vorrang
       const v = w[key] as number | null | undefined;
       if (v == null) continue;
+      if (field === 'weight' && w.id < WEIGHT_SINCE) continue;   // altes Garmin-Gewicht ignorieren
+      if (field === 'weight' && w.id < weightSince) continue;
       row[field] = v;
       row.sources[field] = 'intervals';
     }

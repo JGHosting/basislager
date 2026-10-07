@@ -62,6 +62,10 @@ export class BasislagerDB extends Dexie {
       morning: 'date'
     });
     this.version(3).stores({ snapshots: '++seq, createdAt' });
+    // v4: alte Garmin-Gewichte (vor 07.09.2026) entfernen; eigene Eingaben bleiben
+    this.version(4).stores({}).upgrade(tx => tx.table('morning').toCollection().modify((m: MorningEntry) => {
+      if (m.date < '2026-09-07' && m.weight != null && m.sources?.weight !== 'manual') { m.weight = null; delete m.sources.weight; }
+    }));
   }
 }
 

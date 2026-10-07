@@ -12,7 +12,7 @@ import type { BasislagerDB, Activity, MorningEntry, SettingRow } from '../core/d
 import { db as mainDb, BasislagerDB as DBClass, setSetting } from '../core/db';
 import Dexie from 'dexie';
 
-export const SCHEMA_VERSION = 3;
+export const SCHEMA_VERSION = 4;
 export const BACKUP_TABLES = ['settings', 'activities', 'morning'] as const;
 export const EXCLUDED_TABLES = ['snapshots'];
 /** Einstellungen, die nicht ins Backup gehören (Geheimnisse, gerätespezifisch). */
@@ -70,6 +70,10 @@ function migrate(raw: any): any {
   // if (v === 3) { raw.tables.neueTabelle = []; v = 4; }
   if (v < 2) { raw.tables.activities ??= []; raw.tables.morning ??= []; v = 2; }
   if (v < 3) { v = 3; } // v3 brachte nur die interne Tabelle "snapshots"
+  if (v < 4) {           // v4: alte Garmin-Gewichte vor 07.09.2026 entfernen
+    for (const m of raw.tables.morning ?? []) if (m?.date < '2026-09-07' && m.weight != null && m.sources?.weight !== 'manual') { m.weight = null; if (m.sources) delete m.sources.weight; }
+    v = 4;
+  }
   raw.schemaVersion = v;
   return raw;
 }

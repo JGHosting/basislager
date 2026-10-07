@@ -15,14 +15,19 @@
 * { box-sizing: border-box; }
 /* App-Gerüst: Die Seite selbst scrollt nie. Nur der Inhaltsbereich (main) scrollt.
    Dadurch verrutschen Menüleiste und Popups auf iOS nicht. */
-html, body { margin: 0; height: 100%; overflow: hidden; background: var(--bg); color: var(--text); overscroll-behavior: none; }
+/* Gemessen auf iPhone (Web-App, Statusleiste transparent): 100 % und position:fixed enden 59 pt
+   (= Statusleiste) über dem unteren Rand, und darunter wird nichts gezeichnet. Deshalb bekommt das
+   Dokument selbst die echte Bildschirmhöhe (--app-h aus main.ts) – dann wird bis ganz unten gezeichnet. */
+html, body { margin: 0; height: var(--app-h, 100vh); overflow: hidden; background: var(--bg); color: var(--text); overscroll-behavior: none; }
+body { position: relative; }
+/* iOS-Workaround (installierte Web-App, durchscheinende Statusleiste): Ohne diese Zeile endet der
+   Layout-Bereich um die Höhe der Statusleiste zu früh, unten bleibt eine Lücke. */
+html { min-height: calc(100% + env(safe-area-inset-top)); }
 body {
   font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif;
   -webkit-font-smoothing: antialiased; -webkit-tap-highlight-color: transparent;
 }
-/* Höhe kommt aus main.ts (--app-h): In installierten iOS-Web-Apps melden vh/dvh/100 % teils
-   eine zu kleine Höhe, dann endet die Menüleiste über dem unteren Rand. */
-#app { position: fixed; top: 0; left: 0; right: 0; height: var(--app-h, 100%); display: flex; flex-direction: column; }
+#app { position: fixed; top: 0; left: 0; right: 0; bottom: 0; display: flex; flex-direction: column; }
 input, button { font: inherit; }
 h1 { margin: 0; font-size: 34px; letter-spacing: -0.025em; font-weight: 750; }
 h2 { margin: 0 0 10px; font-size: 18px; letter-spacing: -0.01em; }

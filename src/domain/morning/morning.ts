@@ -2,7 +2,7 @@
  * Morgenwerte: Nachtwerte lesen, Gewicht manuell speichern, heutige Plan-Einträge holen.
  * Manuelle Werte werden als source 'manual' markiert und beim Sync nie überschrieben.
  */
-import { db, getSetting, type MorningEntry } from '../../core/db';
+import { db, getSetting, setSetting, type MorningEntry } from '../../core/db';
 import { today, addDays } from '../../core/dates';
 import { icu, type Credentials, type IcuEvent } from '../../sources/intervals/client';
 
@@ -63,4 +63,29 @@ export async function todaysPlan(): Promise<IcuEvent[] | null> {
     const ev = await icu.events(c, t, t);
     return ev.filter(e => e.start_date_local.slice(0, 10) === t);
   } catch { return null; }
+}
+
+/* ---------- Gewicht erst ab Stichtag ---------- */
+
+/** Standard: Gewichte aus Garmin erst ab 30 Tage vor dem ersten Start dieser Funktion. */
+export async function weightSince(): Promise<string> {
+  let d = await getSetting<string>('weightSince');
+  if (!d) { d = addDays(today(), -30); await setSetting('weightSince', d); await applyWeightCutoff(d); }
+  return d;
+}
+
+/**
+ * Entfernt Garmin-Gewichte vor dem Stichtag (eigene, manuell eingetragene Werte bleiben).
+ * Wird auch beim Sync beachtet, damit alte Werte nicht zurückkommen.
+ */
+export async function applyWeightCutoff(since: string) {
+  await db.transaction('rw', db.morning, async () => {
+    const old = await db.morning.where('date').below(since).filter(m => m.weight != null && m.sources.weight !== 'manual').toArray();
+    const now = Date.now();
+    await db.morning.bulkPut(old.map(m => { const s = { ...m.sources }; delete s.weight; return { ...m, weight: null, sources: s, updatedAt: now }; }));
+  });
+}
+export async function setWeightSince(since: string) {
+  await setSetting('weightSince', since);
+  await applyWeightCutoff(since);
 }

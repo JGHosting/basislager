@@ -3,7 +3,7 @@
   import { db, getSetting, setSetting } from '../../core/db';
   import { today } from '../../core/dates';
   import { hrProfile } from '../../domain/load/load';
-  import { METRICS, PERIODS, rangeFor, buildContext, FAMILIES, type Period } from '../../domain/stats/metrics';
+  import { METRICS, PERIODS, rangeFor, buildContext, type Period } from '../../domain/stats/metrics';
   import MetricView from '../components/MetricView.svelte';
 
   // Daten einmal laden; liveQuery rechnet bei neuen Daten automatisch neu
@@ -61,19 +61,11 @@
 {#if !$ctxQ}
   <p class="muted">Lade …</p>
 {:else}
-  {#if range.bucket !== 'month' && visible.length}
-    <p class="legend muted small">
-      <span class="snow"></span> Schneetage
-      {#if shown.includes('verteilung')}
-        {#each FAMILIES as f}<span class="fam" style="background: var({f.color})"></span>{f.label}{/each}
-      {/if}
-    </p>
-  {/if}
   {#each visible as def (def.id)}
     <MetricView {def} ctx={$ctxQ} {range} />
   {/each}
   {#if !visible.length}<p class="muted">Keine Kennzahl gewählt. Tippe oben auf „Kennzahlen“.</p>{/if}
-  <p class="muted small foot">Muskelgruppen, Schmerzverlauf und Ereignisse wie Verletzung, Wettkampf oder Urlaub kommen mit den jeweiligen Bausteinen dazu.</p>
+  <p class="muted small foot">Rosa hinterlegt: Schneetage. Muskelgruppen, Schmerzverlauf und Ereignisse wie Verletzung, Wettkampf oder Urlaub kommen mit den jeweiligen Bausteinen dazu.</p>
 {/if}
 
 <style>

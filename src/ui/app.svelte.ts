@@ -5,6 +5,7 @@
 import { getSetting, setSetting, deleteSetting, requestPersistence, persistState, type PersistState } from '../core/db';
 import { icu, IcuError, normalizeAthleteId, type Credentials } from '../sources/intervals/client';
 import { today } from '../core/dates';
+import { weightSince } from '../domain/morning/morning';
 import { runSync, getSyncState, resetHistory, type SyncState } from '../sources/intervals/sync';
 
 const AUTO_SYNC_AFTER_MS = 10 * 60 * 1000;
@@ -24,6 +25,7 @@ export const app = $state({
 });
 
 export async function initApp() {
+  await weightSince();
   const cred = await getSetting<Credentials>('intervals');
   app.connected = !!cred;
   app.athleteName = (await getSetting<string>('athleteName')) ?? '';

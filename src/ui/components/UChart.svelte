@@ -57,7 +57,7 @@
     }
     const ordered = [xs, ...order.map(i => data[i])];
     // Gestapelt: Legendenwerte sollen Einzelwerte zeigen, nicht kumulierte
-    if (result.stacked) series.forEach((s, k) => { if (k) { const i = order[k - 1]; s.value = (_u, _v, _si, idx) => (idx == null ? '' : fmtY(result.series[i].values[idx] ?? 0)); } });
+    if (result.stacked) series.forEach((s, k) => { if (k) { const i = order[k - 1]; s.value = (_u, _v, _si, idx) => (idx == null ? fmtY(result.series[i].values.reduce<number>((t, v) => t + (v ?? 0), 0)) : fmtY(result.series[i].values[idx] ?? 0)); } });
 
     plot = new uPlot({
       width, height: 190, padding: [8, 4, 0, 0],
