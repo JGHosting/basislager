@@ -24,13 +24,14 @@
     /* Kein position:fixed – die Leiste ist Teil des Gerüsts und bleibt immer unten */
     flex-shrink: 0; z-index: 10;
     display: grid; grid-template-columns: repeat(5, 1fr);
-    padding: 6px 4px calc(env(safe-area-inset-bottom) + 4px);
+    /* Wie die iOS-Tab-Leiste: Beschriftung sitzt knapp über dem Home-Balken */
+    padding: 4px 4px max(calc(env(safe-area-inset-bottom) - 12px), 8px);
     background: color-mix(in srgb, var(--bg) 82%, transparent);
     backdrop-filter: blur(18px) saturate(1.4); -webkit-backdrop-filter: blur(18px) saturate(1.4);
     border-top: 1px solid var(--line);
   }
-  a { display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 6px 0;
-      color: var(--muted); text-decoration: none; font-size: 11px; font-weight: 500; min-height: 48px; }
+  a { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 4px 0 2px;
+      color: var(--muted); text-decoration: none; font-size: 11px; font-weight: 500; min-height: 44px; }
   svg { width: 26px; height: 26px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
   a.active { color: var(--accent); }
   a.active svg { stroke-width: 2.2; }
