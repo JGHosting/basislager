@@ -4,6 +4,7 @@ import { newId } from '../../core/ids';
 import { today, weekStart, addDays } from '../../core/dates';
 import { activeInjury } from '../injury/injury';
 import { buildWeek, type PlanContext, type PlanWeek, type PlanSession } from './plan';
+import { hrProfile } from '../load/load';
 
 const plain = <T,>(v: T): T => JSON.parse(JSON.stringify(v));
 
@@ -14,13 +15,15 @@ export async function activeGoal(): Promise<Goal | null> {
 }
 
 export async function loadContext(): Promise<PlanContext> {
-  const [activities, strength, splitId, goal, injuries, events, edits, runs, vacations] = await Promise.all([
+  const [activities, strength, splitId, goal, injuries, events, edits, runs, vacations, morning, hrMax, hrRest] = await Promise.all([
     db.activities.toArray(), db.strength.toArray(), getSetting<string | null>('activeSplit'), activeGoal(),
-    db.injuries.toArray(), db.fixedEvents.toArray(), db.planEdits.toArray(), getSetting<2 | 3>('runsPerWeek'), db.vacations.toArray()
+    db.injuries.toArray(), db.fixedEvents.toArray(), db.planEdits.toArray(), getSetting<2 | 3>('runsPerWeek'), db.vacations.toArray(),
+    db.morning.orderBy('date').toArray(), getSetting<number | null>('hrMax'), getSetting<number | null>('hrRest')
   ]);
+  const hr = hrProfile(activities, morning.filter(m => m.restingHr != null).map(m => m.restingHr!), { max: hrMax, rest: hrRest }, today());
   return {
     today: today(), activities, strength, split: splitId ? (await db.splits.get(splitId)) ?? null : null,
-    goal, injury: activeInjury(injuries), events, edits: new Map(edits.map(e => [e.key, e])), runsPerWeek: runs ?? 3, vacations
+    goal, injury: activeInjury(injuries), events, edits: new Map(edits.map(e => [e.key, e])), runsPerWeek: runs ?? 3, vacations, hr
   };
 }
 

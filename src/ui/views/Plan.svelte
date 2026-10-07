@@ -77,11 +77,14 @@
     {:else}
       <div class="mh"><span class="kicker">Standardwoche</span></div>
       <h2>3× Kraft · {$runs}× Laufen</h2>
-      <p class="muted small">Laufumfang steigt langsam mit dir mit, jede 4. Woche ist leichter. {w.phase === 'erholung' ? 'Diese Woche: Erholungswoche.' : ''}</p>
+      <p class="muted small">Laufumfang steigt langsam mit dir mit, nach 3 Wochen folgt eine leichtere (Urlaub zählt mit). Außerplanmäßiges Training wird eingerechnet. {w.phase === 'erholung' ? 'Diese Woche: Erholungswoche.' : ''}</p>
       <div class="seg"><span class="muted small">Läufe pro Woche</span>
         {#each [2, 3] as n}<button class:on={$runs === n} onclick={() => setRunsPerWeek(n as 2 | 3)}>{n}×</button>{/each}
       </div>
       <button class="btn primary wide" onclick={() => openGoal({})}>Wettkampf eintragen</button>
+    {/if}
+    {#if w.extra.length}
+      <p class="extra">Außerplanmäßig: {w.extra.map(e => `${e.text} (Belastung ${e.load})`).join(', ')}{w.adjusted ? ' → restliche Einheiten angepasst' : ''}</p>
     {/if}
     <p class="sum muted small">Diese Woche ≈ {dur(w.minutes)} gesamt{w.runMinutes ? ` · Laufen ${dur(w.runMinutes)}` : ''} · Paces {w.paces.source === 'ziel' ? 'aus Zielzeit' : w.paces.source === 'verlauf' ? 'aus deinen Läufen' : 'Standardwerte'}: locker {fmtPace(w.paces.easy)}, Schwelle {fmtPace(w.paces.threshold)} min/km</p>
   </section>
@@ -173,6 +176,7 @@
   .small { font-size: 13px; }
   .phase { margin: 8px 0 0; font-size: 15px; }
   .sum { margin: 10px 0 0; }
+  .extra { margin: 10px 0 0; font-size: 13px; background: var(--accent-soft); border-radius: 10px; padding: 8px 10px; }
   .seg { display: flex; align-items: center; gap: 6px; margin: 10px 0 0; }
   .seg span { margin-right: auto; }
   .seg button { border: 1px solid var(--line); background: var(--bg); color: var(--text); border-radius: 10px; padding: 6px 14px; font: inherit; font-weight: 600; cursor: pointer; }
