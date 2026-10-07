@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { swipeDismiss } from '../actions/swipeDismiss';
   /**
    * Lebensmittel hinzufügen/bearbeiten:
    *   Suche (lokal sofort, Open Food Facts nach kurzer Pause) → Lebensmittel → Menge + Mahlzeit → Hinzufügen.
@@ -151,7 +152,7 @@
 </script>
 
 <div class="backdrop" role="presentation" onclick={closeFood}></div>
-<div class="sheet" class:full={step !== 'amount'} role="dialog" aria-modal="true" aria-label="Lebensmittel">
+<div class="sheet" class:full={step !== 'amount'} use:swipeDismiss={closeFood} role="dialog" aria-modal="true" aria-label="Lebensmittel">
   <div class="grab"></div>
 
   {#if step === 'search'}

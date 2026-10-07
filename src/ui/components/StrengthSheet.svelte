@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { swipeDismiss } from '../actions/swipeDismiss';
   import { db, type MuscleGroup, type SplitTemplate, type Activity } from '../../core/db';
   import { today, fmtDay } from '../../core/dates';
   import { GROUPS, nextSplitDay, groupLabel } from '../../domain/strength/strength';
@@ -53,7 +54,7 @@
 </script>
 
 <div class="backdrop" role="presentation" onclick={closeStrength}></div>
-<div class="sheet" role="dialog" aria-modal="true" aria-label="Krafttraining">
+<div class="sheet" use:swipeDismiss={closeStrength} role="dialog" aria-modal="true" aria-label="Krafttraining">
   <div class="grab"></div>
   <p class="eyebrow">{fmtDay(date, { weekday: 'long', day: 'numeric', month: 'long' })}{act ? ' · ' + dur(act.duration ?? act.elapsed) : ''}</p>
   <h2 class="title">Krafttraining</h2>

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { swipeDismiss } from '../actions/swipeDismiss';
   import { liveQuery } from 'dexie';
   import { db } from '../../core/db';
   import { today, fmtDay } from '../../core/dates';
@@ -58,7 +59,7 @@
 </script>
 
 <div class="backdrop" role="presentation" onclick={() => closeMorning(false)}></div>
-<div class="sheet" role="dialog" aria-modal="true" aria-label="Morgenübersicht">
+<div class="sheet" use:swipeDismiss={() => closeMorning(false)} role="dialog" aria-modal="true" aria-label="Morgenübersicht">
   <div class="grab"></div>
   <p class="eyebrow">{fmtDay(t, { weekday: 'long', day: 'numeric', month: 'long' })}</p>
   <h2 class="title">{greet}{app.athleteName ? `, ${app.athleteName}` : ''}</h2>

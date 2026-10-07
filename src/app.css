@@ -23,6 +23,9 @@ body { position: relative; }
 /* iOS-Workaround (installierte Web-App, durchscheinende Statusleiste): Ohne diese Zeile endet der
    Layout-Bereich um die Höhe der Statusleiste zu früh, unten bleibt eine Lücke. */
 html { min-height: calc(100% + env(safe-area-inset-top)); }
+/* Kein Doppeltipp-Zoom; Texteingaben ≥ 16 px, damit iOS beim Antippen nicht hineinzoomt */
+html { touch-action: manipulation; -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+input, select, textarea { font-size: max(16px, 1em); }
 body {
   font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif;
   -webkit-font-smoothing: antialiased; -webkit-tap-highlight-color: transparent;
