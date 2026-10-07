@@ -76,6 +76,9 @@ export const icu = {
     get<IcuEvent[]>(c, `/athlete/${c.athleteId}/events?oldest=${oldest}&newest=${newest}`),
   /** Vollständige Daten einer Aktivität (Zonen, Trittfrequenz, Leistung, Kalorien …). */
   activity: (c: Credentials, id: string) => get<Record<string, unknown>>(c, `/activity/${encodeURIComponent(id)}`),
+  /** Zeitreihen einer Aktivität (hier: Puls + Zeit), für eigene Zonenberechnung. */
+  streams: (c: Credentials, id: string, types: string[]) =>
+    get<{ type: string; data: (number | null)[] }[]>(c, `/activity/${encodeURIComponent(id)}/streams?types=${types.join(',')}`),
   wellness: (c: Credentials, oldest: string, newest: string) =>
     get<IcuWellness[]>(c, `/athlete/${c.athleteId}/wellness?oldest=${oldest}&newest=${newest}`)
 };

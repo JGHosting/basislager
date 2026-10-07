@@ -9,6 +9,7 @@
   import { loadDetails } from '../../domain/activity/details';
   import { groupLabel, isStrengthActivity } from '../../domain/strength/strength';
   import { today } from '../../core/dates';
+  import { ZONES, zoneBpm, zoneTimes } from '../../domain/load/zones';
 
   const id = app.activitySheet!.id;
   const data = liveQuery(async () => {
@@ -20,9 +21,14 @@
     return { a, hr, load: activityLoad(a, hr, ss?.intensity), strength: ss };
   });
   let extra = $state<ActivityExtra | null>(null), loading = $state(false), err = $state('');
+  let loadingStarted = false;
+  // Einmal pro Öffnen: gespeicherte Details zeigen, fehlende (inkl. Pulsverlauf) von intervals.icu nachladen
   $effect(() => {
-    const d = $data; if (!d || extra || loading) return;
-    if (d.a.extra) { extra = d.a.extra; return; }
+    const d = $data; if (!d || loadingStarted) return;
+    loadingStarted = true;
+    extra = d.a.extra ?? null;
+    const needs = !d.a.extra || (!!d.a.avgHr && d.a.extra.hrHist === undefined);
+    if (!needs) return;
     loading = true;
     loadDetails(d.a).then(x => (extra = x)).catch(() => (err = 'Details konnten nicht geladen werden (offline?).')).finally(() => (loading = false));
   });
@@ -30,7 +36,8 @@
   const isRun = (t: string) => /Run|Walk|Hike/.test(t);
   const pace = (mps: number) => { const m = 1000 / mps / 60; const mm = Math.floor(m), ss = Math.round((m - mm) * 60); return `${mm}:${String(ss === 60 ? 0 : ss).padStart(2, '0')}`; };
   const kmh = (mps: number) => (mps * 3.6).toLocaleString('de-DE', { maximumFractionDigits: 1 });
-  const ZONE_COLORS = ['#9aa3ad', '#2a78d6', '#1baf7a', '#eda100', '#eb6834', '#e34948', '#a1233c'];
+  // Zone 0 grau, dann aufsteigend kalt → warm
+  const ZONE_COLORS = ['#9aa3ad', '#2a78d6', '#1baf7a', '#eda100', '#eb6834', '#e34948'];
 </script>
 
 <div class="backdrop" role="presentation" onclick={closeActivity}></div>
@@ -65,20 +72,22 @@
       {#if extra?.rpe}<div><span>Anstrengung (RPE)</span><b>{extra.rpe}/10</b></div>{/if}
     </section>
 
-    {#if extra?.hrZoneTimes && extra.hrZoneTimes.some(x => x > 0)}
-      {@const total = extra.hrZoneTimes.reduce((x, y) => x + y, 0)}
+    {#if extra?.hrHist?.length}
+      {@const zt = zoneTimes(extra.hrHist, $data.hr.max)}
+      {@const total = zt.reduce((x, y) => x + y, 0)}
+      {@const zb = zoneBpm($data.hr.max)}
       <section>
-        <h3>Pulszonen</h3>
-        {#each extra.hrZoneTimes as secs, i}
-          {#if secs > 0 || i < 5}
-            <div class="zone">
-              <span class="zl">Z{i + 1}{extra.hrZones?.[i] ? ` bis ${extra.hrZones[i]}` : ''}</span>
-              <span class="zbar"><i style="width: {(secs / total) * 100}%; background: {ZONE_COLORS[i] ?? ZONE_COLORS[6]}"></i></span>
-              <span class="zv">{dur(secs)} · {Math.round((secs / total) * 100)} %</span>
-            </div>
-          {/if}
+        <h3>Pulszonen <span class="muted sub">% vom Maximalpuls ({$data.hr.max} bpm)</span></h3>
+        {#each zt as secs, i}
+          <div class="zone">
+            <span class="zl"><b>Z{i}</b> {ZONES[i].label}<small>{i === 0 ? `< ${zb[i].hi}` : `${zb[i].lo}–${zb[i].hi}`} bpm</small></span>
+            <span class="zbar"><i style="width: {total ? (secs / total) * 100 : 0}%; background: {ZONE_COLORS[i]}"></i></span>
+            <span class="zv">{secs ? dur(secs) : '–'}<small>{total ? Math.round((secs / total) * 100) : 0} %</small></span>
+          </div>
         {/each}
       </section>
+    {:else if extra && a.avgHr && extra.hrHist === null}
+      <section><h3>Pulszonen</h3><p class="muted small">Für diese Aktivität gibt es keinen Pulsverlauf.</p></section>
     {/if}
 
     {#if isStrengthActivity(a)}
@@ -117,8 +126,10 @@
   .grid b { font-size: 20px; font-weight: 700; font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
   .grid small { font-size: 12px; color: var(--muted); }
   h3 { margin: 0 0 10px; font-size: 15px; }
-  .zone { display: grid; grid-template-columns: 78px 1fr 96px; align-items: center; gap: 8px; margin: 6px 0; font-size: 13px; font-variant-numeric: tabular-nums; }
-  .zl { color: var(--muted); }
+  .sub { font-weight: 400; font-size: 12px; }
+  .zone { display: grid; grid-template-columns: 118px 1fr 64px; align-items: center; gap: 8px; margin: 6px 0; font-size: 13px; font-variant-numeric: tabular-nums; }
+  .zl { color: var(--muted); display: flex; flex-direction: column; line-height: 1.25; } .zl b { color: var(--text); } .zl small, .zv small { font-size: 11px; color: var(--muted); }
+  .zv { display: flex; flex-direction: column; align-items: flex-end; line-height: 1.25; }
   .zbar { height: 12px; background: var(--bg); border-radius: 6px; overflow: hidden; }
   .zbar i { display: block; height: 100%; border-radius: 6px; }
   .zv { text-align: right; }

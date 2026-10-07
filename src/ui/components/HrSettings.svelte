@@ -2,6 +2,7 @@
   import { liveQuery } from 'dexie';
   import { setSetting } from '../../core/db';
   import { computeToday } from '../../domain/today';
+  import { zoneBpm } from '../../domain/load/zones';
   const calc = liveQuery(() => computeToday());
   let editing = $state(false), max = $state(''), rest = $state(''), err = $state('');
   const src = (s: string) => (s === 'manual' ? 'eigener Wert' : s === 'auto' ? 'automatisch' : 'Standardwert');
@@ -35,6 +36,14 @@
     {/if}
   {/if}
 </section>
+{#if $calc && !editing}
+  <section class="card zones">
+    <b>Pulszonen</b> <span class="muted small">(% vom Maximalpuls {$calc.hr.max} bpm)</span>
+    {#each zoneBpm($calc.hr.max) as z}
+      <div class="zr"><span>Z{z.id} {z.label}</span><span class="muted">{z.id === 0 ? `< ${Math.round(z.to * 100)} %` : `${Math.round(z.from * 100)}–${Math.round(z.to * 100)} %`}</span><b>{z.id === 0 ? `< ${z.hi}` : `${z.lo}–${z.hi}`} bpm</b></div>
+    {/each}
+  </section>
+{/if}
 <p class="muted hint">Automatisch: Maximalpuls = zweithöchster Wert deiner Aktivitäten der letzten 2 Jahre, Ruhepuls = Median der letzten 30 Morgenwerte. Beides fließt in die Belastungsrechnung ein.</p>
 
 <style>
@@ -49,4 +58,7 @@
   .actions { display: flex; gap: 10px; margin: 14px 0 8px; }
   .actions .btn { flex: 1; }
   .hint { font-size: 13px; margin: 8px 4px 0; }
+  .zones { margin-top: 10px; padding: 12px 20px; } .zones .small { font-size: 12px; }
+  .zr { display: grid; grid-template-columns: 1fr auto 96px; gap: 8px; padding: 7px 0; border-top: 1px solid var(--line); font-size: 14px; font-variant-numeric: tabular-nums; }
+  .zr:first-of-type { margin-top: 8px; } .zr b { text-align: right; font-weight: 600; }
 </style>

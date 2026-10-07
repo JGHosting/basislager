@@ -34,6 +34,8 @@ export interface ActivityExtra {
   avgWatts?: number | null; npWatts?: number | null; elevLoss?: number | null; altMin?: number | null; altMax?: number | null;
   avgTemp?: number | null; hrZoneTimes?: number[] | null; hrZones?: number[] | null; intensity?: number | null;
   rpe?: number | null; feel?: number | null; device?: string | null; laps?: number | null; description?: string | null;
+  /** Puls-Histogramm [bpm, Sekunden][] – daraus werden die Zonen mit dem eigenen Maximalpuls berechnet. */
+  hrHist?: [number, number][] | null;
   fetchedAt: number;
 }
 
