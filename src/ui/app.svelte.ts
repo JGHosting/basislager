@@ -29,7 +29,7 @@ export const app = $state({
   persist: 'denied' as PersistState,
   lastBackupAt: 0,
   showMorning: false,
-  strengthEdit: null as null | { activityId?: string; sessionId?: string; date?: string },
+  strengthEdit: null as null | { activityId?: string; sessionId?: string; date?: string; fresh?: boolean },
   foodSheet: null as null | { mode: 'add'; date: string; meal: Meal } | { mode: 'edit'; entry: FoodLogEntry },
   injurySheet: null as null | { id?: string },
   goalSheet: null as null | { id?: string },
@@ -120,7 +120,7 @@ export async function closeMorning(done: boolean) {
 export function openMorning() { app.showMorning = true; }
 
 /* ---------- Kraft-Zuordnung ---------- */
-export function openStrength(target: { activityId?: string; sessionId?: string; date?: string }) { app.strengthEdit = target; }
+export function openStrength(target: { activityId?: string; sessionId?: string; date?: string; fresh?: boolean }) { app.strengthEdit = target; }
 export function closeStrength() { app.strengthEdit = null; }
 
 /* ---------- Ernährung ---------- */

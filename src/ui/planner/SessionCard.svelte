@@ -32,7 +32,7 @@
         {#if s.status !== 'ausgelassen'}<button onclick={() => editSession(s.key, { status: 'ausgelassen' })}>Auslassen</button>{/if}
         {#if s.sport !== 'wettkampf'}<button onclick={() => (moving = true)}>Verschieben</button>{/if}
         {#if s.status !== 'offen' || s.moved}<button onclick={() => editSession(s.key, null)}>Zurücksetzen</button>{/if}
-        {#if s.sport === 'kraft' && s.status === 'erledigt'}<button onclick={() => openStrength({ date: s.date })}>Gruppen eintragen</button>{/if}
+        {#if s.sport === 'kraft' && s.status === 'erledigt'}<button onclick={() => openStrength(s.activityId ? { activityId: s.activityId } : { date: s.date })}>Muskelgruppen ändern</button>{/if}
       </div>
     {:else}
       <div class="days">

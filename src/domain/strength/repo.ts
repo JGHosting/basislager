@@ -8,9 +8,11 @@ export async function activeSplit(): Promise<SplitTemplate | null> {
 }
 export async function setActiveSplit(id: string | null) { await setSetting('activeSplit', id); }
 
-export async function sessionFor(target: { activityId?: string; sessionId?: string }): Promise<StrengthSession | undefined> {
+export async function sessionFor(target: { activityId?: string; sessionId?: string; date?: string; fresh?: boolean }): Promise<StrengthSession | undefined> {
   if (target.sessionId) return db.strength.get(target.sessionId);
   if (target.activityId) return db.strength.where('activityId').equals(target.activityId).first();
+  // Nur Datum (z. B. aus dem Plan): vorhandene Einheit dieses Tages bearbeiten statt eine zweite anzulegen
+  if (target.date && !target.fresh) return (await db.strength.where('date').equals(target.date).toArray()).sort((a, b) => b.updatedAt - a.updatedAt)[0];
 }
 
 export async function saveSession(input: { id?: string; activityId?: string; date: string; muscleGroups: MuscleGroup[]; intensity: number | null; skipped?: boolean }) {
@@ -20,7 +22,8 @@ export async function saveSession(input: { id?: string; activityId?: string; dat
     id: prev?.id ?? newId(), date: input.date, muscleGroups: input.muscleGroups, intensity: input.intensity,
     createdAt: prev?.createdAt ?? now, updatedAt: now
   };
-  if (input.activityId) row.activityId = input.activityId;   // Feld nur setzen, wenn vorhanden (eindeutiger Index)
+  const activityId = input.activityId ?? prev?.activityId;   // beim Bearbeiten Verknüpfung behalten
+  if (activityId) row.activityId = activityId;   // Feld nur setzen, wenn vorhanden (eindeutiger Index)
   if (input.skipped) row.skipped = true;
   await db.strength.put(row);
   return row;

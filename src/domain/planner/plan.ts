@@ -141,10 +141,10 @@ const noLegDay = (d: number) => d === 4 || d === 6;
  * Verteilt die Split-Tage auf die Krafttage: Beintage möglichst mit mindestens einem Tag Abstand
  * und nicht vor/nach dem langen Lauf. Was nicht passt, wird ohne schweres Beintraining geplant.
  */
-function assignKraft(days: number[], groups: MuscleGroup[][]): { day: number; groups: MuscleGroup[]; noLegs: boolean }[] {
+function assignKraft(days: number[], groups: MuscleGroup[][], fixedLegDays: number[] = []): { day: number; groups: MuscleGroup[]; noLegs: boolean }[] {
   const legs = groups.filter(hasLegs), other = groups.filter(g => !hasLegs(g));
   const legDays: number[] = [];
-  for (const d of days) if (!noLegDay(d) && legDays.length < legs.length && legDays.every(x => Math.abs(x - d) >= 2)) legDays.push(d);
+  for (const d of days) if (!noLegDay(d) && legDays.length < legs.length && [...fixedLegDays, ...legDays].every(x => Math.abs(x - d) >= 2)) legDays.push(d);
   const rest = days.filter(d => !legDays.includes(d));
   const queue = [...other, ...legs.slice(legDays.length)];
   const out = [...legDays.map((day, i) => ({ day, groups: legs[i], noLegs: false })),
@@ -154,8 +154,16 @@ function assignKraft(days: number[], groups: MuscleGroup[][]): { day: number; gr
 function strengthGroups(ctx: PlanContext, ws: string, count: number): MuscleGroup[][] {
   const thisWeekOffset = Math.max(0, Math.round((Date.parse(ws) - Date.parse(weekStart(ctx.today))) / 604800000));
   if (!ctx.split) return Array.from({ length: count }, () => ['ganzkoerper']);
-  const before = ctx.strength.filter(s => s.date < weekStart(ctx.today));
-  const start = nextSplitDay(ctx.split, before).index + thisWeekOffset * kraftCount(ctx);
+  let start: number;
+  if (thisWeekOffset === 0) {
+    start = nextSplitDay(ctx.split, ctx.strength.filter(s => s.date < weekStart(ctx.today))).index;
+  } else {
+    // Zukünftige Wochen: ab der zuletzt tatsächlich trainierten Einheit + noch offene Krafttage dieser Woche
+    const t = ctx.today, cws = weekStart(t);
+    const trainedToday = ctx.strength.some(x => x.date === t && !x.skipped && x.muscleGroups.length);
+    const remaining = KRAFT_DAYS[kraftCount(ctx)].filter(d => DAY(cws, d) > t || (DAY(cws, d) === t && !trainedToday)).length;
+    start = nextSplitDay(ctx.split, ctx.strength.filter(x => x.date <= t)).index + remaining + (thisWeekOffset - 1) * kraftCount(ctx);
+  }
   return Array.from({ length: count }, (_, i) => [...ctx.split!.days[(start + i) % ctx.split!.days.length]]);
 }
 const hasLegs = (g: MuscleGroup[]) => g.includes('beine') || g.includes('ganzkoerper');
@@ -305,6 +313,7 @@ export function buildWeek(ws: string, ctx: PlanContext): PlanWeek {
   out = applyEdits(out, ctx.edits);
   const used = new Set<string>();
   out = applyDone(out, ctx.activities, ctx.today, used);
+  out = applyStrengthActual(out, ctx, ws, phase === 'wettkampfwoche');
   const inter = applyInteractions(out, ctx, ws, used);
   out = inter.list;
   out.sort((a, b) => a.date.localeCompare(b.date) || order(a) - order(b));
@@ -453,6 +462,43 @@ function applyDone(list: PlanSession[], acts: Activity[], today: string, used: S
     if (s.status === 'erledigt') { used.add(a.id); return { ...s, activityId: a.id }; }
     used.add(a.id);
     return { ...s, status: 'erledigt', autoDone: true, activityId: a.id };
+  });
+}
+
+/* ---------- Kraft: tatsächlich trainierte Muskelgruppen ---------- */
+/**
+ * Erledigte Krafttage zeigen, was du wirklich eingetragen hast (nicht den ursprünglichen Plan).
+ * Die restlichen Krafttage dieser Woche setzen den Split ab der zuletzt trainierten Einheit fort.
+ */
+function applyStrengthActual(list: PlanSession[], ctx: PlanContext, ws: string, noLegsAll: boolean): PlanSession[] {
+  const t = ctx.today;
+  const done = ctx.strength.filter(x => !x.skipped && x.muscleGroups.length);
+  const taken = new Set<string>();
+  const out = list.map(s => {
+    if (s.sport !== 'kraft' || s.date > t) return s;
+    const real = (s.activityId ? done.find(x => !taken.has(x.id) && x.activityId === s.activityId) : undefined)
+      ?? done.filter(x => !taken.has(x.id) && x.date === s.date).sort((a, b) => b.updatedAt - a.updatedAt)[0];
+    if (!real) return s;
+    taken.add(real.id);
+    return { ...s, groups: [...real.muscleGroups], title: `Kraft · ${real.muscleGroups.map(groupLabel).join(' + ')}`,
+      status: s.status === 'ausgelassen' ? s.status : 'erledigt' as const };
+  });
+  if (!ctx.split || ws !== weekStart(t)) return out;
+  const idx = (d: string) => Math.round((Date.parse(d) - Date.parse(ws)) / 86400000);
+  const open = out.filter(s => s.sport === 'kraft' && s.status === 'offen' && s.date >= t && !s.key.endsWith(':ausgleich')).sort((a, b) => a.date.localeCompare(b.date));
+  if (!open.length) return out;
+  const start = nextSplitDay(ctx.split, done.filter(x => x.date <= t)).index;
+  const groups = open.map((_, i) => [...ctx.split!.days[(start + i) % ctx.split!.days.length]]);
+  const doneLegs = out.filter(s => s.sport === 'kraft' && s.status === 'erledigt' && s.groups && hasLegs(s.groups)).map(s => idx(s.date));
+  const plan = assignKraft(open.map(s => idx(s.date)), groups, doneLegs);
+  return out.map(s => {
+    const i = open.indexOf(s);
+    if (i < 0) return s;
+    const a = plan.find(p => p.day === idx(s.date) && !(p as { used?: boolean }).used)!;
+    (a as { used?: boolean }).used = true;
+    const keepNoLegs = noLegsAll || s.notes.some(n => /Bein/.test(n));
+    const k = kraft(ws, a.day, s.key.split(':')[1], a.groups, s.intensity === 'locker', a.noLegs || keepNoLegs);
+    return { ...k, key: s.key, date: s.date, origDate: s.origDate, moved: s.moved, status: s.status, notes: [...new Set([...s.notes.filter(n => !/Beintraining/.test(n)), ...k.notes])] };
   });
 }
 

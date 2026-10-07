@@ -29,7 +29,7 @@
 
 {#if $data && ($data.any || $data.open.length)}
   <section class="card">
-    <div class="head"><h2>Kraft</h2><button class="add" onclick={() => openStrength({ date: t })}>+ Einheit</button></div>
+    <div class="head"><h2>Kraft</h2><button class="add" onclick={() => openStrength({ date: t, fresh: true })}>+ Einheit</button></div>
 
     {#if $data.open.length}
       <!-- Älteste zuerst, damit der Split-Vorschlag in der richtigen Reihenfolge weiterzählt -->
