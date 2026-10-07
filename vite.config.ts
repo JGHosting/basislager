@@ -1,0 +1,36 @@
+import { defineConfig } from 'vite';
+import { svelte } from '@sveltejs/vite-plugin-svelte';
+import { VitePWA } from 'vite-plugin-pwa';
+
+// base './' = relative Pfade, funktioniert unter jghosting.github.io/basislager/
+export default defineConfig({
+  base: './',
+  plugins: [
+    svelte(),
+    VitePWA({
+      registerType: 'autoUpdate',
+      includeAssets: ['icons/apple-touch-icon.png'],
+      manifest: {
+        name: 'Basislager',
+        short_name: 'Basislager',
+        description: 'Persönliches Training, Erholung und Ernährung',
+        lang: 'de',
+        start_url: './',
+        scope: './',
+        display: 'standalone',
+        background_color: '#14171c',
+        theme_color: '#14171c',
+        icons: [
+          { src: 'icons/icon-192.png', sizes: '192x192', type: 'image/png' },
+          { src: 'icons/icon-512.png', sizes: '512x512', type: 'image/png' },
+          { src: 'icons/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' }
+        ]
+      },
+      workbox: {
+        // API-Aufrufe nie aus dem Cache beantworten
+        navigateFallbackDenylist: [/^\/api/],
+        globPatterns: ['**/*.{js,css,html,png,svg,webmanifest}']
+      }
+    })
+  ]
+});
