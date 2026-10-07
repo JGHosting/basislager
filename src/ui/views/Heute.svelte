@@ -10,6 +10,8 @@
   import LoadCard from '../components/LoadCard.svelte';
   import StrengthCard from '../components/StrengthCard.svelte';
   import KcalBar from '../nutrition/KcalBar.svelte';
+  import InjuryCard from '../injury/InjuryCard.svelte';
+  import { openInjury } from '../app.svelte';
   import { dayView, getKcalGoal } from '../../domain/nutrition/repo';
   import { groupLabel } from '../../domain/strength/strength';
   import { openStrength } from '../app.svelte';
@@ -85,7 +87,13 @@
     <p class="card error">{app.syncError}</p>
   {/if}
 
-  {#if $calc}<AmpelCard rec={$calc.recovery} />{/if}
+  {#if $calc?.injury}<InjuryCard injury={$calc.injury} />{/if}
+  {#if $calc}<AmpelCard rec={$calc.recovery} injury={!!$calc.injury} />{/if}
+  {#if $calc && !$calc.injury}
+    <button class="injbtn" onclick={() => openInjury()}>
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v16 M4 12h16" /></svg> Verletzung melden
+    </button>
+  {/if}
 
   <section class="card">
     <div class="card-head"><h2>Morgenwerte</h2><button class="tag" onclick={openMorning}>{todayEntry?.weight != null ? `${String(todayEntry.weight).replace('.', ',')} kg` : '+ Gewicht'}</button></div>
@@ -175,6 +183,9 @@
   .card-head h2 { margin: 0; }
   .tag { border: none; font-family: inherit; cursor: pointer; font-size: 13px; color: var(--accent); background: var(--accent-soft); padding: 3px 9px; border-radius: 99px; font-weight: 600; }
   .small { font-size: 13px; }
+  .injbtn { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; margin: -2px 0 12px; padding: 12px; border-radius: 14px;
+            border: 1px dashed color-mix(in srgb, var(--red) 55%, var(--line)); background: none; color: var(--red); font: inherit; font-weight: 600; font-size: 15px; cursor: pointer; }
+  .injbtn svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2.6; stroke-linecap: round; }
   .foodmini { display: block; text-decoration: none; color: var(--text); }
   .fm { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 8px; gap: 8px; }
   .fm span { font-size: 14px; color: var(--muted); font-variant-numeric: tabular-nums; }

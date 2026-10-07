@@ -6,6 +6,7 @@ import { db, getSetting } from '../core/db';
 import { today } from '../core/dates';
 import { hrProfile, loadSeries, describeLoad } from './load/load';
 import { computeRecovery } from './recovery/recovery';
+import { activeInjury } from './injury/injury';
 
 export async function computeToday() {
   const t = today();
@@ -13,13 +14,14 @@ export async function computeToday() {
     db.activities.toArray(), db.morning.orderBy('date').toArray(),
     getSetting<number | null>('hrMax'), getSetting<number | null>('hrRest'), db.strength.toArray()
   ]);
+  const injury = activeInjury(await db.injuries.toArray());
   const intensities = new Map(strength.filter(s => s.activityId).map(s => [s.activityId!, s.intensity]));
   const hr = hrProfile(activities, morning.filter(m => m.restingHr != null).map(m => m.restingHr!), { max: manualMax, rest: manualRest }, t);
   const series = loadSeries(activities, hr, t, intensities);
   const load = series.at(-1);
-  const recovery = computeRecovery(t, morning, load);
+  const recovery = computeRecovery(t, morning, load, !!injury);
   return {
-    hr, recovery,
+    hr, recovery, injury,
     load: load ? { day: load, ...describeLoad(load, series.length), recent: series.slice(-42) } : null
   };
 }

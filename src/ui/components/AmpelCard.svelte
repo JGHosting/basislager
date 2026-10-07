@@ -3,7 +3,7 @@
   import { RECOVERY } from '../../domain/recovery/recovery';
   import AmpelRing from './AmpelRing.svelte';
   import { num } from '../format';
-  let { rec }: { rec: Recovery } = $props();
+  let { rec, injury = false }: { rec: Recovery; injury?: boolean } = $props();
   let open = $state(false);
   const title = $derived({ gruen: 'Gut erholt', gelb: 'Mittel erholt', rot: 'Wenig erholt', grau: 'Keine Bewertung' }[rec.light]);
   const fmtZ = (z: number | null) => (z == null ? '' : `${z > 0 ? '+' : ''}${z.toFixed(1).replace('.', ',')} σ`);
@@ -15,7 +15,7 @@
     <div class="txt">
       <span class="kicker">Tagesampel</span>
       <h2>{title}</h2>
-      <p>{rec.advice}</p>
+      <p>{rec.advice}{injury ? ' Im Verletzungsmodus gilt zusätzlich: nur erlaubte Bewegungen.' : ''}</p>
     </div>
   </div>
   <div class="meta">
@@ -31,18 +31,18 @@
           <tr class:off={c.points == null}>
             <td>{c.label}</td>
             <td>{num(c.value)}</td>
-            <td>{c.baseline == null ? (c.key === 'sleepScore' ? '–' : c.value == null ? '–' : 'zu wenig') : num(c.baseline, 1)} <small>{fmtZ(c.z)}</small></td>
+            <td>{c.baseline == null ? (c.key === 'sleepScore' || c.key === 'pain' ? '–' : c.value == null ? '–' : 'zu wenig') : num(c.baseline, 1)} <small>{fmtZ(c.z)}</small></td>
             <td>{c.points == null ? '–' : Math.round(c.points)}</td>
             <td>{Math.round(c.weight * 100)} %</td>
           </tr>
         {/each}
         {#each rec.penalties as p}
-          <tr><td colspan="3">{p.label}</td><td>{p.points}</td><td></td></tr>
+          <tr><td colspan="3">{p.label}</td><td>{p.points || ''}</td><td></td></tr>
         {/each}
       </tbody>
     </table>
     <p class="explain">
-      HRV: 70 + 15 × Abweichung, Ruhepuls: 70 − 15 × Abweichung (Abweichung in Standardabweichungen zu deinen letzten 14 Tagen).
+      {#if injury}Schmerz (nur bei aktiver Verletzung): 100 − 10 × Schmerzwert, Gewicht 30 %; ab Schmerz 4 höchstens gelb, ab 7 rot.{' '}{/if}HRV: 70 + 15 × Abweichung, Ruhepuls: 70 − 15 × Abweichung (Abweichung in Standardabweichungen zu deinen letzten 14 Tagen).
       Sleep Score zählt direkt. Gewichteter Schnitt der vorhandenen Werte, dazu −{RECOVERY.penalty} bei Form unter {RECOVERY.tsbPenaltyBelow}
       und −{RECOVERY.penalty} bei Belastungsverhältnis über {String(RECOVERY.acwrPenaltyAbove).replace('.', ',')}.
       Grün ab {RECOVERY.green}, gelb ab {RECOVERY.yellow}.

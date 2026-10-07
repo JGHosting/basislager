@@ -7,8 +7,8 @@
   import 'uplot/dist/uPlot.min.css';
   import type { MetricResult, Bucket } from '../../domain/stats/metrics';
 
-  let { result, bucket, unit, digits, markers = [], onhover }: {
-    result: MetricResult; bucket: Bucket; unit: string; digits: number; markers?: string[];
+  let { result, bucket, unit, digits, markers = [], injuryMarkers = [], onhover }: {
+    result: MetricResult; bucket: Bucket; unit: string; digits: number; markers?: string[]; injuryMarkers?: string[];
     onhover?: (idx: number | null) => void;
   } = $props();
 
@@ -75,8 +75,15 @@
       series,
       hooks: {
         drawClear: [u => {
-          if (!markers.length) return;
-          const ctx = u.ctx; ctx.save(); ctx.fillStyle = css('--c-snow'); ctx.globalAlpha = 0.14;
+          if (!markers.length && !injuryMarkers.length) return;
+          const ctx = u.ctx; ctx.save();
+          // Verletzungsphasen: durchgehendes rötliches Band
+          ctx.fillStyle = css('--red'); ctx.globalAlpha = 0.09;
+          for (const d of injuryMarkers) {
+            const t = ts(d); const x0 = u.valToPos(t - 43200, 'x', true), x1 = u.valToPos(t + 43200, 'x', true);
+            ctx.fillRect(x0, u.bbox.top, Math.max(1, x1 - x0 + 0.5), u.bbox.height);
+          }
+          ctx.fillStyle = css('--c-snow'); ctx.globalAlpha = 0.14;
           for (const d of markers) {
             const t = ts(d); const k = bucket === 'day' ? t : bucket === 'week' ? ts(d) : t;
             const x0 = u.valToPos(k - (bucket === 'day' ? 43200 : 0), 'x', true), x1 = u.valToPos(k + (bucket === 'day' ? 43200 : 86400), 'x', true);
@@ -98,7 +105,7 @@
   }
 
   $effect(() => {
-    void result; void bucket; void markers;
+    void result; void bucket; void markers; void injuryMarkers;
     build();
     const ro = new ResizeObserver(() => plot && plot.setSize({ width: el.clientWidth, height: 190 }));
     ro.observe(el);

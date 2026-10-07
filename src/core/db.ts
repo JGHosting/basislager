@@ -99,6 +99,21 @@ export interface FoodLogEntry {
 /** Nur vorhanden, wenn ein Tag bewusst NICHT getrackt wird. */
 export interface NutritionDay { date: string; tracked: boolean; updatedAt: number }
 
+/* ---------- Verletzung ---------- */
+export type Movement = 'gehen' | 'laufen' | 'bergab' | 'springen' | 'rad' | 'schwimmen' | 'beinkraft' | 'oberkoerper';
+export type MoveStatus = 'geht' | 'eingeschraenkt' | 'nicht';
+export interface Injury {
+  id: string;
+  region: string; side: 'links' | 'rechts' | 'beidseitig' | 'keine';
+  severity: 'leicht' | 'mittel' | 'schwer';
+  startDate: string; endDate?: string;          // endDate gesetzt = abgeschlossen
+  medicalNote?: string;
+  movement: Record<Movement, MoveStatus>;
+  stage: number;                                 // Rückkehrstufe 0–7 (siehe domain/injury)
+  stageHistory: { date: string; stage: number }[];
+  createdAt: number; updatedAt: number;
+}
+
 /** Interne Sicherheitskopie vor einem Import (wird selbst nicht exportiert). */
 export interface Snapshot { seq?: number; createdAt: number; reason: string; data: unknown }
 
@@ -112,6 +127,7 @@ export class BasislagerDB extends Dexie {
   foods!: Table<Food, string>;
   foodlog!: Table<FoodLogEntry, string>;
   nutritionDays!: Table<NutritionDay, string>;
+  injuries!: Table<Injury, string>;
   /** name nur für die Backup-Prüfroutine abweichend (separate Test-Datenbank). */
   constructor(name = 'basislager') {
     super(name);
@@ -131,6 +147,8 @@ export class BasislagerDB extends Dexie {
       .upgrade(tx => tx.table('splits').bulkPut(BUILTIN_SPLITS));
     // v6: Ernährung
     this.version(6).stores({ foods: 'id, barcode, name, fav, lastUsedAt', foodlog: 'id, date, foodId', nutritionDays: 'date' });
+    // v7: Verletzungsmodus
+    this.version(7).stores({ injuries: 'id, startDate' });
     this.on('populate', tx => { tx.table('splits').bulkPut(BUILTIN_SPLITS); });
   }
 }

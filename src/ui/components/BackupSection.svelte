@@ -130,7 +130,7 @@
   {#if test}
     <p class={test.ok ? 'okmsg' : 'error'}>
       {test.ok ? '✓ ' : '✗ '}{test.message}
-      {#if test.ok}<br /><small>{num(test.counts.activities)} Aktivitäten, {num(test.counts.morning)} Morgenwerte, {num(test.counts.strength)} Krafteinheiten, {num(test.counts.foodlog)} Ernährungseinträge, {num(test.counts.foods)} Lebensmittel, {num(test.counts.settings)} Einstellungen verglichen · {Math.round(test.ms)} ms</small>{/if}
+      {#if test.ok}<br /><small>{num(test.counts.activities)} Aktivitäten, {num(test.counts.morning)} Morgenwerte, {num(test.counts.strength)} Krafteinheiten, {num(test.counts.foodlog)} Ernährungseinträge, {num(test.counts.foods)} Lebensmittel, {num(test.counts.injuries)} Verletzungen, {num(test.counts.settings)} Einstellungen verglichen · {Math.round(test.ms)} ms</small>{/if}
     </p>
   {/if}
   <button class="rowbtn" onclick={() => csv('activities')}><span>Aktivitäten als CSV</span><b>Teilen</b></button>

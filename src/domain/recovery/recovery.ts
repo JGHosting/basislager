@@ -16,7 +16,7 @@ import type { LoadDay } from '../load/load';
 
 export const RECOVERY = {
   baselineDays: 14, minBaseline: 5,
-  weights: { hrv: 0.45, sleepScore: 0.30, restingHr: 0.25 },
+  weights: { hrv: 0.45, sleepScore: 0.30, restingHr: 0.25, pain: 0.30 },
   green: 60, yellow: 40,
   minSdFraction: 0.05,                     // Streuung mind. 5 % des Mittelwerts (verhindert Überreaktion)
   tsbPenaltyBelow: -25, acwrPenaltyAbove: 1.5, penalty: 10
@@ -24,7 +24,7 @@ export const RECOVERY = {
 
 export type Light = 'gruen' | 'gelb' | 'rot' | 'grau';
 export interface Component {
-  key: 'hrv' | 'sleepScore' | 'restingHr'; label: string;
+  key: 'hrv' | 'sleepScore' | 'restingHr' | 'pain'; label: string;
   value: number | null; baseline: number | null; z: number | null; points: number | null; weight: number;
 }
 export interface Recovery {
@@ -43,7 +43,8 @@ function stats(vals: number[]) {
   return { mean, sd: Math.max(sd, mean * RECOVERY.minSdFraction) };
 }
 
-export function computeRecovery(date: string, entries: MorningEntry[], load?: LoadDay): Recovery {
+/** injuryActive: Schmerz (0–10) fließt nur während einer aktiven Verletzung ein: 100 − 10 × Schmerz. */
+export function computeRecovery(date: string, entries: MorningEntry[], load?: LoadDay, injuryActive = false): Recovery {
   const today = entries.find(e => e.date === date);
   const from = addDays(date, -RECOVERY.baselineDays);
   const base = entries.filter(e => e.date >= from && e.date < date);
@@ -63,6 +64,10 @@ export function computeRecovery(date: string, entries: MorningEntry[], load?: Lo
     return { key, label, value, baseline: mean, z, points, weight };
   });
 
+  if (injuryActive) {
+    const pain = today?.pain ?? null;
+    components.push({ key: 'pain', label: 'Schmerz', value: pain, baseline: null, z: null, points: pain == null ? null : clamp(100 - 10 * pain), weight: RECOVERY.weights.pain });
+  }
   const scored = components.filter(c => c.points != null);
   const used = components.filter(c => c.value != null).length;
   const penalties: Recovery['penalties'] = [];
@@ -78,12 +83,16 @@ export function computeRecovery(date: string, entries: MorningEntry[], load?: Lo
     score = scored.reduce((s, c) => s + c.points! * c.weight, 0) / wsum;
     score = clamp(score + penalties.reduce((s, p) => s + p.points, 0));
   }
-  const light: Light = score == null ? 'grau' : score >= RECOVERY.green ? 'gruen' : score >= RECOVERY.yellow ? 'gelb' : 'rot';
+  let light: Light = score == null ? 'grau' : score >= RECOVERY.green ? 'gruen' : score >= RECOVERY.yellow ? 'gelb' : 'rot';
+  // Deutlicher Schmerz deckelt die Ampel: ab 4 höchstens gelb, ab 7 rot
+  const pain = components.find(c => c.key === 'pain')?.value;
+  if (pain != null && pain >= 7) { light = 'rot'; penalties.push({ label: 'Schmerz ≥ 7 → Ampel rot', points: 0 }); }
+  else if (pain != null && pain >= 4 && light === 'gruen') { light = 'gelb'; penalties.push({ label: 'Schmerz ≥ 4 → Ampel höchstens gelb', points: 0 }); }
   const advice = {
     gruen: 'Gut erholt. Training wie geplant.',
     gelb: 'Etwas angeschlagen. Intensität reduzieren: lieber locker oder kürzer.',
     rot: 'Wenig erholt. Ruhetag oder nur sehr locker bewegen.',
     grau: used ? 'Noch zu wenig Daten für eine Bewertung.' : 'Noch keine Nachtwerte für heute.'
   }[light];
-  return { date, score: score == null ? null : Math.round(score), light, used, total: 3, buildingBaseline, components, penalties, advice };
+  return { date, score: score == null ? null : Math.round(score), light, used, total: components.length, buildingBaseline, components, penalties, advice };
 }

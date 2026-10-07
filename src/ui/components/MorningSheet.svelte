@@ -9,6 +9,10 @@
   import type { IcuEvent } from '../../sources/intervals/client';
   import { computeToday } from '../../domain/today';
   import AmpelRing from './AmpelRing.svelte';
+  import { checkSport, STAGES } from '../../domain/injury/injury';
+  import { savePain } from '../../domain/injury/repo';
+  let pain = $state<number | null>(null);
+  let painInit = false;
   const calc = liveQuery(() => computeToday());
 
   const t = today();
@@ -42,7 +46,10 @@
     return Math.round(((v - a) / a) * 100);
   }
 
+  $effect(() => { if (!painInit && $todayRow !== undefined) { painInit = true; pain = $todayRow?.pain ?? null; } });
+
   async function done() {
+    if ($calc?.injury && pain !== ($todayRow?.pain ?? null)) await savePain(t, pain);
     const kg = parseKg(weight);
     if (Number.isNaN(kg)) { weightErr = 'Bitte ein Gewicht zwischen 30 und 250 kg eingeben.'; return; }
     saving = true;
@@ -110,17 +117,36 @@
     {:else if planned.length === 0}
       <p class="muted">Nichts geplant{notes.length ? '' : ', freier Tag'}.</p>
     {/if}
+    {#if $calc?.injury && planned.length}
+      <p class="injnote">Verletzungsmodus: Stufe „{STAGES[$calc.injury.stage].label}“</p>
+    {/if}
     {#each planned as e}
+      {@const chk = $calc?.injury ? checkSport($calc.injury, e.type ?? '') : null}
       <div class="plan">
         <span class="dot" style="background: {sportColor(e.type ?? '')}"></span>
         <div>
           <b>{e.name || sportName(e.type ?? 'Training')}</b>
           <span class="muted">{[e.type ? sportName(e.type) : '', e.moving_time ? dur(e.moving_time) : '', km(e.distance)].filter(Boolean).join(' · ')}</span>
+          {#if chk && chk.status !== 'geht'}
+            <span class="conflict {chk.status}">{chk.status === 'nicht' ? ($calc?.injury?.stage === 0 ? 'Pause laut Verletzungsmodus' : 'Heute nicht erlaubt') : 'Nur eingeschränkt: locker und kürzer'}{chk.status === 'nicht' && chk.alternatives.length ? ` · Alternative: ${chk.alternatives.join(', ')}` : ''}</span>
+          {/if}
         </div>
       </div>
     {/each}
     {#each notes as e}<p class="note">{e.name}</p>{/each}
   </section>
+
+  {#if $calc?.injury}
+    <section>
+      <h3>Schmerz heute <span class="muted opt">{pain == null ? 'optional' : `${pain}/10`}</span></h3>
+      <div class="pscale">
+        {#each Array.from({ length: 11 }, (_, i) => i) as n}
+          <button class:on={pain === n} class:mid={n >= 4 && n < 7} class:hi={n >= 7} onclick={() => (pain = pain === n ? null : n)}>{n}</button>
+        {/each}
+      </div>
+      <p class="muted small">0 = kein Schmerz, 10 = stärkster vorstellbarer. Wird nur im Verletzungsmodus abgefragt.</p>
+    </section>
+  {/if}
 
   <section>
     <label for="w"><h3>Gewicht <span class="muted opt">optional</span></h3></label>
@@ -177,6 +203,14 @@
   .weight span { font-size: 18px; color: var(--muted); }
   .small { font-size: 13px; margin: 8px 0 0; }
   .muted { color: var(--muted); }
+  .injnote { font-size: 13px; color: var(--red); font-weight: 600; margin: 0 0 4px; }
+  .conflict { font-size: 13px; font-weight: 600; }
+  .conflict.nicht { color: var(--red); } .conflict.eingeschraenkt { color: var(--yellow); }
+  .pscale { display: grid; grid-template-columns: repeat(11, 1fr); gap: 3px; }
+  .pscale button { height: 40px; border-radius: 9px; border: 1px solid var(--line); background: var(--bg); color: var(--text); font: inherit; font-size: 15px; font-weight: 650; cursor: pointer; padding: 0; }
+  .pscale button.on { background: var(--green); border-color: var(--green); color: #fff; }
+  .pscale button.on.mid { background: var(--yellow); border-color: var(--yellow); }
+  .pscale button.on.hi { background: var(--red); border-color: var(--red); }
   .amp { display: flex; gap: 14px; align-items: center; }
   .amp div { display: flex; flex-direction: column; gap: 2px; font-size: 14px; }
   .amp b { font-size: 17px; }

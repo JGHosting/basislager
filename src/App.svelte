@@ -5,6 +5,7 @@
   import StrengthSheet from './ui/components/StrengthSheet.svelte';
   import FoodSheet from './ui/nutrition/FoodSheet.svelte';
   import Ernaehrung from './ui/views/Ernaehrung.svelte';
+  import InjurySheet from './ui/injury/InjurySheet.svelte';
   import TabBar from './ui/components/TabBar.svelte';
   import Heute from './ui/views/Heute.svelte';
   import Mehr from './ui/views/Mehr.svelte';
@@ -23,7 +24,7 @@
   });
 </script>
 
-<main bind:this={scroller} inert={app.showMorning || !!app.strengthEdit || !!app.foodSheet}>
+<main bind:this={scroller} inert={app.showMorning || !!app.strengthEdit || !!app.foodSheet || !!app.injurySheet}>
   {#key route}
     <div class="view">
       {#if route === 'heute'}<Heute />
@@ -36,7 +37,7 @@
   {/key}
 </main>
 <TabBar current={route} />
-{#if app.showMorning}<MorningSheet />{:else if app.strengthEdit}<StrengthSheet />{:else if app.foodSheet}<FoodSheet />{/if}
+{#if app.showMorning}<MorningSheet />{:else if app.strengthEdit}<StrengthSheet />{:else if app.foodSheet}<FoodSheet />{:else if app.injurySheet}<InjurySheet />{/if}
 
 <style>
   /* Einziger Scrollbereich der App */
