@@ -11,12 +11,12 @@
   import { MEALS, scale, toGrams, unitLabel, fmtG } from '../../domain/nutrition/calc';
   import { loadBls, BLS_ATTRIBUTION } from '../../domain/nutrition/bls';
   import { OFF_ATTRIBUTION, offProduct, OffError } from '../../domain/nutrition/off';
-  import { addEntry, updateEntry, deleteEntry, searchLocal, searchOnline, quickPicks, toggleFav, cacheFood, saveCustomFood, findByBarcode, dedupe } from '../../domain/nutrition/repo';
+  import { addEntry, updateEntry, deleteEntry, searchLocal, searchOnline, quickPicks, toggleFav, cacheFood, saveCustomFood, findByBarcode, dedupe, saveRecipe } from '../../domain/nutrition/repo';
   import { app, closeFood } from '../app.svelte';
   import BarcodeScanner from './BarcodeScanner.svelte';
 
   const target = app.foodSheet!;
-  type Step = 'search' | 'amount' | 'scan' | 'custom';
+  type Step = 'search' | 'amount' | 'scan' | 'custom' | 'recipe';
   let step = $state<Step>(target.mode === 'edit' ? 'amount' : 'search');
   let meal = $state<Meal>(target.mode === 'edit' ? target.entry.meal : target.meal);
   const date = target.mode === 'edit' ? target.entry.date : target.date;
@@ -133,6 +133,41 @@
   }
   let pieceEdit = $state(false), pieceInput = $state('');
 
+  /* ---------- Eigenes Gericht ---------- */
+  interface Draft { id?: string; name: string; portions: string; total: string; items: { food: Food; grams: number }[] }
+  let recipe = $state<Draft | null>(null);
+  let addingIngredient = $state(false);
+  let recipeErr = $state('');
+  function newRecipe() { recipe = { name: '', portions: '2', total: '', items: [] }; recipeErr = ''; step = 'recipe'; }
+  async function editRecipe(f: Food) {
+    if (!f.recipe) return;
+    const items = await Promise.all(f.recipe.ingredients.map(async i => ({
+      food: (await db.foods.get(i.foodId)) ?? ({ id: i.foodId, name: i.name, per: 'g', source: 'custom', sourceId: '', ...i.n, fav: 0, useCount: 0, lastUpdated: 0, createdAt: 0, updatedAt: 0 } as Food),
+      grams: i.grams })));
+    recipe = { id: f.id, name: f.name, portions: String(f.recipe.portions), total: String(Math.round(f.recipe.totalGrams)), items };
+    step = 'recipe';
+  }
+  function addIngredient() { addingIngredient = true; q = ''; local = []; online = []; step = 'search'; }
+  function takeIngredient() {
+    if (!food || !grams || !recipe) return;
+    recipe.items = [...recipe.items, { food: $state.snapshot(food) as Food, grams }];
+    addingIngredient = false; food = null; step = 'recipe';
+  }
+  const recipeKcal = $derived(recipe ? recipe.items.reduce((t, i) => t + (i.food.kcal ?? 0) * i.grams / 100, 0) : 0);
+  async function finishRecipe() {
+    if (!recipe) return;
+    const portions = Math.round(Number(recipe.portions.replace(',', '.')));
+    const total = recipe.total.trim() ? Number(recipe.total.replace(',', '.')) : null;
+    if (!recipe.name.trim()) { recipeErr = 'Bitte einen Namen für das Gericht eingeben.'; return; }
+    if (!recipe.items.length) { recipeErr = 'Bitte mindestens eine Zutat hinzufügen.'; return; }
+    if (!(portions >= 1)) { recipeErr = 'Bitte die Anzahl Portionen angeben.'; return; }
+    if (total != null && !(total > 0)) { recipeErr = 'Gewicht bitte als Zahl in Gramm.'; return; }
+    const f = await saveRecipe({ id: recipe.id, name: recipe.name, portions, totalGrams: total, items: $state.snapshot(recipe.items) as Draft['items'] });
+    recipe = null;
+    if (target.mode === 'edit') { closeFood(); return; }
+    choose(f);
+  }
+
   /* ---------- Eigenes Lebensmittel ---------- */
   let cf = $state({ name: '', brand: '', kcal: '', protein: '', carbs: '', fat: '', per: 'g' as 'g' | 'ml', serving: '' });
   let cfErr = $state('');
@@ -157,8 +192,9 @@
 
   {#if step === 'search'}
     <div class="top">
-      <h2 class="title">Hinzufügen</h2>
-      <span class="muted small">{MEALS.find(m => m.id === meal)?.label} · {fmtDay(date)}</span>
+      <h2 class="title">{addingIngredient ? 'Zutat wählen' : 'Hinzufügen'}</h2>
+      {#if addingIngredient}<button class="link" onclick={() => { addingIngredient = false; step = 'recipe'; }}>Zurück zum Gericht</button>
+      {:else}<span class="muted small">{MEALS.find(m => m.id === meal)?.label} · {fmtDay(date)}</span>{/if}
     </div>
     <div class="searchrow">
       <input class="search" type="search" bind:value={q} oninput={onInput} placeholder="Lebensmittel suchen" autocomplete="off" enterkeyhint="search"
@@ -185,7 +221,10 @@
       {#if !picks.favs.length && !picks.recent.length}
         <p class="muted small pad">Tippe einen Namen (z. B. „Banane“, „Haferflocken“, „Nutella“) oder scanne einen Barcode.</p>
       {/if}
-      <button class="link pad" onclick={() => { scannedCode = ''; step = 'custom'; }}>+ Eigenes Lebensmittel anlegen</button>
+      {#if !addingIngredient}
+        <button class="link pad" onclick={newRecipe}>+ Eigenes Gericht aus Zutaten (z. B. Hähnchencurry)</button>
+        <button class="link pad" onclick={() => { scannedCode = ''; step = 'custom'; }}>+ Eigenes Lebensmittel anlegen</button>
+      {/if}
     {:else}
       {#if !blsReady}<p class="muted small pad">Lebensmitteldatenbank wird geladen …</p>{/if}
       <ul class="list">
@@ -211,6 +250,36 @@
   {:else if step === 'scan'}
     <h2 class="title">Barcode scannen</h2>
     <BarcodeScanner ondetect={onBarcode} onclose={() => (step = 'search')} />
+
+  {:else if step === 'recipe' && recipe}
+    <h2 class="title">{recipe.id ? 'Gericht bearbeiten' : 'Eigenes Gericht'}</h2>
+    <section>
+      <label>Name<input bind:value={recipe.name} placeholder="z. B. Hähnchencurry" /></label>
+      <div class="grid2">
+        <label>Portionen<input bind:value={recipe.portions} inputmode="numeric" /></label>
+        <label>Fertiges Gewicht in g<input bind:value={recipe.total} inputmode="decimal" placeholder="optional" /></label>
+      </div>
+      <p class="muted small">Ohne Gewicht zählt die Summe der Zutaten. Wiegst du den fertigen Topf, wird genauer gerechnet (beim Kochen verdunstet Wasser).</p>
+    </section>
+    <section>
+      <h3 class="ih">Zutaten</h3>
+      {#each recipe.items as it, i}
+        <div class="ing">
+          <span><b>{it.food.name}</b><small>{fmtG(it.grams)} {it.food.per} · {fmtG((it.food.kcal ?? 0) * it.grams / 100)} kcal</small></span>
+          <button aria-label="Zutat entfernen" onclick={() => (recipe!.items = recipe!.items.filter((_, j) => j !== i))}>✕</button>
+        </div>
+      {/each}
+      <button class="link" onclick={addIngredient}>+ Zutat hinzufügen</button>
+      {#if recipe.items.length}
+        {@const portions = Math.max(1, Math.round(Number(recipe.portions.replace(',', '.')) || 1))}
+        <p class="sumline">Gesamt {fmtG(recipeKcal)} kcal · pro Portion <b>{fmtG(recipeKcal / portions)} kcal</b></p>
+      {/if}
+    </section>
+    {#if recipeErr}<p class="error small">{recipeErr}</p>{/if}
+    <div class="actions">
+      <button class="btn ghost" onclick={() => { recipe = null; step = target.mode === 'edit' ? 'amount' : 'search'; }}>Abbrechen</button>
+      <button class="btn primary" onclick={finishRecipe}>{recipe.id ? 'Gericht speichern' : 'Speichern & eintragen'}</button>
+    </div>
 
   {:else if step === 'custom'}
     <h2 class="title">Eigenes Lebensmittel</h2>
@@ -274,6 +343,15 @@
         {#if food.kcal == null}<p class="warn small">Für dieses Produkt sind keine Kalorien hinterlegt.</p>{/if}
       </section>
 
+      {#if food.recipe && !addingIngredient}
+        <p class="muted small rinfo">Eigenes Gericht: {food.recipe.ingredients.length} Zutaten, {food.recipe.portions} Portionen · <button class="link inl" onclick={() => editRecipe(food!)}>Rezept bearbeiten</button></p>
+      {/if}
+      {#if addingIngredient}
+        <div class="actions">
+          <button class="btn ghost" onclick={() => (step = 'search')}>Zurück</button>
+          <button class="btn primary" onclick={takeIngredient} disabled={!grams}>Als Zutat übernehmen</button>
+        </div>
+      {:else}
       <div class="meals">
         {#each MEALS as m}<button class:on={meal === m.id} onclick={() => (meal = m.id)}>{m.label}</button>{/each}
       </div>
@@ -283,6 +361,7 @@
         {:else}<button class="btn ghost" onclick={() => (step = 'search')}>Zurück</button>{/if}
         <button class="btn primary" onclick={confirm} disabled={busy || !grams}>{target.mode === 'edit' ? 'Speichern' : 'Hinzufügen'}</button>
       </div>
+      {/if}
     {/if}
   {/if}
 </div>
@@ -342,6 +421,13 @@
   .meals button { padding: 8px 2px; font-size: 13px; }
   .actions { display: grid; grid-template-columns: 1fr 2fr; gap: 10px; margin-top: 6px; }
   .del { color: var(--red); }
+  .ih { margin: 0 0 6px; font-size: 15px; text-transform: none; letter-spacing: 0; color: var(--text); }
+  .ing { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 8px 0; border-top: 1px solid var(--line); }
+  .ing:first-of-type { border-top: none; }
+  .ing span { display: flex; flex-direction: column; min-width: 0; } .ing small { font-size: 12px; color: var(--muted); }
+  .ing button { border: none; background: var(--bg); color: var(--muted); width: 34px; height: 34px; border-radius: 10px; cursor: pointer; flex-shrink: 0; }
+  .sumline { font-size: 14px; margin: 8px 0 0; }
+  .rinfo { margin: -2px 4px 10px; }
   .seg2 { display: flex; gap: 6px; margin: 12px 0 2px; }
   .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0 10px; }
   .grid2 label, section label { margin-top: 10px; font-size: 13px; }

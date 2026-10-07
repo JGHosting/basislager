@@ -2,8 +2,8 @@
   import { liveQuery } from 'dexie';
   import { db, type Injury } from '../../core/db';
   import { today, addDays, fmtDay } from '../../core/dates';
-  import { STAGES, LAST_STAGE, MOVEMENTS, STATUS_LABEL, daysSince, doctorHint, advanceCheck } from '../../domain/injury/injury';
-  import { setStage } from '../../domain/injury/repo';
+  import { STAGES, LAST_STAGE, MOVEMENTS, STATUS_LABEL, daysSince, doctorHint, advanceCheck, isOutage } from '../../domain/injury/injury';
+  import { setStage, endInjury, switchToStages } from '../../domain/injury/repo';
   import { openInjury } from '../app.svelte';
 
   let { injury }: { injury: Injury } = $props();
@@ -19,22 +19,28 @@
     warn = null; setStage(injury.id, injury.stage + 1);
   }
   const days = $derived(daysSince(injury.startDate, t));
+  const outage = $derived(isOutage(injury));
+  let confirmEnd = $state(false);
 </script>
 
 <section class="card inj">
   <div class="head">
     <div>
-      <span class="kicker">Verletzungsmodus</span>
+      <span class="kicker">{outage ? 'Ernste Verletzung' : 'Verletzungsmodus'}</span>
       <h2>{injury.region}{injury.side !== 'keine' ? ` ${injury.side === 'beidseitig' ? 'beidseitig' : injury.side}` : ''}</h2>
       <p class="muted small">seit {fmtDay(injury.startDate, { day: 'numeric', month: 'long' })} · Tag {days + 1} · {injury.severity}</p>
     </div>
     <button class="edit" onclick={() => openInjury({ id: injury.id })}>Bearbeiten</button>
   </div>
 
-  <div class="stages" aria-label="Rückkehrstufen">
-    {#each STAGES as s, i}<span class:done={i < injury.stage} class:cur={i === injury.stage} title={s.label}></span>{/each}
-  </div>
-  <p class="stage"><b>Stufe {injury.stage + 1}/{STAGES.length}: {STAGES[injury.stage].label}</b><br /><span class="muted">{STAGES[injury.stage].hint}</span></p>
+  {#if outage}
+    <p class="stage"><span class="muted">Nur Bewegungen mit ✓ werden eingeplant. Wenn du wieder bereit bist, beendest du die Verletzung oder wechselst in die Rückkehrstufen.</span></p>
+  {:else}
+    <div class="stages" aria-label="Rückkehrstufen">
+      {#each STAGES as s, i}<span class:done={i < injury.stage} class:cur={i === injury.stage} title={s.label}></span>{/each}
+    </div>
+    <p class="stage"><b>Stufe {injury.stage + 1}/{STAGES.length}: {STAGES[injury.stage].label}</b><br /><span class="muted">{STAGES[injury.stage].hint}</span></p>
+  {/if}
 
   <p class="legend muted">✓ geht · ~ eingeschränkt · ✕ geht nicht</p>
   <div class="moves">
@@ -56,10 +62,18 @@
   {#if hint}<p class="doc">{hint}</p>{/if}
   {#if warn}<p class="warnmsg">{warn} <b>Tippe nochmal, um trotzdem freizugeben.</b></p>{/if}
 
+  {#if outage}
+    <div class="actions">
+      <button class="btn ghost" onclick={() => switchToStages(injury.id)}>Rückkehrstufen</button>
+      {#if !confirmEnd}<button class="btn primary" onclick={() => (confirmEnd = true)}>Verletzung beenden</button>
+      {:else}<button class="btn primary" onclick={() => endInjury(injury.id)}>Wirklich beenden?</button>{/if}
+    </div>
+  {:else}
   <div class="actions">
     <button class="btn ghost" disabled={injury.stage === 0} onclick={() => { warn = null; setStage(injury.id, injury.stage - 1); }}>Zurück</button>
     <button class="btn primary" onclick={next}>{injury.stage === LAST_STAGE - 1 ? 'Abschließen' : 'Nächste Stufe'}</button>
   </div>
+  {/if}
 </section>
 
 <style>

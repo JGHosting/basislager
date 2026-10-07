@@ -12,7 +12,7 @@ export async function saveInjury(input: Omit<Injury, 'id' | 'createdAt' | 'updat
   const data = plain(input);
   const prev = data.id ? await db.injuries.get(data.id) : undefined;
   // Start: schwer → Pause, sonst direkt Alternativtraining (nur erlaubte Bewegungen)
-  const stage = data.stage ?? prev?.stage ?? (data.severity === 'schwer' ? 0 : 1);
+  const stage = data.stage ?? prev?.stage ?? (data.mode === 'ausfall' ? 0 : data.severity === 'schwer' ? 0 : 1);
   const row: Injury = {
     ...prev, ...data, id: prev?.id ?? newId(), stage,
     stageHistory: prev?.stageHistory ?? [{ date: data.startDate, stage }],
@@ -51,4 +51,11 @@ export async function savePain(date: string, pain: number | null) {
     date, hrv: null, restingHr: null, sleepScore: null, sleepSecs: null, weight: null, feltRecovery: null, pain,
     sources: {}, createdAt: now, updatedAt: now
   });
+}
+
+/** Ernste Verletzung in Rückkehrstufen überführen (z. B. nach Gips/Schiene). */
+export async function switchToStages(id: string, stage = 1) {
+  const inj = await db.injuries.get(id); if (!inj) return;
+  inj.mode = 'stufen'; inj.stage = stage; inj.stageHistory = [...inj.stageHistory, { date: today(), stage }]; inj.updatedAt = Date.now();
+  await db.injuries.put(inj);
 }

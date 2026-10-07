@@ -2,7 +2,7 @@
   import { swipeDismiss } from '../actions/swipeDismiss';
   import { db, type Movement, type MoveStatus, type Injury } from '../../core/db';
   import { today } from '../../core/dates';
-  import { REGIONS, MOVEMENTS, STATUS_LABEL, movementPreset } from '../../domain/injury/injury';
+  import { REGIONS, MOVEMENTS, STATUS_LABEL, movementPreset, allBlocked } from '../../domain/injury/injury';
   import { saveInjury, deleteInjury } from '../../domain/injury/repo';
   import { app, closeInjury } from '../app.svelte';
 
@@ -10,6 +10,7 @@
   let existing = $state<Injury | null>(null);
   let region = $state(''), side = $state<Injury['side']>('keine'), severity = $state<Injury['severity']>('mittel');
   let startDate = $state(today()), note = $state('');
+  let mode = $state<'stufen' | 'ausfall'>('stufen');
   let movement = $state<Record<Movement, MoveStatus>>(movementPreset(''));
   let touchedMove = false;
   let err = $state(''), confirmDel = $state(false);
@@ -19,15 +20,20 @@
     db.injuries.get(target.id).then(i => {
       if (!i) return;
       existing = i; region = i.region; side = i.side; severity = i.severity; startDate = i.startDate; note = i.medicalNote ?? '';
-      movement = { ...i.movement }; touchedMove = true;
+      movement = { ...i.movement }; touchedMove = true; mode = i.mode ?? 'stufen';
     });
   });
-  function pickRegion(r: string) { region = r; if (!touchedMove) movement = movementPreset(r); }
+  function pickRegion(r: string) { region = r; if (!touchedMove) movement = mode === 'ausfall' ? allBlocked() : movementPreset(r); }
+  function pickMode(m: 'stufen' | 'ausfall') {
+    mode = m;
+    if (m === 'ausfall') { severity = 'schwer'; if (!touchedMove || !existing) movement = allBlocked(); }
+    else if (!existing) movement = movementPreset(region);
+  }
   function setMove(m: Movement, s: MoveStatus) { movement = { ...movement, [m]: s }; touchedMove = true; }
 
   async function save() {
     if (!region) { err = 'Bitte eine Körperregion wählen.'; return; }
-    await saveInjury({ id: existing?.id, region, side, severity, startDate, medicalNote: note.trim() || undefined, movement: $state.snapshot(movement) });
+    await saveInjury({ id: existing?.id, region, side, severity, startDate, medicalNote: note.trim() || undefined, movement: $state.snapshot(movement), mode });
     closeInjury();
   }
   async function remove() { if (existing) await deleteInjury(existing.id); closeInjury(); }
@@ -38,6 +44,14 @@
   <div class="grab"></div>
   <h2 class="title">{existing ? 'Verletzung bearbeiten' : 'Verletzung melden'}</h2>
   <p class="muted small">Der Plan wird sofort pausiert bzw. auf erlaubte Bewegungen reduziert. Die App stellt keine Diagnosen.</p>
+
+  <section>
+    <h3>Art</h3>
+    <div class="modes">
+      <button class:on={mode === 'stufen'} onclick={() => pickMode('stufen')}><b>Mit Rückkehrstufen</b><small>Zerrung, Reizung, Überlastung: schrittweise zurück zum Normalplan</small></button>
+      <button class:on={mode === 'ausfall'} onclick={() => pickMode('ausfall')}><b>Ernste Verletzung</b><small>z. B. Bruch, Bänderriss, OP: alles Nicht-Mögliche sperren, Ende per Knopf</small></button>
+    </div>
+  </section>
 
   <section>
     <h3>Körperregion</h3>
@@ -53,7 +67,8 @@
   </section>
 
   <section>
-    <h3>Was geht gerade?</h3>
+    <h3>{mode === 'ausfall' ? 'Was geht trotzdem?' : 'Was geht gerade?'}</h3>
+    {#if mode === 'ausfall'}<p class="muted small">Alles ist gesperrt. Tippe ✓ bei dem, was trotz Verletzung geht (z. B. Oberkörperkraft).</p>{/if}
     {#each MOVEMENTS as m}
       <div class="mrow">
         <span>{m.label}</span>
@@ -105,6 +120,11 @@
   .tri button.on.geht { background: var(--green); border-color: var(--green); color: #fff; }
   .tri button.on.eingeschraenkt { background: var(--yellow); border-color: var(--yellow); color: #fff; }
   .tri button.on.nicht { background: var(--red); border-color: var(--red); color: #fff; }
+  .modes { display: grid; gap: 8px; }
+  .modes button { text-align: left; border: 1px solid var(--line); background: var(--bg); color: var(--text); border-radius: 14px; padding: 12px 14px; font: inherit; display: flex; flex-direction: column; gap: 2px; cursor: pointer; }
+  .modes button.on { border-color: var(--accent); background: var(--accent-soft); }
+  .modes button.on b { color: var(--accent); }
+  .modes small { font-size: 12px; color: var(--muted); }
   .actions { display: grid; grid-template-columns: 1fr 2fr; gap: 10px; margin-top: 6px; }
   .del { color: var(--red); }
 </style>

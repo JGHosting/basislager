@@ -84,6 +84,8 @@ export interface Food extends Nutrients {
   servingSize?: number | null; servingLabel?: string | null;   // Portion in g/ml
   pieceGrams?: number | null;  // Gewicht für "Stück"
   imageUrl?: string | null;
+  /** Eigenes Gericht: Zutaten (Snapshot), Gesamtgewicht und Portionen; Nährwerte oben = pro 100 g. */
+  recipe?: { ingredients: { foodId: string; name: string; grams: number; n: Nutrients }[]; totalGrams: number; portions: number };
   fav: 0 | 1; useCount: number; lastUsedAt?: number;
   lastUpdated: number; createdAt: number; updatedAt: number;
 }
@@ -109,6 +111,8 @@ export interface Injury {
   startDate: string; endDate?: string;          // endDate gesetzt = abgeschlossen
   medicalNote?: string;
   movement: Record<Movement, MoveStatus>;
+  /** 'stufen' = Rückkehr in Stufen; 'ausfall' = ernste Verletzung (z. B. Bruch, Bänderriss): nur erlaubte Bewegungen, Ende per Knopf. */
+  mode?: 'stufen' | 'ausfall';
   stage: number;                                 // Rückkehrstufe 0–7 (siehe domain/injury)
   stageHistory: { date: string; stage: number }[];
   createdAt: number; updatedAt: number;

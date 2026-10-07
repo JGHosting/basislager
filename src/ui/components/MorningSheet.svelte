@@ -9,7 +9,7 @@
   import type { IcuEvent } from '../../sources/intervals/client';
   import { computeToday } from '../../domain/today';
   import AmpelRing from './AmpelRing.svelte';
-  import { checkSport, STAGES } from '../../domain/injury/injury';
+  import { checkSport, STAGES, isOutage } from '../../domain/injury/injury';
   import { savePain } from '../../domain/injury/repo';
   let pain = $state<number | null>(null);
   let painInit = false;
@@ -118,7 +118,7 @@
       <p class="muted">Nichts geplant{notes.length ? '' : ', freier Tag'}.</p>
     {/if}
     {#if $calc?.injury && planned.length}
-      <p class="injnote">Verletzungsmodus: Stufe „{STAGES[$calc.injury.stage].label}“</p>
+      <p class="injnote">{isOutage($calc.injury) ? 'Ernste Verletzung: nur erlaubte Bewegungen' : `Verletzungsmodus: Stufe „${STAGES[$calc.injury.stage].label}“`}</p>
     {/if}
     {#each planned as e}
       {@const chk = $calc?.injury ? checkSport($calc.injury, e.type ?? '') : null}
@@ -128,7 +128,7 @@
           <b>{e.name || sportName(e.type ?? 'Training')}</b>
           <span class="muted">{[e.type ? sportName(e.type) : '', e.moving_time ? dur(e.moving_time) : '', km(e.distance)].filter(Boolean).join(' · ')}</span>
           {#if chk && chk.status !== 'geht'}
-            <span class="conflict {chk.status}">{chk.status === 'nicht' ? ($calc?.injury?.stage === 0 ? 'Pause laut Verletzungsmodus' : 'Heute nicht erlaubt') : 'Nur eingeschränkt: locker und kürzer'}{chk.status === 'nicht' && chk.alternatives.length ? ` · Alternative: ${chk.alternatives.join(', ')}` : ''}</span>
+            <span class="conflict {chk.status}">{chk.status === 'nicht' ? ($calc?.injury?.stage === 0 && !isOutage($calc.injury) ? 'Pause laut Verletzungsmodus' : 'Heute nicht erlaubt') : /Weight|Workout/.test(e.type ?? '') ? 'Nur erlaubte Muskelgruppen' : 'Nur eingeschränkt: locker und kürzer'}{chk.status === 'nicht' && chk.alternatives.length ? ` · Alternative: ${chk.alternatives.join(', ')}` : ''}</span>
           {/if}
         </div>
       </div>

@@ -17,6 +17,10 @@ export const MOVEMENTS: { id: Movement; label: string }[] = [
 ];
 export const STATUS_LABEL: Record<MoveStatus, string> = { geht: 'geht', eingeschraenkt: 'eingeschränkt', nicht: 'geht nicht' };
 
+export const allBlocked = (): Record<Movement, MoveStatus> =>
+  ({ gehen: 'nicht', laufen: 'nicht', bergab: 'nicht', springen: 'nicht', rad: 'nicht', schwimmen: 'nicht', beinkraft: 'nicht', oberkoerper: 'nicht' });
+export const isOutage = (i: Injury) => i.mode === 'ausfall';
+
 /** Startvorschlag je Region (nur Vorbelegung – du passt es an). */
 export function movementPreset(region: string): Record<Movement, MoveStatus> {
   const all: Record<Movement, MoveStatus> = { gehen: 'geht', laufen: 'geht', bergab: 'geht', springen: 'geht', rad: 'geht', schwimmen: 'geht', beinkraft: 'geht', oberkoerper: 'geht' };
@@ -59,9 +63,12 @@ export function movementsOfSport(sport: string): Movement[] {
 /** Bewertung einer geplanten Einheit: ok / eingeschränkt / nicht erlaubt, plus Alternativen. */
 export function checkSport(inj: Injury, sport: string): { status: MoveStatus; alternatives: string[] } {
   const ms = movementsOfSport(sport);
-  const worst: MoveStatus = ms.some(m => inj.movement[m] === 'nicht') ? 'nicht' : ms.some(m => inj.movement[m] === 'eingeschraenkt') ? 'eingeschraenkt' : 'geht';
+  let worst: MoveStatus = ms.some(m => inj.movement[m] === 'nicht') ? 'nicht' : ms.some(m => inj.movement[m] === 'eingeschraenkt') ? 'eingeschraenkt' : 'geht';
+  // Krafttraining lässt sich anpassen: Geht wenigstens ein Teil (z. B. Oberkörper), ist es "eingeschränkt" statt verboten
+  if (/Weight|Workout/.test(sport) && worst === 'nicht' && ms.some(m => inj.movement[m] !== 'nicht')) worst = 'eingeschraenkt';
   const alt = (['rad', 'schwimmen', 'gehen', 'oberkoerper'] as Movement[]).filter(m => inj.movement[m] === 'geht' && !ms.includes(m)).map(m => MOVEMENTS.find(x => x.id === m)!.label);
-  // Stufe „Pause“: gar kein Training, also auch keine Alternativen
+  // Ernste Verletzung: allein die Bewegungsliste zählt. Stufe „Pause“: gar kein Training, keine Alternativen.
+  if (isOutage(inj)) return { status: worst, alternatives: alt };
   return { status: inj.stage === 0 ? 'nicht' : worst, alternatives: inj.stage === 0 ? [] : alt };
 }
 
@@ -71,6 +78,7 @@ export function doctorHint(inj: Injury, morning: MorningEntry[], today: string):
   const last3 = pains.filter(p => p.date >= addDays(today, -2));
   const days = daysSince(inj.startDate, today);
   if (last3.some(p => p.pain! >= 7)) return 'Starke Schmerzen in den letzten Tagen. Bitte lass das ärztlich oder physiotherapeutisch abklären.';
+  if (isOutage(inj)) return null;   // bei Bruch/Bänderriss ist ärztliche Betreuung ohnehin gegeben
   if (inj.severity === 'schwer' && !inj.medicalNote) return 'Bei einer schweren Verletzung ist eine ärztliche Einschätzung sinnvoll.';
   if (days >= 21 && inj.stage <= 1) return 'Die Beschwerden halten schon über drei Wochen an. Eine Abklärung bei Arzt oder Physio ist sinnvoll.';
   if (pains.length >= 6) {

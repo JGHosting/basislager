@@ -121,3 +121,34 @@ export function dedupe(list: Food[]): Food[] {
 export async function findByBarcode(code: string): Promise<Food | null> {
   return (await db.foods.where('barcode').equals(code).first()) ?? null;
 }
+
+/* ---------- Eigene Gerichte (Rezepte) ---------- */
+/**
+ * Gericht aus Zutaten: Nährwerte werden aus den Zutaten summiert und auf 100 g des fertigen Gerichts umgerechnet.
+ * totalGrams: Gewicht des fertigen Gerichts (beim Kochen verdunstet Wasser) – ohne Angabe = Summe der Zutaten.
+ */
+export async function saveRecipe(input: { id?: string; name: string; portions: number; totalGrams?: number | null; items: { food: Food; grams: number }[] }): Promise<Food> {
+  const items = plain(input.items);
+  const sumGrams = items.reduce((t, i) => t + i.grams, 0);
+  const total = input.totalGrams && input.totalGrams > 0 ? input.totalGrams : sumGrams;
+  const keys = ['kcal', 'protein', 'carbs', 'fat', 'fiber', 'sugar', 'salt'] as const;
+  const per100 = Object.fromEntries(keys.map(k => {
+    // Ein Wert fehlt bei einer Zutat → Gericht-Wert unbekannt (null), damit nichts als 0 gerechnet wird
+    if (items.some(i => i.food[k] == null)) return [k, null];
+    return [k, items.reduce((t, i) => t + i.food[k]! * i.grams / 100, 0) / total * 100];
+  })) as Record<typeof keys[number], number | null>;
+  const now = Date.now();
+  const prev = input.id ? await db.foods.get(input.id) : undefined;
+  const id = prev?.id ?? 'custom:' + newId();
+  const food: Food = {
+    ...(prev ?? { fav: 0 as const, useCount: 0, createdAt: now }),
+    id, source: 'custom', sourceId: id.slice(7), name: input.name.trim(), category: 'Gericht', per: 'g', ...per100,
+    servingSize: total / Math.max(1, input.portions), servingLabel: `1/${input.portions} des Gerichts`, pieceGrams: null, imageUrl: null,
+    recipe: { ingredients: items.map(i => ({ foodId: i.food.id, name: i.food.name, grams: i.grams,
+      n: { kcal: i.food.kcal, protein: i.food.protein, carbs: i.food.carbs, fat: i.food.fat, fiber: i.food.fiber, sugar: i.food.sugar, salt: i.food.salt } })),
+      totalGrams: total, portions: input.portions },
+    lastUpdated: now, updatedAt: now
+  } as Food;
+  await db.foods.put(food);
+  return food;
+}

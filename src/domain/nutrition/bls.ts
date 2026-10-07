@@ -72,6 +72,17 @@ export function searchBls(q: string, limit = 30): { food: Food; score: number }[
   };
   // Erst alle Wörter (UND), nur wenn nichts gefunden wird: irgendein Wort (ODER)
   let hits = index.search(terms, { ...opts, combineWith: 'AND' });
+  // Zusammengesetzte Wörter zerlegen: "hähnchencurry" → "hähnchen curry", "gemüsesuppe" → "gemüse suppe"
+  const words = terms.split(' ');
+  if (hits.length < 3 && words.length === 1 && words[0].length >= 8) {
+    const w = words[0]; const seen = new Set(hits.map(h => h.id));
+    for (let i = 4; i <= w.length - 4; i++) {
+      for (const h of index.search(`${w.slice(0, i)} ${w.slice(i)}`, { ...opts, combineWith: 'AND' })) {
+        if (!seen.has(h.id)) { seen.add(h.id); hits.push(h); }
+      }
+    }
+    hits.sort((a, b) => b.score - a.score);
+  }
   if (!hits.length) hits = index.search(terms, { ...opts, combineWith: 'OR' });
   return hits.slice(0, limit).map(h => ({ food: blsToFood(rows.get(h.id as string)!), score: h.score }));
 }
