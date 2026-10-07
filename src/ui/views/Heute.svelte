@@ -14,6 +14,7 @@
   import SessionCard from '../planner/SessionCard.svelte';
   import { sessionsOn } from '../../domain/planner/repo';
   import { adaptToLight } from '../../domain/planner/plan';
+  import { TRAINING_LABEL, vacationToday } from '../../domain/vacation/vacation';
   import { openInjury } from '../app.svelte';
   import { dayView, getKcalGoal } from '../../domain/nutrition/repo';
   import { groupLabel } from '../../domain/strength/strength';
@@ -24,6 +25,7 @@
   // Ampel + Belastung: rechnet automatisch neu, sobald sich Aktivitäten, Morgenwerte oder Pulswerte ändern
   const calc = liveQuery(() => computeToday());
   const todayPlan = liveQuery(async () => (await sessionsOn(today())).sessions);
+  const vacation = liveQuery(() => vacationToday());
   const food = liveQuery(async () => ({ day: await dayView(today()), goal: await getKcalGoal() }));
 
   const t = today();
@@ -91,6 +93,12 @@
     <p class="card error">{app.syncError}</p>
   {/if}
 
+  {#if $vacation}
+    <a class="card vacb" href="#/plan">
+      <b>Urlaub{$vacation.title ? ': ' + $vacation.title : ''}</b>
+      <span>bis {fmtDay($vacation.end, { weekday: 'short', day: '2-digit', month: '2-digit' })} · {TRAINING_LABEL[$vacation.training]} · kein Kraft, kein Tracking</span>
+    </a>
+  {/if}
   {#if $calc?.injury}<InjuryCard injury={$calc.injury} />{/if}
   {#if $calc}<AmpelCard rec={$calc.recovery} injury={!!$calc.injury} />{/if}
   {#if $todayPlan}
@@ -195,6 +203,8 @@
   .card-head h2 { margin: 0; }
   .tag { border: none; font-family: inherit; cursor: pointer; font-size: 13px; color: var(--accent); background: var(--accent-soft); padding: 3px 9px; border-radius: 99px; font-weight: 600; }
   .small { font-size: 13px; }
+  .vacb { display: flex; flex-direction: column; gap: 2px; text-decoration: none; color: var(--text); border-left: 5px solid var(--c-ride); }
+  .vacb span { font-size: 13px; color: var(--muted); }
   .more { color: var(--accent); font-weight: 600; font-size: 14px; text-decoration: none; }
   .injbtn { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; margin: -2px 0 12px; padding: 12px; border-radius: 14px;
             border: 1px dashed color-mix(in srgb, var(--red) 55%, var(--line)); background: none; color: var(--red); font: inherit; font-weight: 600; font-size: 15px; cursor: pointer; }

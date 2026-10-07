@@ -8,6 +8,8 @@
   import { computeToday } from '../../domain/today';
   import { openGoal, openInjury } from '../app.svelte';
   import SessionCard from '../planner/SessionCard.svelte';
+  import { saveVacation, deleteVacation, TRAINING_LABEL } from '../../domain/vacation/vacation';
+  import type { Vacation } from '../../core/db';
 
   const t = today();
   let offset = $state(0);
@@ -22,6 +24,20 @@
   const calc = liveQuery(() => computeToday());
   const runs = liveQuery(async () => (await getSetting<2 | 3>('runsPerWeek')) ?? 3);
   const events = liveQuery(() => db.fixedEvents.orderBy('start').toArray());
+  const vacations = liveQuery(() => db.vacations.orderBy('start').toArray());
+
+  // Urlaub-Formular
+  let vacOpen = $state(false), vacErr = $state('');
+  let vac = $state<{ id?: string; title: string; start: string; end: string; training: Vacation['training'] }>({ title: '', start: t, end: t, training: 'weniger' });
+  /** Liegt der Urlaub im Zeitraum des Wettkampfplans? Dann ist "kein Training" nicht möglich. */
+  const vacInGoal = $derived(!!planData?.ctx.goal && vac.start <= planData.ctx.goal.date && vac.end >= planData.ctx.goal.planStart);
+  $effect(() => { if (vacInGoal && vac.training === 'keine') vac.training = 'weniger'; });
+  async function addVacation() {
+    vacErr = '';
+    if (vac.end < vac.start) { vacErr = 'Das Ende liegt vor dem Start.'; return; }
+    await saveVacation({ ...vac, title: vac.title.trim() || undefined }); vacOpen = false;
+  }
+  function editVacation(v: Vacation) { vac = { id: v.id, title: v.title ?? '', start: v.start, end: v.end, training: v.training }; vacOpen = true; }
 
   const days = $derived(Array.from({ length: 7 }, (_, i) => addDays(ws, i)));
   const dur = (m: number) => `${Math.floor(m / 60)} h ${String(Math.round(m % 60)).padStart(2, '0')}`;
@@ -32,6 +48,7 @@
   let ev = $state<{ type: FixedEvent['type']; title: string; start: string; end: string }>({ type: 'ski', title: '', start: t, end: t });
   async function addEvent() { if (ev.end < ev.start) ev.end = ev.start; await saveEvent({ ...ev, title: ev.title.trim() || undefined }); evOpen = false; }
   const EV = { ski: 'Ski/Snowboard', hochtour: 'Hochtour', urlaub: 'Urlaub', sonstiges: 'Sonstiges' } as const;
+  const EV_NEW = { ski: 'Ski/Snowboard', hochtour: 'Hochtour', sonstiges: 'Sonstiges' } as const;   // Urlaub hat einen eigenen Bereich
 </script>
 
 <header class="page-head">
@@ -87,15 +104,43 @@
   {#each days as d}
     {@const list = w.sessions.filter(s => s.date === d)}
     {@const evs = w.events.filter(e => d >= e.start && d <= e.end)}
+    {@const vday = ($vacations ?? []).find(v => d >= v.start && d <= v.end)}
     <section class="card day" class:today={d === t} class:past={d < t}>
       <div class="dh"><b>{d === t ? 'Heute' : fmtDay(d, { weekday: 'long' })}</b><span class="muted small">{fmtDay(d, { day: '2-digit', month: '2-digit' })}</span></div>
+      {#if vday}<p class="vac">Urlaub{vday.title ? ': ' + vday.title : ''} · {TRAINING_LABEL[vday.training === 'keine' && planData.ctx.goal ? 'weniger' : vday.training]}</p>{/if}
       {#each evs as e}<p class="ev">{EV[e.type]}{e.title ? ': ' + e.title : ''}</p>{/each}
       {#each list as s (s.key)}
         <SessionCard s={d === t && $calc ? adaptToLight(s, $calc.recovery.light) : s} />
       {/each}
-      {#if !list.length && !evs.length}<p class="muted small rest">Ruhetag</p>{/if}
+      {#if !list.length && !evs.length && !vday}<p class="muted small rest">Ruhetag</p>{/if}
     </section>
   {/each}
+
+  <h3 class="section">Urlaub</h3>
+  <section class="card">
+    <p class="muted small">Im Urlaub entfällt Kraft, Gewicht ist egal und die Ernährung wird nicht getrackt. Die Ausdauereinheiten wählst du selbst.</p>
+    {#each ($vacations ?? []).filter(v => v.end >= t) as v (v.id)}
+      <div class="evrow"><button class="evtxt" onclick={() => editVacation(v)}><b>{v.title || 'Urlaub'}</b><small>{fmtDay(v.start, { day: '2-digit', month: '2-digit' })}{v.end !== v.start ? ' – ' + fmtDay(v.end, { day: '2-digit', month: '2-digit' }) : ''} · {TRAINING_LABEL[v.training]}</small></button>
+        <button aria-label="Urlaub löschen" onclick={() => deleteVacation(v.id)}>✕</button></div>
+    {/each}
+    {#if vacOpen}
+      <div class="evform">
+        <input bind:value={vac.title} placeholder="z. B. Gardasee (optional)" />
+        <div class="two"><label>Von<input type="date" bind:value={vac.start} oninput={() => { if (vac.end < vac.start) vac.end = vac.start; }} /></label><label>Bis<input type="date" bind:value={vac.end} min={vac.start} /></label></div>
+        <span class="muted small">Training im Urlaub</span>
+        <div class="tri3">
+          <button class:on={vac.training === 'voll'} onclick={() => (vac.training = 'voll')}><b>Voll</b><small>wie geplant</small></button>
+          <button class:on={vac.training === 'weniger'} onclick={() => (vac.training = 'weniger')}><b>Weniger</b><small>ca. 60 %, locker</small></button>
+          <button class:on={vac.training === 'keine'} disabled={vacInGoal} onclick={() => (vac.training = 'keine')}><b>Keins</b><small>{vacInGoal ? 'nicht im Wettkampfplan' : 'nur Urlaub'}</small></button>
+        </div>
+        <p class="muted small">Kraft entfällt immer. Falls du doch trainierst, trägt Garmin es ein bzw. du erfasst es unter „Heute“.</p>
+        {#if vacErr}<p class="error small">{vacErr}</p>{/if}
+        <div class="two"><button class="btn ghost" onclick={() => (vacOpen = false)}>Abbrechen</button><button class="btn primary" onclick={addVacation}>Speichern</button></div>
+      </div>
+    {:else}
+      <button class="link" onclick={() => { vac = { title: '', start: t, end: t, training: 'weniger' }; vacOpen = true; }}>+ Urlaub planen</button>
+    {/if}
+  </section>
 
   <h3 class="section">Fixtermine</h3>
   <section class="card">
@@ -106,7 +151,7 @@
     {/each}
     {#if evOpen}
       <div class="evform">
-        <div class="chips">{#each Object.entries(EV) as [k, l]}<button class:on={ev.type === k} onclick={() => (ev.type = k as FixedEvent['type'])}>{l}</button>{/each}</div>
+        <div class="chips">{#each Object.entries(EV_NEW) as [k, l]}<button class:on={ev.type === k} onclick={() => (ev.type = k as FixedEvent['type'])}>{l}</button>{/each}</div>
         <input bind:value={ev.title} placeholder="Titel (optional)" />
         <div class="two"><label>Von<input type="date" bind:value={ev.start} /></label><label>Bis<input type="date" bind:value={ev.end} min={ev.start} /></label></div>
         <div class="two"><button class="btn ghost" onclick={() => (evOpen = false)}>Abbrechen</button><button class="btn primary" onclick={addEvent}>Speichern</button></div>
@@ -143,6 +188,13 @@
   .dh { display: flex; justify-content: space-between; align-items: baseline; }
   .rest { margin: 6px 0 0; }
   .ev { margin: 8px 0 0; font-size: 14px; font-weight: 600; color: var(--c-snow); }
+  .vac { margin: 8px 0 0; font-size: 14px; font-weight: 600; color: var(--c-ride); }
+  .evtxt { flex: 1; display: flex; flex-direction: column; align-items: flex-start; background: none !important; border: none; width: auto !important; height: auto !important; font: inherit; color: var(--text) !important; text-align: left; cursor: pointer; padding: 0; }
+  .tri3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+  .tri3 button { border: 1px solid var(--line); background: var(--bg); color: var(--text); border-radius: 12px; padding: 8px; font: inherit; display: flex; flex-direction: column; align-items: flex-start; cursor: pointer; }
+  .tri3 button small { font-size: 11px; color: var(--muted); }
+  .tri3 button.on { border-color: var(--accent); background: var(--accent-soft); } .tri3 button.on b { color: var(--accent); }
+  .tri3 button:disabled { opacity: .4; }
   .section { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); font-weight: 600; margin: 22px 4px 8px; }
   .evrow { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-top: 1px solid var(--line); }
   .evrow span { display: flex; flex-direction: column; } .evrow small { color: var(--muted); font-size: 12px; }

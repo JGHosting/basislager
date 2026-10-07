@@ -7,8 +7,8 @@
   import 'uplot/dist/uPlot.min.css';
   import type { MetricResult, Bucket } from '../../domain/stats/metrics';
 
-  let { result, bucket, unit, digits, markers = [], injuryMarkers = [], onhover }: {
-    result: MetricResult; bucket: Bucket; unit: string; digits: number; markers?: string[]; injuryMarkers?: string[];
+  let { result, bucket, unit, digits, markers = [], injuryMarkers = [], vacationMarkers = [], onhover }: {
+    result: MetricResult; bucket: Bucket; unit: string; digits: number; markers?: string[]; injuryMarkers?: string[]; vacationMarkers?: string[];
     onhover?: (idx: number | null) => void;
   } = $props();
 
@@ -75,8 +75,13 @@
       series,
       hooks: {
         drawClear: [u => {
-          if (!markers.length && !injuryMarkers.length) return;
+          if (!markers.length && !injuryMarkers.length && !vacationMarkers.length) return;
           const ctx = u.ctx; ctx.save();
+          ctx.fillStyle = css('--c-ride'); ctx.globalAlpha = 0.08;
+          for (const d of vacationMarkers) {
+            const t = ts(d); const x0 = u.valToPos(t - 43200, 'x', true), x1 = u.valToPos(t + 43200, 'x', true);
+            ctx.fillRect(x0, u.bbox.top, Math.max(1, x1 - x0 + 0.5), u.bbox.height);
+          }
           // Verletzungsphasen: durchgehendes rötliches Band
           ctx.fillStyle = css('--red'); ctx.globalAlpha = 0.09;
           for (const d of injuryMarkers) {
@@ -105,7 +110,7 @@
   }
 
   $effect(() => {
-    void result; void bucket; void markers; void injuryMarkers;
+    void result; void bucket; void markers; void injuryMarkers; void vacationMarkers;
     build();
     const ro = new ResizeObserver(() => plot && plot.setSize({ width: el.clientWidth, height: 190 }));
     ro.observe(el);

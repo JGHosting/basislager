@@ -2,6 +2,7 @@
 import { db, getSetting, setSetting, type Food, type FoodLogEntry, type FoodUnit, type Meal } from '../../core/db';
 import { newId } from '../../core/ids';
 import { addDays } from '../../core/dates';
+import { vacationOn } from '../vacation/vacation';
 import { toGrams, sumEntries, MEALS, type Sums } from './calc';
 import { fold, searchBls } from './bls';
 import { offSearch } from './off';
@@ -59,10 +60,17 @@ export async function deleteEntry(id: string) { await db.foodlog.delete(id); }
 
 /* ---------- Tracking-Status ---------- */
 /** Kein Eintrag = getrackt (Standard). Damit ist jeder neue Tag automatisch wieder normal. */
-export async function isTracked(date: string) { return (await db.nutritionDays.get(date))?.tracked !== false; }
+/** Urlaubstage gelten ohne eigene Angabe als nicht getrackt. */
+export async function isTracked(date: string) {
+  const d = await db.nutritionDays.get(date);
+  if (d) return d.tracked;
+  return !vacationOn(await db.vacations.toArray(), date);
+}
 export async function setTracked(date: string, tracked: boolean) {
-  if (tracked) await db.nutritionDays.delete(date);
-  else await db.nutritionDays.put({ date, tracked: false, updatedAt: Date.now() });
+  const onVacation = !!vacationOn(await db.vacations.toArray(), date);
+  // Gespeichert wird nur die Abweichung vom Normalfall (normal: getrackt, Urlaub: nicht getrackt)
+  if (tracked === !onVacation) await db.nutritionDays.delete(date);
+  else await db.nutritionDays.put({ date, tracked, updatedAt: Date.now() });
 }
 
 /* ---------- Ziel ---------- */
@@ -70,20 +78,21 @@ export const getKcalGoal = async () => (await getSetting<number | null>('kcalGoa
 export const setKcalGoal = (v: number | null) => setSetting('kcalGoal', v);
 
 /* ---------- Tag ---------- */
-export interface DayView { date: string; tracked: boolean; entries: FoodLogEntry[]; total: Sums; meals: Record<Meal, { entries: FoodLogEntry[]; sum: Sums }> }
+export interface DayView { date: string; tracked: boolean; vacation: boolean; entries: FoodLogEntry[]; total: Sums; meals: Record<Meal, { entries: FoodLogEntry[]; sum: Sums }> }
 export async function dayView(date: string): Promise<DayView> {
-  const [entries, tracked] = await Promise.all([db.foodlog.where('date').equals(date).toArray(), isTracked(date)]);
+  const [entries, tracked, vacs] = await Promise.all([db.foodlog.where('date').equals(date).toArray(), isTracked(date), db.vacations.toArray()]);
   entries.sort((a, b) => a.createdAt - b.createdAt);
   const meals = Object.fromEntries(MEALS.map(m => { const es = entries.filter(e => e.meal === m.id); return [m.id, { entries: es, sum: sumEntries(es) }]; })) as DayView['meals'];
-  return { date, tracked, entries, total: sumEntries(entries), meals };
+  return { date, tracked, vacation: !!vacationOn(vacs, date), entries, total: sumEntries(entries), meals };
 }
-export type DayState = 'getrackt' | 'nicht getrackt' | 'keine Einträge';
+export type DayState = 'getrackt' | 'nicht getrackt' | 'keine Einträge' | 'Urlaub';
 export async function recentDays(n: number, from: string): Promise<{ date: string; state: DayState; kcal: number }[]> {
   const out = [];
   for (let i = 0; i < n; i++) {
     const date = addDays(from, -i);
     const [entries, tracked] = await Promise.all([db.foodlog.where('date').equals(date).toArray(), isTracked(date)]);
-    out.push({ date, state: (!tracked ? 'nicht getrackt' : entries.length ? 'getrackt' : 'keine Einträge') as DayState, kcal: sumEntries(entries).kcal.value });
+    const vac = !!vacationOn(await db.vacations.toArray(), date);
+    out.push({ date, state: (!tracked ? (vac ? 'Urlaub' : 'nicht getrackt') : entries.length ? 'getrackt' : 'keine Einträge') as DayState, kcal: sumEntries(entries).kcal.value });
   }
   return out;
 }

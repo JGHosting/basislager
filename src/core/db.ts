@@ -137,6 +137,9 @@ export interface PlanEdit { key: string; movedTo?: string; status?: 'erledigt' |
 /** Fixtermin: an diesen Tagen wird nichts geplant (Skiwochenende, Hochtour, Urlaub …). */
 export interface FixedEvent { id: string; type: 'ski' | 'hochtour' | 'urlaub' | 'sonstiges'; title?: string; start: string; end: string; createdAt: number; updatedAt: number }
 
+/** Urlaub: App-weit – kein Gewicht/Ernährung nötig, Kraft entfällt, Ausdauer voll/weniger/keine. */
+export interface Vacation { id: string; title?: string; start: string; end: string; training: 'voll' | 'weniger' | 'keine'; createdAt: number; updatedAt: number }
+
 /** Interne Sicherheitskopie vor einem Import (wird selbst nicht exportiert). */
 export interface Snapshot { seq?: number; createdAt: number; reason: string; data: unknown }
 
@@ -154,6 +157,7 @@ export class BasislagerDB extends Dexie {
   goals!: Table<Goal, string>;
   planEdits!: Table<PlanEdit, string>;
   fixedEvents!: Table<FixedEvent, string>;
+  vacations!: Table<Vacation, string>;
   /** name nur für die Backup-Prüfroutine abweichend (separate Test-Datenbank). */
   constructor(name = 'basislager') {
     super(name);
@@ -177,6 +181,14 @@ export class BasislagerDB extends Dexie {
     this.version(7).stores({ injuries: 'id, startDate' });
     // v8: Planer
     this.version(8).stores({ goals: 'id, date', planEdits: 'key', fixedEvents: 'id, start' });
+    // v9: Urlaub als eigener Modus; bisherige Fixtermine vom Typ "Urlaub" werden übernommen
+    this.version(9).stores({ vacations: 'id, start' }).upgrade(async tx => {
+      const all = (await tx.table('fixedEvents').toArray()).filter((e: FixedEvent) => e.type === 'urlaub');
+      for (const e of all) {
+        await tx.table('vacations').put({ id: e.id, title: e.title, start: e.start, end: e.end, training: 'weniger', createdAt: e.createdAt, updatedAt: Date.now() });
+        await tx.table('fixedEvents').delete(e.id);
+      }
+    });
     this.on('populate', tx => { tx.table('splits').bulkPut(BUILTIN_SPLITS); });
   }
 }

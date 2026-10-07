@@ -4,19 +4,21 @@
   import { today, fmtDay } from '../../core/dates';
   import { openStrengthActivities, groupStatus, neglectWarnings, nextSplitDay, groupLabel } from '../../domain/strength/strength';
   import { activeSplit } from '../../domain/strength/repo';
+  import { recentlyOnVacation } from '../../domain/vacation/vacation';
   import { openStrength } from '../app.svelte';
   import { dur } from '../format';
 
   const t = today();
   const data = liveQuery(async () => {
-    const [acts, sessions, split] = await Promise.all([
-      db.activities.where('sportType').equals('WeightTraining').toArray(), db.strength.toArray(), activeSplit()
+    const [acts, sessions, split, vacs] = await Promise.all([
+      db.activities.where('sportType').equals('WeightTraining').toArray(), db.strength.toArray(), activeSplit(), db.vacations.toArray()
     ]);
     const status = groupStatus(sessions, acts, t);
     return {
       open: openStrengthActivities(acts, sessions, t),
       status, split,
-      warnings: neglectWarnings(status, sessions, split, t),
+      // Im Urlaub und eine Woche danach keine "seit X Tagen nicht trainiert"-Warnungen
+      warnings: recentlyOnVacation(vacs, t) ? [] : neglectWarnings(status, sessions, split, t),
       next: split ? nextSplitDay(split, sessions) : null,
       any: sessions.some(s => !s.skipped) || acts.some(a => a.date >= '0')
     };

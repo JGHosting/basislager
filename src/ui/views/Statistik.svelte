@@ -13,8 +13,9 @@
       db.strength.toArray(), getSetting<number | null>('goalWeight'), db.foodlog.toArray(), db.nutritionDays.toArray(), getSetting<number | null>('kcalGoal')
     ]);
     const injuries = await db.injuries.toArray();
+    const vacations = await db.vacations.toArray();
     const hr = hrProfile(acts, morning.filter(m => m.restingHr != null).map(m => m.restingHr!), { max: mMax, rest: mRest }, today());
-    return buildContext(acts, morning, hr, strength, goal ?? null, foodlog, ndays, kcalGoal ?? null, injuries);
+    return buildContext(acts, morning, hr, strength, goal ?? null, foodlog, ndays, kcalGoal ?? null, injuries, vacations);
   });
 
   const DEFAULT_SHOWN = ['belastung', 'zeit', 'verteilung', 'muskeln', 'hrv', 'ruhepuls', 'sleepscore', 'gewicht'];
@@ -88,7 +89,7 @@
     <MetricView {def} ctx={$ctxQ} {range} />
   {/each}
   {#if !visible.length}<p class="muted">Keine Kennzahl gewählt. Tippe oben auf „Kennzahlen“.</p>{/if}
-  <p class="muted small foot">Rosa hinterlegt: Schneetage, rötlich: Verletzungsphasen. Ernährung: nicht getrackte Tage und Tage ohne Einträge bleiben leer. Schmerzverlauf und Ereignisse wie Verletzung, Wettkampf oder Urlaub kommen mit den jeweiligen Bausteinen dazu.</p>
+  <p class="muted small foot">Rosa hinterlegt: Schneetage, rötlich: Verletzungsphasen, blau: Urlaub. Ernährung: nicht getrackte Tage und Tage ohne Einträge bleiben leer. Schmerzverlauf und Ereignisse wie Verletzung, Wettkampf oder Urlaub kommen mit den jeweiligen Bausteinen dazu.</p>
 {/if}
 
 <style>

@@ -4,7 +4,7 @@
    * Bekommt die Definition und den Kontext und rechnet selbst.
    */
   import type { MetricDef, StatsContext, Range } from '../../domain/stats/metrics';
-  import { snowDays, injuryDays } from '../../domain/stats/metrics';
+  import { snowDays, injuryDays, vacationDays } from '../../domain/stats/metrics';
   import { fmtDay } from '../../core/dates';
   import { toCsv, shareFile } from '../../backup/backup';
   import UChart from './UChart.svelte';
@@ -16,6 +16,7 @@
   const res = $derived(def.compute(ctx, range));
   const markers = $derived(range.bucket === 'month' ? [] : snowDays(ctx, range));
   const injMarkers = $derived(range.bucket === 'month' ? [] : injuryDays(ctx, range));
+  const vacMarkers = $derived(range.bucket === 'month' ? [] : vacationDays(ctx, range));
   const hasData = $derived(res.series.some(s => s.values.some(v => v != null && v !== 0)));
 
   const fmt = (v: number | null | undefined) => {
@@ -81,7 +82,7 @@
   {#if !hasData}
     <p class="muted empty">Keine Daten im Zeitraum.</p>
   {:else if view === 'chart'}
-    <UChart result={res} bucket={range.bucket} unit={def.unit} digits={def.digits} {markers} injuryMarkers={injMarkers} onhover={i => (hover = i)} />
+    <UChart result={res} bucket={range.bucket} unit={def.unit} digits={def.digits} {markers} injuryMarkers={injMarkers} vacationMarkers={vacMarkers} onhover={i => (hover = i)} />
   {:else}
     <div class="tablewrap">
       <table>

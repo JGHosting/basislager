@@ -10,7 +10,7 @@
  * Danach werden Fixtermine, Verletzung, deine Änderungen und erledigte Einheiten eingerechnet.
  * Alles regelbasiert und nachvollziehbar, ohne Server.
  */
-import type { Activity, StrengthSession, SplitTemplate, Goal, Injury, FixedEvent, PlanEdit, MuscleGroup, Movement } from '../../core/db';
+import type { Activity, StrengthSession, SplitTemplate, Goal, Injury, FixedEvent, PlanEdit, MuscleGroup, Movement, Vacation } from '../../core/db';
 import { addDays, weekStart, today as todayFn } from '../../core/dates';
 import { nextSplitDay, groupLabel } from '../strength/strength';
 import { STAGES, STAGE_VOLUME, MOVEMENTS, isOutage } from '../injury/injury';
@@ -35,7 +35,7 @@ export interface PlanWeek {
 export interface PlanContext {
   today: string; activities: Activity[]; strength: StrengthSession[]; split: SplitTemplate | null;
   goal: Goal | null; injury: Injury | null; events: FixedEvent[]; edits: Map<string, PlanEdit>;
-  runsPerWeek: 2 | 3;
+  runsPerWeek: 2 | 3; vacations: Vacation[];
 }
 
 /* ---------- Hilfen ---------- */
@@ -239,6 +239,7 @@ export function buildWeek(ws: string, ctx: PlanContext): PlanWeek {
   }
 
   let out = applyEvents(sessions, ctx.events, ws);
+  out = applyVacation(out, ctx.vacations ?? [], !!g);
   if (ctx.injury) out = applyInjury(out, ctx.injury);
   out = applyEdits(out, ctx.edits);
   out = applyDone(out, ctx.activities, ctx.today);
@@ -262,6 +263,7 @@ const fmtTimeShort = (s: number) => { const h = Math.floor(s / 3600), m = Math.r
 
 /* ---------- Fixtermine ---------- */
 const EVENT_LABEL = { ski: 'Skitag', hochtour: 'Hochtour', urlaub: 'Urlaub', sonstiges: 'Fixtermin' } as const;
+// Hinweis: Urlaub ist seit v9 ein eigener Modus (applyVacation), Typ 'urlaub' bei Fixterminen nur noch für alte Daten.
 function applyEvents(list: PlanSession[], events: FixedEvent[], ws: string): PlanSession[] {
   const out: PlanSession[] = [];
   for (const s of list) {
@@ -274,6 +276,26 @@ function applyEvents(list: PlanSession[], events: FixedEvent[], ws: string): Pla
     }
     if (tomorrow && s.intensity === 'hart') { out.push({ ...s, intensity: 'locker', title: s.title + ' (locker)', notes: [...s.notes, `Morgen ${EVENT_LABEL[tomorrow.type]} – heute nur locker.`] }); continue; }
     out.push(s);
+  }
+  return out;
+}
+
+/* ---------- Urlaub ---------- */
+function applyVacation(list: PlanSession[], vacations: Vacation[], goalMode: boolean): PlanSession[] {
+  const out: PlanSession[] = [];
+  for (const s of list) {
+    const v = vacations.find(x => s.date >= x.start && s.date <= x.end);
+    if (!v || s.sport === 'wettkampf') { out.push(s); continue; }
+    if (s.sport === 'kraft') continue;                                   // kein Studio im Urlaub – trägst du selbst ein, falls doch
+    const mode = v.training === 'keine' && goalMode ? 'weniger' : v.training;
+    if (mode === 'keine') continue;
+    if (mode === 'weniger') {
+      out.push({ ...s, minutes: r5(s.minutes * 0.6), intensity: s.intensity === 'hart' ? 'mittel' : s.intensity,
+        details: s.intensity === 'hart' ? 'Urlaubsversion: locker mit ein paar zügigen Abschnitten nach Lust und Gelände.' : s.details,
+        notes: [...s.notes, 'Urlaub: reduziert.'] });
+      continue;
+    }
+    out.push({ ...s, notes: [...s.notes, 'Urlaub.'] });
   }
   return out;
 }

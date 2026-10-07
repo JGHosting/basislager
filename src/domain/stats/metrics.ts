@@ -2,7 +2,7 @@
  * Statistik-Kennzahlen: reine Funktionen, die aus Aktivitäten/Morgenwerten Zeitreihen bauen.
  * Zeiträume werden in "Eimer" (Tag/Woche/Monat) gruppiert. Fehlende Werte bleiben null (keine 0!).
  */
-import type { Activity, MorningEntry, StrengthSession, FoodLogEntry, NutritionDay, Injury } from '../../core/db';
+import type { Activity, MorningEntry, StrengthSession, FoodLogEntry, NutritionDay, Injury, Vacation } from '../../core/db';
 import { scale } from '../nutrition/calc';
 import { CORE_GROUPS, groupLabel, coversGroup } from '../strength/strength';
 import { addDays, weekStart, today } from '../../core/dates';
@@ -77,7 +77,7 @@ export interface StatsContext {
   activities: Activity[]; morning: MorningEntry[]; hr: HrProfile; load: LoadDay[];
   strength: StrengthSession[]; goalWeight: number | null;
   foodlog: FoodLogEntry[]; untracked: Set<string>; kcalGoal: number | null;
-  injuries: Injury[];
+  injuries: Injury[]; vacations: Vacation[];
 }
 
 const sum = (v: number[]) => v.reduce((a, b) => a + b, 0);
@@ -238,11 +238,14 @@ function withGoal(def: MetricDef): MetricDef {
 
 /** Aktivitäten mit vorab berechneter Belastung (einmal pro Datenstand). */
 export function buildContext(activities: Activity[], morning: MorningEntry[], hr: HrProfile, strength: StrengthSession[] = [], goalWeight: number | null = null,
-  foodlog: FoodLogEntry[] = [], nutritionDays: NutritionDay[] = [], kcalGoal: number | null = null, injuries: Injury[] = []): StatsContext {
+  foodlog: FoodLogEntry[] = [], nutritionDays: NutritionDay[] = [], kcalGoal: number | null = null, injuries: Injury[] = [], vacations: Vacation[] = []): StatsContext {
+  const tracked = new Set(nutritionDays.filter(d => d.tracked).map(d => d.date));
+  const untracked = new Set(nutritionDays.filter(d => !d.tracked).map(d => d.date));
+  for (const v of vacations) for (let d = v.start; d <= v.end; d = addDays(d, 1)) if (!tracked.has(d)) untracked.add(d);
   const intens = new Map(strength.filter(s => s.activityId).map(s => [s.activityId!, s.intensity]));
   const withLoad = activities.map(a => Object.assign({}, a, { load: activityLoad(a, hr, intens.get(a.id)).load }));
   return { activities: withLoad as (Activity & { load: number })[], morning, hr, load: loadSeries(activities, hr, today(), intens), strength, goalWeight,
-    foodlog, untracked: new Set(nutritionDays.filter(d => !d.tracked).map(d => d.date)), kcalGoal, injuries };
+    foodlog, untracked, kcalGoal, injuries, vacations };
 }
 
 /** Tage mit aktiver Verletzung (Start bis Ende bzw. heute). */
@@ -252,6 +255,13 @@ export function injuryDays(ctx: StatsContext, r: Range): string[] {
     const end = i.endDate ?? today();
     for (let d = i.startDate > r.from ? i.startDate : r.from; d <= end && d <= r.to; d = addDays(d, 1)) out.push(d);
   }
+  return out;
+}
+
+/** Urlaubstage im Zeitraum. */
+export function vacationDays(ctx: StatsContext, r: Range): string[] {
+  const out: string[] = [];
+  for (const v of ctx.vacations) for (let d = v.start > r.from ? v.start : r.from; d <= v.end && d <= r.to; d = addDays(d, 1)) out.push(d);
   return out;
 }
 

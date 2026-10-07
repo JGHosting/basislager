@@ -5,6 +5,7 @@
 import { getSetting, setSetting, deleteSetting, requestPersistence, persistState, type PersistState } from '../core/db';
 import { icu, IcuError, normalizeAthleteId, type Credentials } from '../sources/intervals/client';
 import { today } from '../core/dates';
+import { vacationToday } from '../domain/vacation/vacation';
 import type { Meal, FoodLogEntry } from '../core/db';
 import { weightSince } from '../domain/morning/morning';
 import { runSync, getSyncState, resetHistory, type SyncState } from '../sources/intervals/sync';
@@ -57,7 +58,9 @@ export async function initApp() {
 async function maybeShowMorning() {
   if (!app.connected || app.showMorning) return;
   const done = await getSetting<string>('morningDone');
-  if (done !== today()) app.showMorning = true;
+  if (done === today()) return;
+  if (await vacationToday()) return;          // Urlaub: kein automatisches Popup
+  app.showMorning = true;
 }
 /** done=true: für heute erledigt. done=false ("Später"): beim nächsten Öffnen wieder. */
 export async function closeMorning(done: boolean) {

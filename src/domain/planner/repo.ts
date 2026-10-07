@@ -14,13 +14,13 @@ export async function activeGoal(): Promise<Goal | null> {
 }
 
 export async function loadContext(): Promise<PlanContext> {
-  const [activities, strength, splitId, goal, injuries, events, edits, runs] = await Promise.all([
+  const [activities, strength, splitId, goal, injuries, events, edits, runs, vacations] = await Promise.all([
     db.activities.toArray(), db.strength.toArray(), getSetting<string | null>('activeSplit'), activeGoal(),
-    db.injuries.toArray(), db.fixedEvents.toArray(), db.planEdits.toArray(), getSetting<2 | 3>('runsPerWeek')
+    db.injuries.toArray(), db.fixedEvents.toArray(), db.planEdits.toArray(), getSetting<2 | 3>('runsPerWeek'), db.vacations.toArray()
   ]);
   return {
     today: today(), activities, strength, split: splitId ? (await db.splits.get(splitId)) ?? null : null,
-    goal, injury: activeInjury(injuries), events, edits: new Map(edits.map(e => [e.key, e])), runsPerWeek: runs ?? 3
+    goal, injury: activeInjury(injuries), events, edits: new Map(edits.map(e => [e.key, e])), runsPerWeek: runs ?? 3, vacations
   };
 }
 

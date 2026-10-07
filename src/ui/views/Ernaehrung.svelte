@@ -43,10 +43,10 @@
   {@const v = dayData}
   {#if !v.tracked}
     <section class="card untracked">
-      <h2>{date === t ? 'Heute wird nicht getrackt.' : 'Dieser Tag wurde nicht getrackt.'}</h2>
+      <h2>{v.vacation ? 'Urlaub – Ernährung wird nicht getrackt.' : date === t ? 'Heute wird nicht getrackt.' : 'Dieser Tag wurde nicht getrackt.'}</h2>
       <p class="muted">Die Ernährung dieses Tages fließt nicht in Auswertungen ein und zählt nicht als 0 kcal.
         {#if v.entries.length}Die {v.entries.length} Einträge bleiben gespeichert.{/if}</p>
-      <button class="btn primary wide" onclick={() => setTracked(date, true)}>{date === t ? 'Tracking für heute aktivieren' : 'Tracking für diesen Tag aktivieren'}</button>
+      <button class="btn primary wide" onclick={() => setTracked(date, true)}>{v.vacation ? 'Trotzdem tracken' : date === t ? 'Tracking für heute aktivieren' : 'Tracking für diesen Tag aktivieren'}</button>
     </section>
   {:else}
     <section class="card summary">
@@ -105,7 +105,7 @@
       <button class:cur={h.date === date} onclick={() => (date = h.date)}>
         <span>{h.date === t ? 'Heute' : fmtDay(h.date)}</span>
         <span class="hv {h.state === 'getrackt' ? '' : 'muted'}">
-          {#if h.state === 'nicht getrackt'}nicht getrackt{:else if h.state === 'keine Einträge'}keine Einträge{:else}{kcal(h.kcal)}{#if $goalQ}{' / ' + kcal($goalQ)}{/if} kcal{/if}
+          {#if h.state === 'nicht getrackt'}nicht getrackt{:else if h.state === 'Urlaub'}Urlaub{:else if h.state === 'keine Einträge'}keine Einträge{:else}{kcal(h.kcal)}{#if $goalQ}{' / ' + kcal($goalQ)}{/if} kcal{/if}
         </span>
       </button>
     {/each}
