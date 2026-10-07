@@ -12,11 +12,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Download BLS
-        run: |
-          mkdir -p raw/bls && cd raw/bls
-          curl -sSL -A "Basislager/1.0 (jakob+claude@greimel.com)" -o bls.zip "https://blsdb.de/assets/uploads/BLS_4_0_2025_DE.zip?token=6NYW-CBWK-S3WH-LUX2-7CDB-W6I1-QASX-40Q4"
-          ls -la; unzip -o bls.zip; rm bls.zip; find . -type f -exec ls -la {} \; > ../bls-files.txt
       - name: Probe Open Food Facts
         run: |
           cd raw
@@ -25,9 +20,15 @@ jobs:
             echo "== v2 product"; curl -sS -D - -A "$UA" -H "Origin: https://jghosting.github.io" "https://world.openfoodfacts.org/api/v2/product/3017624010701.json?fields=product_name,nutriments,serving_size,brands" | head -c 3000; echo
             echo "== cgi search"; curl -sS -D - -A "$UA" -H "Origin: https://jghosting.github.io" "https://world.openfoodfacts.org/cgi/search.pl?search_terms=haferflocken&json=1&page_size=3&fields=code,product_name,brands,nutriments" | head -c 3000; echo
             echo "== searchalicious"; curl -sS -D - -A "$UA" -H "Origin: https://jghosting.github.io" "https://search.openfoodfacts.org/search?q=haferflocken&page_size=3&langs=de&fields=code,product_name,brands,nutriments" | head -c 3000; echo
+            for o in "https://jghosting.github.io" "null"; do
+              echo "== searchalicious Origin $o"; curl -sS -D - -o /dev/null -A "$UA" -H "Origin: $o" "https://search.openfoodfacts.org/search?q=milch&page_size=1"
+              echo "== searchalicious OPTIONS $o"; curl -sS -D - -o /dev/null -X OPTIONS -H "Origin: $o" -H "Access-Control-Request-Method: GET" "https://search.openfoodfacts.org/search?q=milch"
+            done
+            echo "== cgi de"; curl -sS -D - -A "$UA" -H "Origin: https://jghosting.github.io" "https://de.openfoodfacts.org/cgi/search.pl?search_terms=milch&search_simple=1&action=process&json=1&page_size=2&fields=code,product_name" | head -c 800; echo
+            echo "== v2 search tags"; curl -sS -D - -A "$UA" "https://world.openfoodfacts.org/api/v2/search?categories_tags_de=haferflocken&countries_tags_en=germany&page_size=2&fields=code,product_name" | head -c 800; echo
           } > off-probe.txt 2>&1
       - name: Commit raw data
         run: |
           git config user.name "github-actions"; git config user.email "actions@github.com"
-          git checkout -b data-raw
-          git add raw; git commit -m "Rohdaten BLS 4.0 + OFF-Test" ; git push -f origin data-raw
+          git checkout -b off-probe
+          git add raw; git commit -m "OFF-Test 2" ; git push -f origin off-probe
