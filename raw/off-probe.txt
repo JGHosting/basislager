@@ -1,0 +1,139 @@
+== v2 product
+HTTP/2 200 
+server: nginx
+date: Wed, 07 Oct 2026 20:26:39 GMT
+content-type: application/json; charset=utf-8
+x-content-type-options: nosniff
+x-download-options: noopen
+x-xss-protection: 1; mode=block
+x-request-id: dwgNr4mKUQI69HjC
+access-control-allow-origin: *
+access-control-allow-methods: HEAD, GET, PATCH, POST, PUT, OPTIONS
+access-control-allow-headers: DNT,User-Agent,X-User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range,If-None-Match,Authorization
+access-control-expose-headers: Content-Length,Content-Range
+access-control-max-age: 1728000
+x-cache-status: MISS
+x-cache-status: MISS
+
+{"code":"3017624010701","product":{"brands":"Ferrero","nutriments":{"added-sugars":0,"added-sugars_100g":0,"added-sugars_modifier":"~","added-sugars_unit":"g","added-sugars_value":0,"carbohydrates":57.5,"carbohydrates_100g":57.5,"carbohydrates_unit":"g","carbohydrates_value":57.5,"energy":2228,"energy-kcal":539,"energy-kcal_100g":539,"energy-kcal_unit":"kcal","energy-kcal_value":539,"energy-kj":2228,"energy-kj_100g":2228,"energy-kj_unit":"kJ","energy-kj_value":2228,"energy_100g":2228,"energy_unit":"kJ","energy_value":2228,"fat":30.9,"fat_100g":30.9,"fat_unit":"g","fat_value":30.9,"fruits-vegetables-legumes-estimate-from-ingredients_100g":0,"fruits-vegetables-nuts-estimate-from-ingredients_100g":0,"proteins":6.3,"proteins_100g":6.3,"proteins_unit":"g","proteins_value":6.3,"salt":0.1075,"salt_100g":0.1075,"salt_unit":"g","salt_value":0.1075,"saturated-fat":10.6,"saturated-fat_100g":10.6,"saturated-fat_unit":"g","saturated-fat_value":10.6,"sodium":0.043,"sodium_100g":0.043,"sodium_unit":"g","sodium_value":0.043,"sugars":56.3,"sugars_100g":56.3,"sugars_unit":"g","sugars_value":56.3},"nutrition_data":"on","nutrition_data_prepared_per":"100g","product_name":"Nutella"},"status":1,"status_verbose":"product found"}
+== cgi search
+HTTP/2 200 
+server: nginx
+date: Wed, 07 Oct 2026 20:26:40 GMT
+content-type: application/json; charset=utf-8
+x-content-type-options: nosniff
+x-download-options: noopen
+x-xss-protection: 1; mode=block
+x-request-id: fRfdfyJNEidG7EJP
+access-control-allow-origin: *
+access-control-allow-methods: HEAD, GET, PATCH, POST, PUT, OPTIONS
+access-control-allow-headers: DNT,User-Agent,X-User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range,If-None-Match,Authorization
+access-control-expose-headers: Content-Length,Content-Range
+access-control-max-age: 1728000
+
+{"count":585,"page":1,"page_count":3,"page_size":3,"products":[{"brands":"","code":"20003166","nutriments":{"added-sugars":0,"added-sugars_100g":0,"added-sugars_serving":0,"added-sugars_unit":"g","added-sugars_value":0,"carbohydrates":58.7,"carbohydrates_100g":58.7,"carbohydrates_serving":58.7,"carbohydrates_unit":"g","carbohydrates_value":58.7,"choline":0,"choline_100g":0,"choline_serving":0,"choline_unit":"g","choline_value":0,"energy":1566,"energy-kcal":372,"energy-kcal_100g":372,"energy-kcal_serving":372,"energy-kcal_unit":"kcal","energy-kcal_value":372,"energy-kj":1566,"energy-kj_100g":1566,"energy-kj_serving":1570,"energy-kj_unit":"kJ","energy-kj_value":1566,"energy_100g":1566,"energy_serving":1570,"energy_unit":"kJ","energy_value":1566,"fat":7,"fat_100g":7,"fat_serving":7,"fat_unit":"g","fat_value":7,"fiber":10,"fiber_100g":10,"fiber_serving":10,"fiber_unit":"g","fiber_value":10,"fruits-vegetables-legumes-estimate-from-ingredients_100g":0,"fruits-vegetables-nuts-estimate-from-ingredients_100g":0,"iron":0.0043,"iron_100g":0.0043,"iron_serving":0.0043,"iron_unit":"g","iron_value":0.0043,"magnesium":0.0058,"magnesium_100g":0.0058,"magnesium_serving":0.0058,"magnesium_unit":"g","magnesium_value":0.0058,"nova-group":1,"nova-group_100g":1,"nova-group_serving":1,"nova-group_unit":"","nova-group_value":1,"phosphorus":0.43,"phosphorus_100g":0.43,"phosphorus_serving":0.43,"phosphorus_unit":"g","phosphorus_value":0.43,"proteins":13.5,"proteins_100g":13.5,"proteins_serving":13.5,"proteins_unit":"g","proteins_value":13.5,"salt":0.02,"salt_100g":0.02,"salt_serving":0.02,"salt_unit":"g","salt_value":0.02,"saturated-fat":1.3,"saturated-fat_100g":1.3,"saturated-fat_serving":1.3,"saturated-fat_unit":"g","saturated-fat_value":1.3,"sodium":0.008,"sodium_100g":0.008,"sodium_serving":0.008,"sodium_unit":"g","sodium_value":0.008,"starch":0,"starch_100g":0,"starch_serving":0,"starch_unit":"g","starch_value":0,"sugars":0.7,"sugars_100g":0.7,"sugars_serving":0.7,"sugars_unit":"g","sugars_value":0.7,"vitamin-b1":0.0006,"vitamin-b1_100g":0.0006,"vitamin-b1_serving":0.0006,"vitamin-b1_unit":"g","vitamin-b1_value":0.0006},"nutrition_data":"on","nutrition_data_prepared_per":"100g","product_name":"FLOCONS D'AVOINE"},{"brands":"","code":"40897677","nutriments":{"added-sugars":0,"added-sugars_100g":0,"added-sugars_serving":0,"added-sugars_unit":"g","added-sugars_value":0,"caffeine":0,"caffeine_1
+== searchalicious
+HTTP/2 200 
+server: nginx/1.31.5
+date: Wed, 07 Oct 2026 20:26:42 GMT
+content-type: application/json
+content-length: 1563
+access-control-allow-credentials: true
+
+{"hits":[{"code":"4013200254742","brands":["Bio Rinatura Haferflocken","Rinatura"],"nutriments":{"energy-kj_100g":1565,"sodium_100g":0.08,"fiber_100g":10,"fat_100g":7,"salt_100g":0.2,"saturated-fat_100g":1.3,"carbohydrates_100g":59,"sugars_100g":1.1,"proteins_100g":13},"product_name":"Haferflocken"},{"code":"4306188047162","brands":["Jeden Tag","Nudeln","Haferflocken"],"nutriments":{"carbohydrates_100g":59,"energy-kcal_100g":375,"fat_100g":7,"fiber_100g":10,"proteins_100g":14,"salt_100g":0.02,"saturated-fat_100g":1.3,"sodium_100g":0.008,"sugars_100g":0.7},"product_name":"Haferflocken"},{"code":"29084302","brands":["Ideal"],"nutriments":{"carbohydrates_100g":58.7,"energy-kj_100g":1566,"fat_100g":7,"fiber_100g":10,"proteins_100g":13.5,"salt_100g":0.01,"saturated-fat_100g":1.3,"sodium_100g":0.004,"sugars_100g":0.7},"product_name":"Haferflocken"}],"aggregations":null,"facets":{},"charts":{},"page":1,"page_size":3,"page_count":127,"debug":{"query":{"query":{"bool":{"should":[{"match_phrase":{"product_name.de":{"query":"haferflocken","boost":2.0}}},{"match_phrase":{"generic_name.de":{"query":"haferflocken","boost":2.0}}},{"match_phrase":{"categories.de":{"query":"haferflocken","boost":2.0}}},{"match_phrase":{"labels.de":{"query":"haferflocken","boost":2.0}}},{"match_phrase":{"brands":{"query":"haferflocken","boost":2.0}}},{"multi_match":{"query":"haferflocken","fields":["product_name.de","generic_name.de","categories.de","labels.de","brands"]}}]}},"size":3,"from":0}},"took":4,"timed_out":false,"count":381,"is_count_exact":true,"warnings":null}
+== searchalicious Origin https://jghosting.github.io
+HTTP/2 200 
+server: nginx/1.31.5
+date: Wed, 07 Oct 2026 20:26:42 GMT
+content-type: application/json
+content-length: 10162
+access-control-allow-credentials: true
+
+== searchalicious OPTIONS https://jghosting.github.io
+HTTP/2 400 
+server: nginx/1.31.5
+date: Wed, 07 Oct 2026 20:26:43 GMT
+content-type: text/plain; charset=utf-8
+content-length: 22
+vary: Origin
+access-control-allow-methods: DELETE, GET, HEAD, OPTIONS, PATCH, POST, PUT
+access-control-max-age: 600
+access-control-allow-credentials: true
+
+== searchalicious Origin null
+HTTP/2 200 
+server: nginx/1.31.5
+date: Wed, 07 Oct 2026 20:26:44 GMT
+content-type: application/json
+content-length: 10162
+access-control-allow-credentials: true
+
+== searchalicious OPTIONS null
+HTTP/2 400 
+server: nginx/1.31.5
+date: Wed, 07 Oct 2026 20:26:44 GMT
+content-type: text/plain; charset=utf-8
+content-length: 22
+vary: Origin
+access-control-allow-methods: DELETE, GET, HEAD, OPTIONS, PATCH, POST, PUT
+access-control-max-age: 600
+access-control-allow-credentials: true
+
+== cgi de
+HTTP/2 503 
+server: nginx
+date: Wed, 07 Oct 2026 20:26:46 GMT
+content-type: text/html
+content-length: 25281
+etag: "69ce3dec-62c1"
+
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Page temporarily unavailable - Open Food Facts</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Plus Jakarta Sans', sans-serif;
+            background: linear-gradient(135deg, #fdf6e3 0%, #fff8e7 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            ju
+== v2 search tags
+HTTP/2 503 
+server: nginx
+date: Wed, 07 Oct 2026 20:26:46 GMT
+content-type: text/html
+content-length: 25281
+etag: "69ce3dec-62c1"
+
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Page temporarily unavailable - Open Food Facts</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Plus Jakarta Sans', sans-serif;
+            background: linear-gradient(135deg, #fdf6e3 0%, #fff8e7 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            ju
