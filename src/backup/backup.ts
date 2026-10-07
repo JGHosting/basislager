@@ -256,7 +256,7 @@ export async function markBackupDone() { await setSetting('lastBackupAt', Date.n
 
 /* ---------- CSV ---------- */
 
-function toCsv(rows: Record<string, unknown>[], cols: string[]): string {
+export function toCsv(rows: Record<string, unknown>[], cols: string[]): string {
   const esc = (v: unknown) => {
     if (v == null) return '';
     const s = typeof v === 'number' ? String(v).replace('.', ',') : String(v);

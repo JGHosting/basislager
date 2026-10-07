@@ -16,7 +16,7 @@ export function sportColor(t: string): string {
   if (/Weight|Workout|Yoga|Elliptical/.test(t)) return 'var(--c-strength)';
   if (/Ski|Snowboard/.test(t)) return 'var(--c-snow)';
   if (/Hike|Climb/.test(t)) return 'var(--c-mountain)';
-  return 'var(--muted)';
+  return 'var(--c-other)';
 }
 
 export function dur(s: number | null | undefined): string {

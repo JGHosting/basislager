@@ -19,7 +19,8 @@
     "vite-plugin-pwa": "^2.0.0"
   },
   "dependencies": {
-    "dexie": "^4.4.6"
+    "dexie": "^4.4.6",
+    "uplot": "^1.6.32"
   },
   "type": "module"
 }

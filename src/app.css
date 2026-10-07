@@ -2,13 +2,15 @@
   --bg: #f4f2ee; --card: #ffffff; --text: #1b1e23; --muted: #6b7079; --line: #e7e3dc;
   --accent: #e0662f; --accent-soft: #fbe6dc;
   --green: #2f9e6b; --yellow: #d9a21b; --red: #d64545;
-  --c-run: #e0662f; --c-ride: #3b82c4; --c-swim: #22a3b8; --c-strength: #8a63d2; --c-snow: #7aa7d9; --c-mountain: #4f9a5c;
+  /* Sportfamilien – feste Reihenfolge, farbenblind-geprüft: Rad, Lauf, Schwimmen, Kraft, Schnee, Berg */
+  --c-ride: #2a78d6; --c-run: #eb6834; --c-swim: #1baf7a; --c-strength: #4a3aa7; --c-snow: #e87ba4; --c-mountain: #008300; --c-other: #9a9a94;
   --radius: 20px;
   color-scheme: light dark;
 }
 @media (prefers-color-scheme: dark) {
   :root { --bg: #14171c; --card: #1e2229; --text: #eef0f3; --muted: #9097a3; --line: #2c313a;
-          --accent: #f0804a; --accent-soft: #3a261d; }
+          --accent: #f0804a; --accent-soft: #3a261d;
+          --c-ride: #3987e5; --c-run: #d95926; --c-swim: #199e70; --c-strength: #9085e9; --c-snow: #d55181; --c-mountain: #008300; --c-other: #6f747c; }
 }
 * { box-sizing: border-box; }
 /* App-Gerüst: Die Seite selbst scrollt nie. Nur der Inhaltsbereich (main) scrollt.
@@ -18,7 +20,8 @@ body {
   font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif;
   -webkit-font-smoothing: antialiased; -webkit-tap-highlight-color: transparent;
 }
-#app { display: flex; flex-direction: column; height: 100vh; height: 100dvh; }
+/* Füllt immer exakt den Bildschirm (vh/dvh sind in installierten iOS-Web-Apps unzuverlässig) */
+#app { position: fixed; inset: 0; display: flex; flex-direction: column; }
 input, button { font: inherit; }
 h1 { margin: 0; font-size: 34px; letter-spacing: -0.025em; font-weight: 750; }
 h2 { margin: 0 0 10px; font-size: 18px; letter-spacing: -0.01em; }
