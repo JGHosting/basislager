@@ -4,7 +4,8 @@
  */
 import type { Activity, MorningEntry, StrengthSession, FoodLogEntry, NutritionDay, Injury, Vacation } from '../../core/db';
 import { scale } from '../nutrition/calc';
-import { CORE_GROUPS, groupLabel, coversGroup } from '../strength/strength';
+import { CORE_GROUPS, groupLabel } from '../strength/strength';
+import type { MuscleGroup } from '../../core/db';
 import { addDays, weekStart, today } from '../../core/dates';
 import { activityLoad, loadSeries, ownElevation, type HrProfile, type LoadDay } from '../load/load';
 
@@ -187,11 +188,14 @@ export const METRICS: MetricDef[] = [
     compute: (ctx, r) => {
       const x = bucketsOf(r);
       const done = ctx.strength.filter(s => !s.skipped && s.muscleGroups.length && inRange(s.date, r));
-      const colors = ['--c-ride', '--c-run', '--c-snow', '--c-swim', '--c-strength'];
-      const series: Series[] = CORE_GROUPS.map((g, gi) => {
+      // Ganzkörper ist eine eigene Säule – eine Ganzkörper-Einheit zählt einmal, nicht in jeder Gruppe.
+      // Nur Gruppen zeigen, die auch vorkommen, damit z. B. "Arme" ohne Nutzung nicht auftaucht.
+      const chart: MuscleGroup[] = [...CORE_GROUPS, 'ganzkoerper'];
+      const colors: Record<string, string> = { push: '--c-ride', pull: '--c-run', arme: '--c-snow', beine: '--c-swim', rumpf: '--c-strength', ganzkoerper: '--c-other' };
+      const series: Series[] = chart.filter(g => done.some(s => s.muscleGroups.includes(g))).map(g => {
         const m = new Map(x.map(k => [k, 0]));
-        for (const s of done) if (coversGroup(s, g)) { const k = bucketKey(s.date, r.bucket); m.set(k, (m.get(k) ?? 0) + 1); }
-        return { label: groupLabel(g), values: x.map(k => m.get(k) ?? 0), color: colors[gi], kind: 'bar' as const };
+        for (const s of done) if (s.muscleGroups.includes(g)) { const k = bucketKey(s.date, r.bucket); m.set(k, (m.get(k) ?? 0) + 1); }
+        return { label: groupLabel(g), values: x.map(k => m.get(k) ?? 0), color: colors[g], kind: 'bar' as const };
       });
       return { x, series, stacked: true, summary: { label: 'Krafteinheiten', value: done.length, prev: ctx.strength.filter(s => !s.skipped && s.muscleGroups.length && inRange(s.date, previousRange(r))).length, better: 0 } };
     }
