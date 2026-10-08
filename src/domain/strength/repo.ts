@@ -56,5 +56,23 @@ export async function dedupeStrength(): Promise<number> {
     remove.push(...list.slice(1).map(s => s.id));
   }
   if (remove.length) await db.strength.bulkDelete(remove);
-  return remove.length;
+
+  // Zweiter Durchgang: Ein Tag mit genau einer Garmin-Krafteinheit ist ein Training.
+  // Mehrere Einträge entstanden früher beim Umstellen der Muskelgruppen. Die verknüpfte
+  // Einheit bekommt den zuletzt gewählten Stand (Gruppen/Intensität), die übrigen fallen weg.
+  const left = all.filter(s => !remove.includes(s.id));
+  const byDate = new Map<string, StrengthSession[]>();
+  for (const s of left) (byDate.get(s.date) ?? byDate.set(s.date, []).get(s.date)!).push(s);
+  let merged = 0;
+  for (const list of byDate.values()) {
+    if (list.length < 2) continue;
+    const linked = list.filter(s => s.activityId);
+    if (linked.length !== 1) continue;                       // zwei getrackte Trainings = beide echt
+    const keep = linked[0];
+    const newest = list.filter(s => s.muscleGroups.length).sort((a, b) => b.updatedAt - a.updatedAt)[0] ?? keep;
+    await db.strength.put({ ...keep, muscleGroups: [...newest.muscleGroups], intensity: newest.intensity, skipped: newest.skipped, updatedAt: Date.now() });
+    await db.strength.bulkDelete(list.filter(s => s.id !== keep.id).map(s => s.id));
+    merged += list.length - 1;
+  }
+  return remove.length + merged;
 }
