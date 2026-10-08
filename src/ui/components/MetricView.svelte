@@ -8,6 +8,7 @@
   import { fmtDay } from '../../core/dates';
   import { toCsv, shareFile } from '../../backup/backup';
   import UChart from './UChart.svelte';
+  import MuscleGrid from './MuscleGrid.svelte';
 
   let { def, ctx, range }: { def: MetricDef; ctx: StatsContext; range: Range } = $props();
   let view = $state<'chart' | 'table'>('chart');
@@ -82,7 +83,11 @@
   {#if !hasData}
     <p class="muted empty">Keine Daten im Zeitraum.</p>
   {:else if view === 'chart'}
-    <UChart result={res} bucket={range.bucket} unit={def.unit} digits={def.digits} {markers} injuryMarkers={injMarkers} vacationMarkers={vacMarkers} onhover={i => (hover = i)} />
+    {#if def.heatmap}
+      <MuscleGrid result={res} bucket={range.bucket} />
+    {:else}
+      <UChart result={res} bucket={range.bucket} unit={def.unit} digits={def.digits} {markers} injuryMarkers={injMarkers} vacationMarkers={vacMarkers} onhover={i => (hover = i)} />
+    {/if}
   {:else}
     <div class="tablewrap">
       <table>

@@ -72,6 +72,8 @@ export interface MetricResult {
 }
 export interface MetricDef {
   id: string; title: string; unit: string; digits: number; group: 'training' | 'erholung' | 'koerper' | 'ernaehrung';
+  /** Als Raster (Gruppe × Zeit) statt Balken anzeigen – sinnvoll bei 0/1-Werten wie Muskelgruppen. */
+  heatmap?: boolean;
   compute: (ctx: StatsContext, r: Range) => MetricResult;
 }
 export interface StatsContext {
@@ -184,7 +186,7 @@ export const METRICS: MetricDef[] = [
   nutritionMetric('kh', 'Kohlenhydrate', 'g', 'carbs'),
   nutritionMetric('fett', 'Fett', 'g', 'fat'),
   {
-    id: 'muskeln', title: 'Muskelgruppen', unit: '×', digits: 0, group: 'training',
+    id: 'muskeln', title: 'Muskelgruppen', unit: '×', digits: 0, group: 'training', heatmap: true,
     compute: (ctx, r) => {
       const x = bucketsOf(r);
       const done = ctx.strength.filter(s => !s.skipped && s.muscleGroups.length && inRange(s.date, r));
