@@ -34,3 +34,27 @@ export async function deleteSession(id: string) { await db.strength.delete(id); 
 export async function ensureBuiltinSplits() {
   for (const s of BUILTIN_SPLITS) if (!(await db.splits.get(s.id))) await db.splits.put(s);
 }
+
+/**
+ * Entfernt doppelte Krafteinheiten, die durch einen früheren Fehler entstehen konnten
+ * (mehrfaches Eintragen am selben Tag legte jeweils eine neue Einheit an).
+ * Doppelt = gleicher Tag und exakt gleiche Muskelgruppen. Behalten wird die mit
+ * verknüpfter Aktivität, sonst die zuletzt geänderte. Unterschiedliche Einheiten
+ * am selben Tag (andere Gruppen) bleiben unangetastet.
+ */
+export async function dedupeStrength(): Promise<number> {
+  const all = await db.strength.toArray();
+  const groups = new Map<string, StrengthSession[]>();
+  for (const s of all) {
+    const key = `${s.date}|${[...s.muscleGroups].sort().join('+')}|${s.skipped ? 1 : 0}`;
+    (groups.get(key) ?? groups.set(key, []).get(key)!).push(s);
+  }
+  const remove: string[] = [];
+  for (const list of groups.values()) {
+    if (list.length < 2) continue;
+    list.sort((a, b) => Number(!!b.activityId) - Number(!!a.activityId) || b.updatedAt - a.updatedAt);
+    remove.push(...list.slice(1).map(s => s.id));
+  }
+  if (remove.length) await db.strength.bulkDelete(remove);
+  return remove.length;
+}
