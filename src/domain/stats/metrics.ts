@@ -74,6 +74,8 @@ export interface MetricDef {
   id: string; title: string; unit: string; digits: number; group: 'training' | 'erholung' | 'koerper' | 'ernaehrung';
   /** Als Raster (Gruppe × Zeit) statt Balken anzeigen – sinnvoll bei 0/1-Werten wie Muskelgruppen. */
   heatmap?: boolean;
+  /** Immer in Tagesauflösung als durchgehende Linie (echter Verlauf, kein Eimer-Schnitt), z. B. Gewicht. */
+  dayLine?: boolean;
   compute: (ctx: StatsContext, r: Range) => MetricResult;
 }
 export interface StatsContext {
@@ -149,6 +151,31 @@ function sumMetric(id: string, title: string, unit: string, digits: number, f: (
 
 const isRun = (a: Activity) => /Run/.test(a.sportType) && !!a.distance && !!a.duration;
 
+/** Gewicht: echter Verlauf als Linie über alle Messtage (kein Durchschnitt), mit Ziellinie. */
+function weightMetric(): MetricDef {
+  return {
+    id: 'gewicht', title: 'Gewicht', unit: 'kg', digits: 1, group: 'koerper', dayLine: true,
+    compute: (ctx, r) => {
+      const x = bucketsOf({ ...r, bucket: 'day' });
+      const byDate = new Map(ctx.morning.filter(m => m.weight != null).map(m => [m.date, m.weight as number]));
+      const values = x.map(d => byDate.get(d) ?? null);
+      const measured = values.filter((v): v is number => v != null);
+      const latest = [...values].reverse().find(v => v != null) ?? null;
+      const first = measured[0] ?? null;
+      const change = latest != null && first != null ? latest - first : null;
+      const fmtKg = (v: number) => v.toLocaleString('de-DE', { maximumFractionDigits: 1 });
+      let note: string | undefined;
+      if (ctx.goalWeight != null && latest != null) note = `noch ${fmtKg(Math.abs(latest - ctx.goalWeight))} kg bis Ziel (${fmtKg(ctx.goalWeight)} kg)`;
+      else if (change != null && Math.abs(change) >= 0.1) note = `${change > 0 ? '+' : '−'}${fmtKg(Math.abs(change))} kg im Zeitraum`;
+      return {
+        x, series: [{ label: 'Gewicht', values, color: '--accent', kind: 'line' }],
+        goal: ctx.goalWeight,
+        summary: { label: 'Aktuell', value: latest, prev: null, better: 0, note }
+      };
+    }
+  };
+}
+
 export const METRICS: MetricDef[] = [
   sumMetric('belastung', 'Belastung', '', 0, a => a.load ?? null),
   sumMetric('zeit', 'Trainingszeit', 'h', 1, a => (a.duration ?? a.elapsed ?? 0) / 3600),
@@ -179,7 +206,7 @@ export const METRICS: MetricDef[] = [
   morningMetric('ruhepuls', 'Ruhepuls', 'bpm', 0, 'restingHr', -1, 'erholung'),
   morningMetric('sleepscore', 'Sleep Score', '', 0, 'sleepScore', 1, 'erholung'),
   morningMetric('schlaf', 'Schlafdauer', 'h', 1, 'sleepSecs', 1, 'erholung', 1 / 3600),
-  withGoal(morningMetric('gewicht', 'Gewicht', 'kg', 1, 'weight', 0, 'koerper')),
+  weightMetric(),
   morningMetric('schmerz', 'Schmerz', '/10', 1, 'pain', -1, 'koerper'),
   nutritionMetric('kalorien', 'Kalorien', 'kcal', 'kcal'),
   nutritionMetric('protein', 'Protein', 'g', 'protein'),
@@ -233,14 +260,6 @@ function nutritionMetric(id: string, title: string, unit: string, key: 'kcal' | 
   };
 }
 
-function withGoal(def: MetricDef): MetricDef {
-  return { ...def, compute: (ctx, r) => {
-    const res = def.compute(ctx, r);
-    if (ctx.goalWeight == null) return res;
-    const cur = rolling7(ctx, [r.to], 'weight')[0];
-    return { ...res, goal: ctx.goalWeight, summary: cur != null ? { label: 'Ø 7 Tage', value: cur, prev: null, better: 0, note: `noch ${Math.abs(cur - ctx.goalWeight).toLocaleString('de-DE', { maximumFractionDigits: 1 })} kg bis Ziel (${ctx.goalWeight.toLocaleString('de-DE')} kg)` } : res.summary };
-  } };
-}
 
 /** Aktivitäten mit vorab berechneter Belastung (einmal pro Datenstand). */
 export function buildContext(activities: Activity[], morning: MorningEntry[], hr: HrProfile, strength: StrengthSession[] = [], goalWeight: number | null = null,

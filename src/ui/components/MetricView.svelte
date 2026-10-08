@@ -14,10 +14,12 @@
   let view = $state<'chart' | 'table'>('chart');
   let hover = $state<number | null>(null);
 
-  const res = $derived(def.compute(ctx, range));
-  const markers = $derived(range.bucket === 'month' ? [] : snowDays(ctx, range));
-  const injMarkers = $derived(range.bucket === 'month' ? [] : injuryDays(ctx, range));
-  const vacMarkers = $derived(range.bucket === 'month' ? [] : vacationDays(ctx, range));
+  // Manche Kennzahlen (z. B. Gewicht) wollen den echten Tagesverlauf, unabhängig vom gewählten Eimer
+  const vrange = $derived(def.dayLine ? { ...range, bucket: 'day' as const } : range);
+  const res = $derived(def.compute(ctx, vrange));
+  const markers = $derived(vrange.bucket === 'month' ? [] : snowDays(ctx, vrange));
+  const injMarkers = $derived(vrange.bucket === 'month' ? [] : injuryDays(ctx, vrange));
+  const vacMarkers = $derived(vrange.bucket === 'month' ? [] : vacationDays(ctx, vrange));
   const hasData = $derived(res.series.some(s => s.values.some(v => v != null && v !== 0)));
 
   const fmt = (v: number | null | undefined) => {
@@ -25,8 +27,8 @@
     if (def.unit === 'min/km') return `${Math.floor(v)}:${String(Math.round((v % 1) * 60)).padStart(2, '0')}`;
     return v.toLocaleString('de-DE', { maximumFractionDigits: def.digits, minimumFractionDigits: v < 10 && def.digits ? def.digits : 0 });
   };
-  const label = (d: string) => range.bucket === 'day' ? fmtDay(d, { weekday: 'short', day: '2-digit', month: '2-digit' })
-    : range.bucket === 'week' ? 'Woche ab ' + fmtDay(d, { day: '2-digit', month: '2-digit', year: '2-digit' })
+  const label = (d: string) => vrange.bucket === 'day' ? fmtDay(d, { weekday: 'short', day: '2-digit', month: '2-digit' })
+    : vrange.bucket === 'week' ? 'Woche ab ' + fmtDay(d, { day: '2-digit', month: '2-digit', year: '2-digit' })
     : fmtDay(d, { month: 'long', year: 'numeric' });
   const delta = $derived.by(() => {
     const { value, prev } = res.summary;
@@ -86,12 +88,12 @@
     {#if def.heatmap}
       <MuscleGrid result={res} bucket={range.bucket} />
     {:else}
-      <UChart result={res} bucket={range.bucket} unit={def.unit} digits={def.digits} {markers} injuryMarkers={injMarkers} vacationMarkers={vacMarkers} onhover={i => (hover = i)} />
+      <UChart result={res} bucket={vrange.bucket} unit={def.unit} digits={def.digits} {markers} injuryMarkers={injMarkers} vacationMarkers={vacMarkers} onhover={i => (hover = i)} />
     {/if}
   {:else}
     <div class="tablewrap">
       <table>
-        <thead><tr><th>{range.bucket === 'day' ? 'Tag' : range.bucket === 'week' ? 'Woche' : 'Monat'}</th>
+        <thead><tr><th>{vrange.bucket === 'day' ? 'Tag' : vrange.bucket === 'week' ? 'Woche' : 'Monat'}</th>
           {#each res.series as s}<th>{s.label}</th>{/each}</tr></thead>
         <tbody>
           {#each res.x.map((d, i) => ({ d, i })).reverse() as row}
