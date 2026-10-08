@@ -132,9 +132,9 @@ function goalPhase(g: Goal, ws: string, vacations: Vacation[]) {
 }
 
 /* ---------- Kraft ---------- */
-export const kraftCount = (ctx: PlanContext) => Math.max(1, Math.min(6, Math.round(ctx.strengthPerWeek ?? 3)));
+export const kraftCount = (ctx: PlanContext) => Math.max(0, Math.min(6, Math.round(ctx.strengthPerWeek ?? 3)));
 /** Krafttage je Anzahl (0 = Montag). Samstag (langer Lauf) bleibt immer frei. */
-export const KRAFT_DAYS: Record<number, number[]> = { 1: [0], 2: [0, 3], 3: [0, 2, 4], 4: [0, 2, 4, 6], 5: [0, 1, 2, 4, 6], 6: [0, 1, 2, 3, 4, 6] };
+export const KRAFT_DAYS: Record<number, number[]> = { 0: [], 1: [0], 2: [0, 3], 3: [0, 2, 4], 4: [0, 2, 4, 6], 5: [0, 1, 2, 4, 6], 6: [0, 1, 2, 3, 4, 6] };
 /** Kein schweres Beintraining am Tag vor dem langen Lauf (Fr) und am Tag danach (So). */
 const noLegDay = (d: number) => d === 4 || d === 6;
 /**
@@ -247,7 +247,7 @@ export function buildWeek(ws: string, ctx: PlanContext): PlanWeek {
     const raceDay = (Date.parse(g.date) - Date.parse(ws)) / 86400000;   // 0..6 in der Wettkampfwoche
     // Kraft: wie eingestellt, Taper eine weniger und leichter, Wettkampfwoche 1× leicht ohne Beine
     const n = kraftCount(ctx);
-    const kCount = phase === 'wettkampfwoche' ? 1 : phase === 'taper' ? Math.max(1, n - 1) : n;
+    const kCount = n === 0 ? 0 : phase === 'wettkampfwoche' ? 1 : phase === 'taper' ? Math.max(1, n - 1) : n;
     const kg = strengthGroups(ctx, ws, kCount);
     const kDays = KRAFT_DAYS[kCount];
     assignKraft(kDays, kg).forEach((k, i) => sessions.push(kraft(ws, k.day, `kraft${i + 1}`, k.groups, phase === 'taper' || phase === 'wettkampfwoche',

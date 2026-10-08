@@ -81,7 +81,7 @@
           <b>{goalLabel(goal)} · {fmtDay(goal.date, { day: '2-digit', month: '2-digit' })}</b>
           <small>{PHASE_LABEL[w.phase]}{w.weekNo ? ` · Woche ${w.weekNo}/${w.totalWeeks}` : ''} · noch {weeksTo(goal.date)} Wochen · ≈ {dur(w.minutes)}</small>
         {:else}
-          <b>{w.phase === 'urlaub' ? 'Urlaubswoche' : w.phase === 'erholung' ? 'Erholungswoche' : 'Standardwoche'} · {$kraftN}× Kraft · {$runs}× Laufen</b>
+          <b>{w.phase === 'urlaub' ? 'Urlaubswoche' : w.phase === 'erholung' ? 'Erholungswoche' : 'Standardwoche'} · {$kraftN ? `${$kraftN}× Kraft` : 'ohne Kraft'} · {$runs}× Laufen</b>
           <small>≈ {dur(w.minutes)} gesamt{w.runMinutes ? ` · Laufen ${dur(w.runMinutes)}` : ''}</small>
         {/if}
       </span>
@@ -103,7 +103,7 @@
       <p class="phase"><b>{PHASE_LABEL[w.phase]}</b>{w.weekNo ? ` · Woche ${w.weekNo}/${w.totalWeeks}` : ws < weekStart(goal.planStart) ? ' · Plan startet später, bis dahin Standardwoche' : ''}</p>
     {:else}
       <div class="mh"><span class="kicker">Standardwoche</span></div>
-      <h2>{$kraftN}× Kraft · {$runs}× Laufen</h2>
+      <h2>{$kraftN ? `${$kraftN}× Kraft` : 'ohne Kraft'} · {$runs}× Laufen</h2>
       <p class="muted small">Laufumfang steigt langsam mit dir mit, nach 3 Wochen folgt eine leichtere (Urlaub zählt mit). Außerplanmäßiges Training wird eingerechnet. {w.phase === 'erholung' ? 'Diese Woche: Erholungswoche.' : ''}</p>
       <div class="seg"><span class="muted small">Läufe pro Woche</span>
         {#each [2, 3] as n}<button class:on={$runs === n} onclick={() => setRunsPerWeek(n as 2 | 3)}>{n}×</button>{/each}

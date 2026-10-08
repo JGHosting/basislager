@@ -18,7 +18,7 @@
   <section class="card per">
     <span>Krafttraining pro Woche</span>
     <div class="seg" role="radiogroup" aria-label="Krafttraining pro Woche">
-      {#each [1, 2, 3, 4, 5, 6] as n}<button role="radio" aria-checked={$q.perWeek === n} class:on={$q.perWeek === n} onclick={() => setStrengthPerWeek(n)}>{n}×</button>{/each}
+      {#each [0, 1, 2, 3, 4, 5, 6] as n}<button role="radio" aria-checked={$q.perWeek === n} class:on={$q.perWeek === n} onclick={() => setStrengthPerWeek(n)}>{n}×</button>{/each}
     </div>
   </section>
   <section class="card list">
@@ -50,7 +50,7 @@
   .list { padding: 4px 16px; }
   .per { padding: 14px 16px; }
   .per > span { display: block; font-size: 15px; margin-bottom: 10px; }
-  .seg { display: grid; grid-template-columns: repeat(6, 1fr); gap: 4px; background: var(--bg); border-radius: 12px; padding: 4px; }
+  .seg { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; background: var(--bg); border-radius: 12px; padding: 4px; }
   .seg button { border: none; background: none; font: inherit; font-size: 15px; font-weight: 600; color: var(--muted); padding: 9px 0; border-radius: 9px; cursor: pointer; }
   .seg button.on { background: var(--accent); color: #fff; }
   .opt { width: 100%; display: flex; gap: 12px; align-items: center; text-align: left; background: none; border: none; border-top: 1px solid var(--line);

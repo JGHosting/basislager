@@ -66,7 +66,7 @@ export async function saveEvent(e: Omit<FixedEvent, 'id' | 'createdAt' | 'update
 }
 export async function deleteEvent(id: string) { await db.fixedEvents.delete(id); }
 export const setRunsPerWeek = (n: 2 | 3) => setSetting('runsPerWeek', n);
-export const setStrengthPerWeek = (n: number) => setSetting('strengthPerWeek', Math.max(1, Math.min(6, Math.round(n))));
+export const setStrengthPerWeek = (n: number) => setSetting('strengthPerWeek', Math.max(0, Math.min(6, Math.round(n))));
 
 /** Wenig Grundlage? (Laufumfang der letzten 4 Wochen sehr gering) → Startempfehlung früher. */
 export async function lowBase(sport: Goal['sport']): Promise<boolean> {
