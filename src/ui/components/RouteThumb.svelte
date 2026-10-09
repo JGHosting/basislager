@@ -52,15 +52,14 @@
     const cx = (lon2x(minLon, z) + lon2x(maxLon, z)) / 2 * TILE;
     const cy = (lat2y(minLat, z) + lat2y(maxLat, z)) / 2 * TILE;
     const ox = cx - w / 2, oy = cy - h / 2;
-    const sub = ['a', 'b', 'c', 'd'], style = darkMode ? 'dark_all' : 'light_all';
-    const r2 = (window.devicePixelRatio || 1) > 1 ? '@2x' : '';
     const max = Math.pow(2, z);
     const tiles: { left: number; top: number; url: string }[] = [];
+    // OpenStreetMap-Standardkacheln (schlüssellos); Verdunkeln/Verblassen passiert per CSS-Filter
     for (let x = Math.floor(ox / TILE); x <= Math.floor((ox + w) / TILE); x++)
       for (let y = Math.floor(oy / TILE); y <= Math.floor((oy + h) / TILE); y++) {
         if (y < 0 || y >= max) continue;
         const tx = ((x % max) + max) % max;
-        tiles.push({ left: x * TILE - ox, top: y * TILE - oy, url: `https://${sub[(tx + y) % 4]}.basemaps.cartocdn.com/${style}/${z}/${tx}/${y}${r2}.png` });
+        tiles.push({ left: x * TILE - ox, top: y * TILE - oy, url: `https://tile.openstreetmap.org/${z}/${tx}/${y}.png` });
       }
     const d = 'M' + r.map(([la, lo]) => `${(lon2x(lo, z) * TILE - ox).toFixed(1)} ${(lat2y(la, z) * TILE - oy).toFixed(1)}`).join('L');
     return { w, h, tiles, d };
@@ -75,12 +74,12 @@
 </script>
 
 {#if route && route.length >= 2}
-  <span class="thumb" class:wide bind:clientWidth={cw} bind:clientHeight={ch} style={wide ? '' : `width: ${size}px; height: ${size}px`}>
+  <span class="thumb" class:wide class:dark={darkMode} bind:clientWidth={cw} bind:clientHeight={ch} style={wide ? '' : `width: ${size}px; height: ${size}px`}>
     {#if map}
-      {#each map.tiles as t}<img class="tile" src={t.url} alt="" loading="lazy" style="left: {t.left}px; top: {t.top}px" onerror={e => (e.currentTarget.style.visibility = 'hidden')} />{/each}
+      <span class="tiles">{#each map.tiles as t}<img class="tile" src={t.url} alt="" loading="lazy" style="left: {t.left}px; top: {t.top}px" onerror={e => (e.currentTarget.style.visibility = 'hidden')} />{/each}</span>
       <span class="scrim"></span>
       <svg class="over" viewBox="0 0 {map.w} {map.h}" preserveAspectRatio="none"><path d={map.d} /></svg>
-      {#if wide}<span class="attr">© OpenStreetMap, © CARTO</span>{/if}
+      {#if wide}<span class="attr">© OpenStreetMap-Mitwirkende</span>{/if}
     {:else if shape}
       <svg class="shape" viewBox="-0.08 -0.08 {shape.w + 0.16} {shape.h + 0.16}" preserveAspectRatio="xMidYMid meet"><path d={shape.d} /></svg>
     {/if}
@@ -96,8 +95,13 @@
              linear-gradient(145deg, color-mix(in srgb, var(--text) 10%, var(--card)), color-mix(in srgb, var(--text) 3%, var(--card)));
            box-shadow: inset 0 0 0 1px var(--line); }
   .thumb.wide { display: block; width: 100%; height: 150px; border-radius: 16px; margin: 2px 0 10px; }
+  .tiles { position: absolute; inset: 0; }
   .tile { position: absolute; width: 256px; height: 256px; }
-  .scrim { position: absolute; inset: 0; background: color-mix(in srgb, var(--bg) 22%, transparent); }
+  /* Helle Karte: entsättigt und etwas verblasst */
+  .thumb:not(.dark) .tiles { filter: grayscale(.55) brightness(1.03) contrast(.9); }
+  /* Dunkle Karte: invertiert zu einem ruhigen Dark-Style */
+  .thumb.dark .tiles { filter: invert(1) hue-rotate(180deg) brightness(.85) contrast(.9) grayscale(.35); }
+  .scrim { position: absolute; inset: 0; background: color-mix(in srgb, var(--bg) 30%, transparent); }
   .over { position: absolute; inset: 0; width: 100%; height: 100%; }
   .over path { fill: none; stroke: var(--accent); stroke-width: 3; stroke-linejoin: round; stroke-linecap: round; paint-order: stroke;
                filter: drop-shadow(0 0 1.5px rgba(0,0,0,.5)); }
