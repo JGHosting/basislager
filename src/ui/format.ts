@@ -37,14 +37,23 @@ export function paceStr(mps: number): string {
   return `${s === 60 ? m + 1 : m}:${String(s === 60 ? 0 : s).padStart(2, '0')}`;
 }
 export const speedStr = (mps: number) => (mps * 3.6).toLocaleString('de-DE', { maximumFractionDigits: 1 });
-const isFoot = (t: string) => /Run|Walk|Hike|Snowshoe/.test(t);
-/** Kurze Fakten für die Aktivitätsliste: Distanz, Tempo/Pace, Puls, Höhe. */
+/** Schwimm-Pace als mm:ss pro 100 m. */
+const pace100 = (dist: number, sec: number) => { const s = Math.round(sec / (dist / 100)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')} /100m`; };
+/**
+ * Nur die für die Sportart relevanten Kurzfakten (Dauer steht schon in der Zeile darüber):
+ * Kraft/Yoga: nichts · Laufen: Distanz + Pace · Bergsport: Distanz + Höhenmeter · Rad: Distanz + Tempo · Schwimmen: Distanz + Pace/100 m.
+ */
 export function activityFacts(a: { sportType: string; distance: number | null; duration: number | null; elapsed: number | null; avgHr: number | null }, elev: number | null): string[] {
-  const out: string[] = [];
-  const dist = a.distance, sec = a.duration ?? a.elapsed;
-  if (dist && dist > 0) out.push(km(dist));
-  if (dist && sec && dist > 50) out.push(isFoot(a.sportType) ? paceStr(dist / sec) + ' /km' : speedStr(dist / sec) + ' km/h');
-  if (a.avgHr) out.push('♥ ' + Math.round(a.avgHr));
-  if (elev && elev >= 20) out.push(Math.round(elev) + ' hm');
-  return out;
+  const t = a.sportType, dist = a.distance, sec = a.duration ?? a.elapsed;
+  const kmS = dist && dist > 0 ? km(dist) : null;
+  const paceS = dist && sec && dist > 50 ? paceStr(dist / sec) + ' /km' : null;
+  const spdS = dist && sec && dist > 50 ? speedStr(dist / sec) + ' km/h' : null;
+  const hmS = elev && elev >= 20 ? Math.round(elev) + ' hm' : null;
+  const keep = (...xs: (string | null)[]) => xs.filter((x): x is string => !!x);
+  if (/Weight|Workout|Crossfit|HighIntensity|Yoga|Pilates|Elliptical|StairStepper/.test(t)) return [];
+  if (/Ride|EBike|Velomobile|Handcycle/.test(t)) return keep(kmS, spdS);
+  if (/Hike|Snowshoe|AlpineSki|BackcountrySki|NordicSki|Snowboard|RockClimb|Mountaineering/.test(t)) return keep(kmS, hmS);
+  if (/Swim/.test(t)) return keep(kmS, dist && sec ? pace100(dist, sec) : null);
+  if (/Run|VirtualRun|TrailRun/.test(t)) return keep(kmS, paceS);
+  return keep(kmS);
 }

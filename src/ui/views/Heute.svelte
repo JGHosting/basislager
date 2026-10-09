@@ -36,8 +36,8 @@
 
   const morning = liveQuery(() => db.morning.where('date').between(addDays(t, -14), t, true, true).toArray());
   const week = liveQuery(() => db.activities.where('date').between(ws, addDays(ws, 6), true, true).toArray());
-  // Aktivitäten der letzten 30 Tage (nicht nur eine feste Anzahl)
-  const recent = liveQuery(() => db.activities.where('date').aboveOrEqual(addDays(today(), -30)).toArray());
+  // Aktivitäten der letzten 6 Monate, nach Monat gruppiert
+  const recent = liveQuery(() => db.activities.where('date').aboveOrEqual(addDays(today(), -183)).toArray());
   const total = liveQuery(() => db.activities.count());
   const strengthByAct = liveQuery(async () => new Map((await db.strength.toArray()).filter(s => s.activityId).map(s => [s.activityId!, s])));
 
@@ -65,6 +65,17 @@
   });
 
   const sortedRecent = $derived(($recent ?? []).slice().sort((a, b) => b.start.localeCompare(a.start)));
+  // Nach Monat gruppieren (neuester zuerst)
+  const byMonth = $derived.by(() => {
+    const groups: { key: string; label: string; items: typeof sortedRecent }[] = [];
+    for (const a of sortedRecent) {
+      const key = a.date.slice(0, 7);
+      let g = groups.find(x => x.key === key);
+      if (!g) { g = { key, label: fmtDay(key + '-01', { month: 'long', year: 'numeric' }), items: [] }; groups.push(g); }
+      g.items.push(a);
+    }
+    return groups;
+  });
 </script>
 
 <header class="page-head">
@@ -182,25 +193,30 @@
     {#if sortedRecent.length === 0}
       <p class="muted">Noch keine Aktivitäten gespeichert.</p>
     {/if}
-    <ul class="acts">
-      {#each sortedRecent as a (a.id)}
-        {@const ss = $strengthByAct?.get(a.id)}
-        {@const facts = activityFacts(a, ownElevation(a))}
-        <li class="tap" role="button" tabindex="0" onclick={() => openActivity(a.id)} onkeydown={e => e.key === 'Enter' && openActivity(a.id)}>
-          <SportIcon type={a.sportType} size={44} />
-          <div class="main">
-            <strong>{sportName(a.sportType)}{ss && !ss.skipped ? ' · ' + ss.muscleGroups.map(groupLabel).join(' + ') : ''}</strong>
-            <span class="when muted">{fmtDay(a.date)} · {dur(a.duration ?? a.elapsed)}{ss?.intensity ? ` · Intensität ${ss.intensity}/10` : a.name ? ' · ' + a.name : ''}</span>
-            {#if facts.length}<span class="facts">{facts.join('   ')}</span>{/if}
-          </div>
-          <RouteThumb {a} size={52} />
-        </li>
-      {/each}
-    </ul>
+    {#each byMonth as m (m.key)}
+      <h3 class="month">{m.label}</h3>
+      <ul class="acts">
+        {#each m.items as a (a.id)}
+          {@const ss = $strengthByAct?.get(a.id)}
+          {@const facts = activityFacts(a, ownElevation(a))}
+          <li class="tap" role="button" tabindex="0" onclick={() => openActivity(a.id)} onkeydown={e => e.key === 'Enter' && openActivity(a.id)}>
+            <SportIcon type={a.sportType} size={44} />
+            <div class="main">
+              <strong>{sportName(a.sportType)}{ss && !ss.skipped ? ' · ' + ss.muscleGroups.map(groupLabel).join(' + ') : ''}</strong>
+              <span class="when muted">{fmtDay(a.date)} · {dur(a.duration ?? a.elapsed)}{ss?.intensity ? ` · Intensität ${ss.intensity}/10` : a.name ? ' · ' + a.name : ''}</span>
+              {#if facts.length}<span class="facts">{facts.join('   ')}</span>{/if}
+            </div>
+            <RouteThumb {a} size={52} />
+          </li>
+        {/each}
+      </ul>
+    {/each}
   </section>
 {/if}
 
 <style>
+  .month { font-size: 13px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); font-weight: 600; margin: 18px 2px 2px; }
+  .month:first-of-type { margin-top: 4px; }
   .card-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-bottom: 10px; }
   .card-head h2 { margin: 0; }
   .tag { border: none; font-family: inherit; cursor: pointer; font-size: 13px; color: var(--accent); background: var(--accent-soft); padding: 3px 9px; border-radius: 99px; font-weight: 600; }

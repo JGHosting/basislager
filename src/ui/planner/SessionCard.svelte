@@ -5,7 +5,7 @@
   import { openStrength, openActivity } from '../app.svelte';
   import SportIcon from '../components/SportIcon.svelte';
   let { s, compact = false }: { s: PlanSession; compact?: boolean } = $props();
-  let open = $state(false), moving = $state(false);
+  let open = $state(false), moving = $state(false), editing = $state(false);
   const ws = $derived(weekStart(s.origDate));
   // Verschieben innerhalb derselben Woche (ab heute)
   const days = $derived(Array.from({ length: 7 }, (_, i) => addDays(ws, i)).filter(d => d >= today()));
@@ -13,7 +13,7 @@
 </script>
 
 <div class="sess {s.status}" class:race={s.sport === 'wettkampf'}>
-  <button class="main" onclick={() => (open = !open)} aria-expanded={open}>
+  <button class="main" onclick={() => { open = !open; if (!open) editing = false; }} aria-expanded={open}>
     <SportIcon type={s.sport} size={34} done={s.status === 'erledigt'} />
     <span class="txt">
       <b>{s.title}</b>
@@ -27,13 +27,18 @@
     {#if s.notes.length && compact}{#each s.notes as n}<p class="note">{n}</p>{/each}{/if}
     {#if !moving}
       <div class="acts">
-        {#if s.activityId}<button class="pri" onclick={() => openActivity(s.activityId!)}>Aktivität ansehen</button>{/if}
-        {#if s.status !== 'erledigt'}<button onclick={() => editSession(s.key, { status: 'erledigt' })}>Erledigt</button>{/if}
-        {#if s.status !== 'ausgelassen'}<button onclick={() => editSession(s.key, { status: 'ausgelassen' })}>Auslassen</button>{/if}
-        {#if s.sport !== 'wettkampf'}<button onclick={() => (moving = true)}>Verschieben</button>{/if}
-        {#if s.status !== 'offen' || s.moved}<button onclick={() => editSession(s.key, null)}>Zurücksetzen</button>{/if}
-        {#if s.sport === 'kraft' && s.status === 'erledigt'}<button onclick={() => openStrength(s.activityId ? { activityId: s.activityId } : { date: s.date })}>Muskelgruppen ändern</button>{/if}
+        {#if s.activityId}<button class="pri" onclick={() => openActivity(s.activityId!)}>Details</button>{/if}
+        <button class:pri={!s.activityId} onclick={() => (editing = !editing)} aria-expanded={editing}>Bearbeiten</button>
       </div>
+      {#if editing}
+        <div class="acts edit">
+          {#if s.status !== 'erledigt'}<button onclick={() => editSession(s.key, { status: 'erledigt' })}>Erledigt</button>{/if}
+          {#if s.status !== 'ausgelassen'}<button onclick={() => editSession(s.key, { status: 'ausgelassen' })}>Auslassen</button>{/if}
+          {#if s.sport !== 'wettkampf'}<button onclick={() => (moving = true)}>Verschieben</button>{/if}
+          {#if s.status !== 'offen' || s.moved}<button onclick={() => editSession(s.key, null)}>Zurücksetzen</button>{/if}
+          {#if s.sport === 'kraft' && s.status === 'erledigt'}<button onclick={() => openStrength(s.activityId ? { activityId: s.activityId } : { date: s.date })}>Muskelgruppen ändern</button>{/if}
+        </div>
+      {/if}
     {:else}
       <div class="days">
         {#each days as d}<button class:on={d === s.date} onclick={() => { editSession(s.key, { movedTo: d === s.origDate ? undefined : d }); moving = false; }}>{fmtDay(d, { weekday: 'short' })}<small>{fmtDay(d, { day: '2-digit', month: '2-digit' })}</small></button>{/each}
@@ -54,6 +59,7 @@
   .det { font-size: 14px; line-height: 1.45; margin: 0 0 8px; }
   .note { font-size: 12px; color: var(--yellow); margin: -4px 0 8px 20px; }
   .acts, .days { display: flex; flex-wrap: wrap; gap: 6px; padding-bottom: 10px; }
+  .acts.edit { padding-top: 2px; padding-left: 10px; border-left: 2px solid var(--line); margin-bottom: 4px; }
   .acts button, .days button { border: 1px solid var(--line); background: var(--card); color: var(--text); border-radius: 10px; padding: 7px 10px; font: inherit; font-size: 13px; cursor: pointer; min-height: 36px; }
   .days button { display: flex; flex-direction: column; align-items: center; min-width: 52px; } .days small { font-size: 11px; color: var(--muted); }
   .acts button.pri { border-color: var(--accent); color: var(--accent); font-weight: 600; }
