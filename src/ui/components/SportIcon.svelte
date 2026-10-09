@@ -24,8 +24,8 @@
   const color = $derived(kind === 'race' ? 'var(--red)' : sportColor(type));
 </script>
 
-<span class="tile" class:flat style="--c: {color}; width: {size}px; height: {size}px; border-radius: {Math.round(size * 0.3)}px">
-  <svg viewBox="0 0 24 24" aria-hidden="true" style="width: {Math.round(size * 0.58)}px; height: {Math.round(size * 0.58)}px">
+<span class="tile" class:flat style="--c: {color}; width: {size}px; height: {size}px; border-radius: {Math.round(size * 0.28)}px">
+  <svg class="glyph" viewBox="0 0 24 24" aria-hidden="true" style="width: {Math.round(size * 0.6)}px; height: {Math.round(size * 0.6)}px">
     {#if kind === 'run'}
       <circle cx="14" cy="5" r="1.6" /><path d="M7 9l4-1 3 3 3 1 M11 8l-1.5 4 3.5 3 .5 5 M14 15l-4-1-2.5 4" />
     {:else if kind === 'walk'}
@@ -58,11 +58,19 @@
 </span>
 
 <style>
+  /* Farbiger „Liquid Glass“-Look: glänzende Kachel in der Sportfarbe, weiße Glyphe mit sanfter Tiefe. */
   .tile { position: relative; flex-shrink: 0; display: inline-grid; place-items: center;
-          background: color-mix(in srgb, var(--c) 16%, var(--card)); }
-  .tile.flat { background: none; }
-  svg { fill: none; stroke: var(--c); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; display: block; }
+          background:
+            linear-gradient(150deg, rgba(255,255,255,.45), rgba(255,255,255,0) 46%),
+            radial-gradient(130% 90% at 28% 12%, rgba(255,255,255,.35), rgba(255,255,255,0) 55%),
+            linear-gradient(158deg, color-mix(in srgb, var(--c) 68%, white), var(--c) 82%, color-mix(in srgb, var(--c) 82%, black));
+          box-shadow: inset 0 1px 0 rgba(255,255,255,.55), inset 0 -2px 5px rgba(0,0,0,.18),
+                      inset 0 0 0 .5px rgba(255,255,255,.3), 0 2px 5px rgba(0,0,0,.2); }
+  .glyph { display: block; fill: none; stroke: #fff; stroke-width: 2.1; stroke-linecap: round; stroke-linejoin: round;
+           filter: drop-shadow(0 1px 1.2px rgba(0,0,0,.28)); }
+  .tile.flat { background: none; box-shadow: none; }
+  .tile.flat .glyph { stroke: var(--c); filter: none; }
   .badge { position: absolute; right: -3px; bottom: -3px; width: 15px; height: 15px; border-radius: 50%;
            background: var(--green); display: grid; place-items: center; box-shadow: 0 0 0 2px var(--card); }
-  .badge svg { width: 10px; height: 10px; stroke: #fff; stroke-width: 3.2; }
+  .badge svg { width: 10px; height: 10px; fill: none; stroke: #fff; stroke-width: 3.2; stroke-linecap: round; stroke-linejoin: round; }
 </style>
