@@ -80,7 +80,7 @@ export const icu = {
   activity: (c: Credentials, id: string) => get<Record<string, unknown>>(c, `/activity/${encodeURIComponent(id)}`),
   /** Zeitreihen einer Aktivität (hier: Puls + Zeit), für eigene Zonenberechnung. */
   streams: (c: Credentials, id: string, types: string[]) =>
-    get<{ type: string; data: (number | null)[] }[]>(c, `/activity/${encodeURIComponent(id)}/streams?types=${types.join(',')}`),
+    get<{ type: string; data: (number | null)[]; data2?: (number | null)[] }[]>(c, `/activity/${encodeURIComponent(id)}/streams?types=${types.join(',')}`),
   wellness: (c: Credentials, oldest: string, newest: string) =>
     get<IcuWellness[]>(c, `/athlete/${c.athleteId}/wellness?oldest=${oldest}&newest=${newest}`),
   /** Beste Pace-Kurven (Laufen) über die angegebenen Zeiträume, z. B. ['all', '1y']. */

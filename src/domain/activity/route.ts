@@ -3,13 +3,33 @@
  * Wird einmal von intervals.icu geholt (latlng-Stream), vereinfacht und lokal gespeichert
  * (Teil von activity.extra, also offline verfügbar und im Backup). Danach kein Netz mehr nötig.
  */
-import { db, getSetting, type Activity } from '../../core/db';
+import { db, getSetting, setSetting, type Activity } from '../../core/db';
 import { icu, type Credentials } from '../../sources/intervals/client';
 
 /** Sportarten mit GPS-Spur draußen (Indoor/Virtual ausgeschlossen). */
 export const hasGps = (t: string) =>
   /Run|Ride|Walk|Hike|Ski|Snowboard|Snowshoe|OpenWaterSwim|Kayak|Canoe|Row|Surf|Paddl|Climb|Golf|InlineSkate|IceSkate/.test(t)
   && !/Virtual/.test(t);
+
+/**
+ * intervals.icu liefert den latlng-Stream als zwei getrennte Arrays:
+ * data = Breitengrade, data2 = Längengrade. Ältere Annahme war [lat,lng]-Paare – beides abfangen.
+ */
+export function toLatLng(data: (number | null)[] | undefined, data2?: (number | null)[]): [number, number][] {
+  if (!Array.isArray(data)) return [];
+  if (data2 && Array.isArray(data2)) {
+    const n = Math.min(data.length, data2.length);
+    const out: [number, number][] = [];
+    for (let i = 0; i < n; i++) if (data[i] != null && data2[i] != null) out.push([data[i] as number, data2[i] as number]);
+    return out;
+  }
+  // Fallback: schon als Paare [lat,lng] oder Objekte {lat,lng}
+  return (data as unknown[]).map(p => {
+    if (Array.isArray(p)) return [p[0], p[1]] as [number, number];
+    if (p && typeof p === 'object') { const o = p as Record<string, number>; return [o.lat ?? o.latitude, o.lng ?? o.lon ?? o.longitude] as [number, number]; }
+    return [NaN, NaN] as [number, number];
+  });
+}
 
 /** latlng → auf 0..1 normierte Punkte (Seitenverhältnis erhalten, y nach unten). */
 export function projectRoute(latlng: [number, number][]): [number, number][] | null {
@@ -43,8 +63,8 @@ export async function ensureRoute(a: Activity): Promise<[number, number][] | nul
       const c = await getSetting<Credentials>('intervals');
       if (!c) return null;
       const st = await icu.streams(c, a.sourceId, ['latlng']);
-      const data = st.find(x => x.type === 'latlng')?.data as unknown as [number, number][] | undefined;
-      const route = data ? projectRoute(data) : null;
+      const ll = st.find(x => x.type === 'latlng');
+      const route = ll ? projectRoute(toLatLng(ll.data, ll.data2)) : null;
       await save(a, route);
       return route;
     } catch { return null; }   // keine Spur verfügbar – nicht als "null" speichern, später erneut versuchen
@@ -58,4 +78,17 @@ async function save(a: Activity, route: [number, number][] | null) {
   const cur = await db.activities.get(a.id);
   if (!cur) return;
   await db.activities.update(a.id, { extra: { ...(cur.extra ?? { fetchedAt: Date.now() }), route }, updatedAt: Date.now() });
+}
+
+/** Einmalig: alte (falsch gespeicherte) Routen zurücksetzen, damit sie neu geholt werden. */
+export async function resetRoutes(): Promise<void> {
+  if (await getSetting<boolean>('routesFixedV2')) return;
+  const all = await db.activities.toArray();
+  for (const a of all) {
+    if (a.extra && a.extra.route !== undefined) {
+      const extra = { ...a.extra }; delete extra.route;
+      await db.activities.update(a.id, { extra });
+    }
+  }
+  await setSetting('routesFixedV2', true);
 }
