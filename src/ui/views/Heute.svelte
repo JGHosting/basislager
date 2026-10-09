@@ -36,7 +36,8 @@
 
   const morning = liveQuery(() => db.morning.where('date').between(addDays(t, -14), t, true, true).toArray());
   const week = liveQuery(() => db.activities.where('date').between(ws, addDays(ws, 6), true, true).toArray());
-  const recent = liveQuery(() => db.activities.orderBy('date').reverse().limit(8).toArray());
+  // Aktivitäten der letzten 30 Tage (nicht nur eine feste Anzahl)
+  const recent = liveQuery(() => db.activities.where('date').aboveOrEqual(addDays(today(), -30)).toArray());
   const total = liveQuery(() => db.activities.count());
   const strengthByAct = liveQuery(async () => new Map((await db.strength.toArray()).filter(s => s.activityId).map(s => [s.activityId!, s])));
 
