@@ -27,31 +27,31 @@
 <span class="tile" class:flat style="--c: {color}; width: {size}px; height: {size}px; border-radius: {Math.round(size * 0.3)}px">
   <svg viewBox="0 0 24 24" aria-hidden="true" style="width: {Math.round(size * 0.58)}px; height: {Math.round(size * 0.58)}px">
     {#if kind === 'run'}
-      <circle cx="15.5" cy="4.5" r="1.9" /><path d="M13 9l-3 2 1 4-3 4 M13 9l3-1 2 3 3 1 M13 9l-2.5-.5-3 2.5" />
+      <circle cx="14" cy="5" r="1.6" /><path d="M7 9l4-1 3 3 3 1 M11 8l-1.5 4 3.5 3 .5 5 M14 15l-4-1-2.5 4" />
     {:else if kind === 'walk'}
-      <circle cx="13" cy="4.3" r="1.8" /><path d="M12 8l-1.5 5 2 2.5 1 5 M10.5 13l-2.5 2 M13 10.5l3 1.5" />
+      <circle cx="13.5" cy="4.5" r="1.6" /><path d="M13.5 7.5l-1.5 4.5 3 2.5 1 5.5 M12 12l-3.5 2.5-.5 3 M13.5 9l3 1.5" />
     {:else if kind === 'hike'}
-      <circle cx="12.5" cy="4.2" r="1.8" /><path d="M11.5 8l-1 5 2.5 3 1.5 4 M10.5 13l-2.5 2.5 M12.5 10.5l3.5 2 M18 4v16" />
+      <circle cx="12.5" cy="4.5" r="1.6" /><path d="M12.5 7.5l-1.5 4.5 3 2.5 1 5.5 M11 12l-3 2.5-.5 3 M12.5 9l3 1.5" /><path d="M18 4.5v15.5" />
     {:else if kind === 'ride'}
-      <circle cx="5.5" cy="16.5" r="3.3" /><circle cx="18.5" cy="16.5" r="3.3" /><path d="M5.5 16.5l4-6h5l-3.5 6 M9.5 10.5l2.5 6h6.5 M13.5 7h2.5" /><circle cx="14" cy="4.6" r="1.4" />
+      <circle cx="6" cy="16.5" r="3.5" /><circle cx="18" cy="16.5" r="3.5" /><path d="M6 16.5l3.5-6h5 M9 10.5l3 6h6 M14.5 7.5h2.5" /><circle cx="15" cy="5" r="1.4" />
     {:else if kind === 'swim'}
-      <circle cx="17" cy="7" r="1.8" /><path d="M3 16.5c1.6 0 1.6 1.3 3.2 1.3s1.6-1.3 3.2-1.3 1.6 1.3 3.2 1.3 1.6-1.3 3.2-1.3 1.6 1.3 3.2 1.3 M6 13l5-2.5 2.5 2 M11 10.5l3.5-2.5" />
+      <circle cx="17.5" cy="7" r="1.7" /><path d="M5.5 13l4-2.5 3 2 3-3" /><path d="M3 17.5c1.4 0 1.8-1 3.2-1s1.8 1 3.2 1 1.8-1 3.2-1 1.8 1 3.2 1 1.8-1 3.2-1" />
     {:else if kind === 'row'}
-      <path d="M3.5 15q8.5 4.5 17 0 M9 15l-3.5-4.5 M15 15l3.5-4.5" />
+      <path d="M3 15.5q9 5 18 0" /><path d="M9 15l-3-4" /><path d="M15 15l3-4" /><circle cx="19" cy="7.5" r="1.3" />
     {:else if kind === 'strength'}
-      <path d="M4 9v6 M7 7.5v9 M17 7.5v9 M20 9v6 M7 12h10" />
+      <path d="M4 10v4 M7 8v8 M17 8v8 M20 10v4 M7 12h10" />
     {:else if kind === 'ski'}
-      <path d="M4 19l15-5 M6.5 12l2 7 M18 7.5l-3 9.5 M5 17.5l13.5-4.5" /><circle cx="15.5" cy="5" r="1.6" />
+      <circle cx="15" cy="5" r="1.5" /><path d="M14.5 7l-1.5 4 2.5 2 .5 3.5" /><path d="M9.5 9l3.5-1" /><path d="M4 18l15.5-4.5" /><path d="M5.3 19.8l15.5-4.5" />
     {:else if kind === 'snowboard'}
-      <path d="M6 17c2 2 11-7 13-10-2-2-11 7-13 10Z M10 13l1.8 1.8 M13.2 9.8l1.8 1.8" />
+      <path d="M6.4 17.6c-.6-.6-.6-1.5 0-2.1L15.5 6.4c.6-.6 1.5-.6 2.1 0s.6 1.5 0 2.1L8.5 17.6c-.6.6-1.5.6-2.1 0Z" /><path d="M9.8 13.2l1.6 1.6" /><path d="M12.8 10.2l1.6 1.6" />
     {:else if kind === 'climb'}
-      <path d="M12 3l7 18H5z M12 9l3.5 8 M12 9l-3.5 8" />
+      <path d="M4 21l6-14 5 7 2-3 3 10z" />
     {:else if kind === 'yoga'}
-      <circle cx="12" cy="5" r="1.9" /><path d="M12 8v6 M6 20c0-3 3-6 6-6s6 3 6 6 M8.5 12l7 0" />
+      <circle cx="12" cy="4.5" r="1.6" /><path d="M12 7v6 M12 13l-5 2 M12 13l5 2 M8.5 11.5h7" />
     {:else if kind === 'race'}
-      <path d="M7 4h10v3a5 5 0 0 1-10 0z M7 5H4.5v1.5A2.5 2.5 0 0 0 7 9 M17 5h2.5v1.5A2.5 2.5 0 0 1 17 9 M12 12v3 M9 20h6 M10 17.5h4" />
+      <path d="M7 4h10v4.5a5 5 0 0 1-10 0z" /><path d="M7 5.5H4.5v1.5a3 3 0 0 0 3 3" /><path d="M17 5.5h2.5v1.5a3 3 0 0 1-3 3" /><path d="M12 13.5V17" /><path d="M8.5 20.5h7" /><path d="M9.5 20.5l.7-3.5h3.6l.7 3.5" />
     {:else}
-      <circle cx="12" cy="12" r="3.3" /><path d="M12 3v3 M12 18v3 M3 12h3 M18 12h3" />
+      <path d="M3 12h4l2.5-6 5 13 2.5-7H21" />
     {/if}
   </svg>
   {#if done}<span class="badge"><svg viewBox="0 0 24 24"><path d="M5 12.5l4 4 10-10" /></svg></span>{/if}
