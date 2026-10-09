@@ -3,9 +3,9 @@
   import { editSession } from '../../domain/planner/repo';
   import { addDays, weekStart, fmtDay, today } from '../../core/dates';
   import { openStrength, openActivity } from '../app.svelte';
+  import SportIcon from '../components/SportIcon.svelte';
   let { s, compact = false }: { s: PlanSession; compact?: boolean } = $props();
   let open = $state(false), moving = $state(false);
-  const COLOR: Record<string, string> = { kraft: 'var(--c-strength)', lauf: 'var(--c-run)', trail: 'var(--c-mountain)', rad: 'var(--c-ride)', schwimmen: 'var(--c-swim)', gehen: 'var(--c-mountain)', wettkampf: 'var(--red)' };
   const ws = $derived(weekStart(s.origDate));
   // Verschieben innerhalb derselben Woche (ab heute)
   const days = $derived(Array.from({ length: 7 }, (_, i) => addDays(ws, i)).filter(d => d >= today()));
@@ -14,7 +14,7 @@
 
 <div class="sess {s.status}" class:race={s.sport === 'wettkampf'}>
   <button class="main" onclick={() => (open = !open)} aria-expanded={open}>
-    <span class="dot" style="background: {COLOR[s.sport]}"></span>
+    <SportIcon type={s.sport} size={34} done={s.status === 'erledigt'} />
     <span class="txt">
       <b>{s.title}</b>
       <small>{s.minutes ? dur(s.minutes) + ' · ' : ''}{s.intensity}{s.elevation ? ` · ${s.elevation} hm` : ''}{s.moved ? ' · verschoben' : ''}</small>
@@ -47,7 +47,6 @@
   .sess { background: var(--bg); border-radius: 14px; padding: 2px 12px; margin-top: 8px; }
   .sess.race { background: color-mix(in srgb, var(--red) 12%, var(--bg)); }
   .main { width: 100%; display: flex; align-items: center; gap: 10px; background: none; border: none; font: inherit; color: var(--text); text-align: left; padding: 10px 0; cursor: pointer; }
-  .dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
   .txt { flex: 1; display: flex; flex-direction: column; min-width: 0; }
   .txt b { font-weight: 600; font-size: 15px; } .txt small { font-size: 12px; color: var(--muted); }
   .st { font-weight: 800; color: var(--green); font-size: 18px; }

@@ -5,6 +5,8 @@
   import { fmtDay } from '../../core/dates';
   import { app, closeActivity, openStrength } from '../app.svelte';
   import { sportName, sportColor, dur, num } from '../format';
+  import SportIcon from '../components/SportIcon.svelte';
+  import RouteThumb from '../components/RouteThumb.svelte';
   import { activityLoad, hrProfile, ownElevation } from '../../domain/load/load';
   import { loadDetails } from '../../domain/activity/details';
   import { groupLabel, isStrengthActivity } from '../../domain/strength/strength';
@@ -48,12 +50,14 @@
     {@const elev = ownElevation(a)}
     {@const speed = a.distance && (a.duration ?? a.elapsed) ? a.distance / (a.duration ?? a.elapsed)! : null}
     <div class="head">
-      <span class="dot" style="background: {sportColor(a.sportType)}"></span>
+      <SportIcon type={a.sportType} size={46} />
       <div>
         <p class="eyebrow">{fmtDay(a.date, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })} · {a.start.slice(11, 16)} Uhr</p>
         <h2 class="title">{sportName(a.sportType)}{a.name ? ` · ${a.name}` : ''}</h2>
       </div>
     </div>
+
+    <RouteThumb {a} wide />
 
     <section class="grid">
       <div><span>Dauer</span><b>{dur(a.duration ?? a.elapsed)}</b>{#if a.elapsed && a.duration && a.elapsed - a.duration > 120}<small>gesamt {dur(a.elapsed)}</small>{/if}</div>

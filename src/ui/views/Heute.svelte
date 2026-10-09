@@ -3,7 +3,9 @@
   import { db } from '../../core/db';
   import { today, addDays, weekStart, fmtDay } from '../../core/dates';
   import { app, openMorning } from '../app.svelte';
-  import { sportName, sportColor, dur, km, num, hours } from '../format';
+  import { sportName, sportColor, dur, km, num, hours, activityFacts } from '../format';
+  import SportIcon from '../components/SportIcon.svelte';
+  import RouteThumb from '../components/RouteThumb.svelte';
   import ConnectForm from '../components/ConnectForm.svelte';
   import SyncChip from '../components/SyncChip.svelte';
   import AmpelCard from '../components/AmpelCard.svelte';
@@ -182,16 +184,15 @@
     <ul class="acts">
       {#each sortedRecent as a (a.id)}
         {@const ss = $strengthByAct?.get(a.id)}
+        {@const facts = activityFacts(a, ownElevation(a))}
         <li class="tap" role="button" tabindex="0" onclick={() => openActivity(a.id)} onkeydown={e => e.key === 'Enter' && openActivity(a.id)}>
-          <span class="dot" style="background: {sportColor(a.sportType)}"></span>
+          <SportIcon type={a.sportType} size={44} />
           <div class="main">
             <strong>{sportName(a.sportType)}{ss && !ss.skipped ? ' · ' + ss.muscleGroups.map(groupLabel).join(' + ') : ''}</strong>
-            <span class="muted">{fmtDay(a.date)}{ss?.intensity ? ` · Intensität ${ss.intensity}/10` : a.name ? ' · ' + a.name : ''}</span>
+            <span class="when muted">{fmtDay(a.date)} · {dur(a.duration ?? a.elapsed)}{ss?.intensity ? ` · Intensität ${ss.intensity}/10` : a.name ? ' · ' + a.name : ''}</span>
+            {#if facts.length}<span class="facts">{facts.join('   ')}</span>{/if}
           </div>
-          <div class="right">
-            <span>{dur(a.duration ?? a.elapsed)}</span>
-            <span class="muted">{[km(a.distance), ownElevation(a) ? Math.round(ownElevation(a)!) + ' hm' : '', a.avgHr ? '♥ ' + Math.round(a.avgHr) : ''].filter(Boolean).join(' · ')}</span>
-          </div>
+          <RouteThumb {a} size={52} />
         </li>
       {/each}
     </ul>
@@ -244,9 +245,8 @@
   .acts li { display: flex; align-items: center; gap: 12px; padding: 12px 0; border-top: 1px solid var(--line); }
   .acts li:first-child { border-top: none; padding-top: 4px; }
   .acts li.tap { cursor: pointer; }
-  .dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
-  .main, .right { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-  .main { flex: 1; }
-  .acts .muted { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .right { text-align: right; align-items: flex-end; flex-shrink: 0; font-variant-numeric: tabular-nums; max-width: 50%; }
+  .main { display: flex; flex-direction: column; gap: 3px; min-width: 0; flex: 1; }
+  .main strong { font-size: 15.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .acts .when { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .facts { font-size: 13px; color: var(--text); font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 </style>

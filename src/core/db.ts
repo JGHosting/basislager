@@ -36,6 +36,8 @@ export interface ActivityExtra {
   rpe?: number | null; feel?: number | null; device?: string | null; laps?: number | null; description?: string | null;
   /** Puls-Histogramm [bpm, Sekunden][] – daraus werden die Zonen mit dem eigenen Maximalpuls berechnet. */
   hrHist?: [number, number][] | null;
+  /** Vereinfachte Route (projiziert, auf 0..1 normiert, y nach unten). null = keine GPS-Spur. */
+  route?: [number, number][] | null;
   fetchedAt: number;
 }
 

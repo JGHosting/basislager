@@ -13,6 +13,7 @@ export async function loadDetails(a: Activity, force = false): Promise<ActivityE
   if (!c || !navigator.onLine) return a.extra ?? null;
   const d = await icu.activity(c, a.sourceId);
   const extra: ActivityExtra = {
+    ...(a.extra ?? {}),   // bereits geladene Felder (z. B. Route, Pulsverlauf) behalten
     calories: num(d.calories), avgSpeed: num(d.average_speed), maxSpeed: num(d.max_speed),
     cadence: num(d.average_cadence), avgWatts: num(d.icu_average_watts ?? d.average_watts), npWatts: num(d.icu_weighted_avg_watts),
     elevLoss: num(d.total_elevation_loss), altMin: num(d.min_altitude), altMax: num(d.max_altitude), avgTemp: num(d.average_temp),
