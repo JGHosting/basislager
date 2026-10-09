@@ -18,6 +18,7 @@ import { TRI, goalLabel, fmtPace } from './goals';
 import { estimatePaces, type Paces } from './paces';
 import { activityLoad, loadSeries, type HrProfile } from '../load/load';
 import { sportName } from '../../ui/format';
+import { VACATION_LEG, vacationSportLabel } from '../vacation/vacation';
 
 export type PlanSport = 'kraft' | 'lauf' | 'trail' | 'rad' | 'schwimmen' | 'gehen' | 'wettkampf';
 export type Intensity = 'locker' | 'mittel' | 'hart' | 'wettkampf';
@@ -307,8 +308,7 @@ export function buildWeek(ws: string, ctx: PlanContext): PlanWeek {
     }
   }
 
-  let out = applyEvents(sessions, ctx.events, ws);
-  out = applyVacation(out, ctx.vacations ?? [], !!g);
+  let out = applyVacation(sessions, ctx.vacations ?? [], !!g, ws);
   if (ctx.injury) out = applyInjury(out, ctx.injury, ws, ctx.vacations ?? []);
   out = applyEdits(out, ctx.edits);
   const used = new Set<string>();
@@ -319,7 +319,7 @@ export function buildWeek(ws: string, ctx: PlanContext): PlanWeek {
   out.sort((a, b) => a.date.localeCompare(b.date) || order(a) - order(b));
   const minutes = out.filter(s => s.status !== 'ausgelassen').reduce((t, s) => t + s.minutes, 0);
   const runMinutes = out.filter(s => (s.sport === 'lauf' || s.sport === 'trail') && s.status !== 'ausgelassen').reduce((t, s) => t + s.minutes, 0);
-  const events = ctx.events.filter(e => e.end >= ws && e.start <= addDays(ws, 6));
+  const events: FixedEvent[] = [];   // Fixtermine sind in den Urlaub übergegangen
   return { weekStart: ws, phase, goal: g, weekNo, totalWeeks: total, sessions: out, events, paces: p, minutes, runMinutes, extra: inter.extra, adjusted: inter.adjusted };
 }
 const order = (s: PlanSession) => (s.sport === 'kraft' ? 1 : s.key.endsWith('brick') ? 3 : 2);
@@ -354,21 +354,39 @@ function applyEvents(list: PlanSession[], events: FixedEvent[], ws: string): Pla
 }
 
 /* ---------- Urlaub ---------- */
-function applyVacation(list: PlanSession[], vacations: Vacation[], goalMode: boolean): PlanSession[] {
+function applyVacation(list: PlanSession[], vacations: Vacation[], goalMode: boolean, ws: string): PlanSession[] {
+  const sportVac = (date: string) => vacations.find(v => v.sport && date >= v.start && date <= v.end);
   const out: PlanSession[] = [];
   for (const s of list) {
+    if (s.sport === 'wettkampf') { out.push(s); continue; }
     const v = vacations.find(x => s.date >= x.start && s.date <= x.end);
-    if (!v || s.sport === 'wettkampf') { out.push(s); continue; }
-    if (s.sport === 'kraft') continue;                                   // kein Studio im Urlaub – trägst du selbst ein, falls doch
-    const mode = v.training === 'keine' && goalMode ? 'weniger' : v.training;
-    if (mode === 'keine') continue;
-    if (mode === 'weniger') {
-      out.push({ ...s, minutes: r5(s.minutes * 0.6), intensity: s.intensity === 'hart' ? 'mittel' : s.intensity,
-        details: s.intensity === 'hart' ? 'Urlaubsversion: locker mit ein paar zügigen Abschnitten nach Lust und Gelände.' : s.details,
-        notes: [...s.notes, 'Urlaub: reduziert.'] });
+    // Urlaubstag mit fest geplantem Sport: der Sport ersetzt das geplante Training (nichts anderes planen)
+    if (v?.sport) continue;
+    if (v) {
+      // Urlaub ohne Sport: Trainingsstufe voll / weniger / keine
+      if (s.sport === 'kraft') continue;                                 // kein Studio im Urlaub – trägst du selbst ein, falls doch
+      const mode = v.training === 'keine' && goalMode ? 'weniger' : v.training;
+      if (mode === 'keine') continue;
+      if (mode === 'weniger') {
+        out.push({ ...s, minutes: r5(s.minutes * 0.6), intensity: s.intensity === 'hart' ? 'mittel' : s.intensity,
+          details: s.intensity === 'hart' ? 'Urlaubsversion: locker mit ein paar zügigen Abschnitten nach Lust und Gelände.' : s.details,
+          notes: [...s.notes, 'Urlaub: reduziert.'] });
+        continue;
+      }
+      out.push({ ...s, notes: [...s.notes, 'Urlaub.'] });
       continue;
     }
-    out.push({ ...s, notes: [...s.notes, 'Urlaub.'] });
+    // Kein Urlaubstag: Anpassung, wenn morgen ein Sport-Urlaubstag beginnt
+    const tmr = sportVac(addDays(s.date, 1));
+    if (tmr?.sport) {
+      const label = vacationSportLabel(tmr.sport);
+      if (s.sport === 'kraft' && s.groups && hasLegs(s.groups) && VACATION_LEG.has(tmr.sport)) {
+        const k = kraft(ws, (Date.parse(s.date) - Date.parse(ws)) / 86400000, s.key.split(':')[1], s.groups, false, true);
+        k.notes = [`Weniger Beinvolumen: morgen ${label}.`]; out.push(k); continue;
+      }
+      if (s.intensity === 'hart') { out.push({ ...s, intensity: 'locker', title: s.title + ' (locker)', notes: [...s.notes, `Morgen ${label} – heute nur locker.`] }); continue; }
+    }
+    out.push(s);
   }
   return out;
 }

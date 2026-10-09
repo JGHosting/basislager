@@ -12,7 +12,7 @@ import type { BasislagerDB, Activity, MorningEntry, SettingRow, StrengthSession,
 import { db as mainDb, BasislagerDB as DBClass, setSetting } from '../core/db';
 import Dexie from 'dexie';
 
-export const SCHEMA_VERSION = 10;
+export const SCHEMA_VERSION = 12;
 export const BACKUP_TABLES = ['settings', 'activities', 'morning', 'strength', 'splits', 'foods', 'foodlog', 'nutritionDays', 'injuries', 'goals', 'planEdits', 'fixedEvents', 'vacations', 'mealTemplates'] as const;
 export const EXCLUDED_TABLES = ['snapshots'];
 /** Einstellungen, die nicht ins Backup gehören (Geheimnisse, gerätespezifisch). */
@@ -96,6 +96,15 @@ function migrate(raw: any): any {
     v = 9;
   }
   if (v < 10) { raw.tables.mealTemplates ??= []; v = 10; }
+  if (v < 11) { v = 11; }   // v11 ergänzte nur eine feste Split-Vorlage (keine Backup-Änderung)
+  if (v < 12) {             // v12: sportliche Fixtermine werden Urlaub mit festem Sport
+    raw.tables.vacations ??= []; raw.tables.fixedEvents ??= [];
+    const map: Record<string, string> = { ski: 'ski', hochtour: 'hochtour', sonstiges: 'sonstiges' };
+    for (const e of raw.tables.fixedEvents.filter((e: any) => map[e?.type]))
+      raw.tables.vacations.push({ id: e.id, title: e.title, start: e.start, end: e.end, training: 'voll', sport: map[e.type], createdAt: e.createdAt, updatedAt: e.updatedAt });
+    raw.tables.fixedEvents = raw.tables.fixedEvents.filter((e: any) => !map[e?.type]);
+    v = 12;
+  }
   raw.schemaVersion = v;
   return raw;
 }

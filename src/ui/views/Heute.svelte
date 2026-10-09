@@ -16,7 +16,7 @@
   import SessionCard from '../planner/SessionCard.svelte';
   import { sessionsOn } from '../../domain/planner/repo';
   import { adaptToLight } from '../../domain/planner/plan';
-  import { TRAINING_LABEL, vacationToday } from '../../domain/vacation/vacation';
+  import { TRAINING_LABEL, vacationToday, vacationSportLabel } from '../../domain/vacation/vacation';
   import { openInjury } from '../app.svelte';
   import { dayView, getKcalGoal } from '../../domain/nutrition/repo';
   import { groupLabel } from '../../domain/strength/strength';
@@ -97,8 +97,8 @@
 
   {#if $vacation}
     <a class="card vacb" href="#/plan">
-      <b>Urlaub{$vacation.title ? ': ' + $vacation.title : ''}</b>
-      <span>bis {fmtDay($vacation.end, { weekday: 'short', day: '2-digit', month: '2-digit' })} · {TRAINING_LABEL[$vacation.training]} · kein Kraft, kein Tracking</span>
+      <b>{$vacation.sport ? vacationSportLabel($vacation.sport) : 'Urlaub'}{$vacation.title ? ': ' + $vacation.title : ''}</b>
+      <span>bis {fmtDay($vacation.end, { weekday: 'short', day: '2-digit', month: '2-digit' })} · {$vacation.sport ? 'fester Sport, ersetzt das Training' : TRAINING_LABEL[$vacation.training]} · kein Tracking</span>
     </a>
   {/if}
   {#if $calc?.injury}<InjuryCard injury={$calc.injury} />{/if}

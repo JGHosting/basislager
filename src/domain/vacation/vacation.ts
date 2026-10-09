@@ -5,11 +5,21 @@
  * - Ernährung: Urlaubstage gelten als "nicht getrackt" (nie 0 kcal), außer du trackst bewusst.
  * - Kein automatisches Morgenpopup, keine Warnungen zu vernachlässigten Muskelgruppen.
  */
-import { db, type Vacation } from '../../core/db';
+import { db, type Vacation, type VacationSport } from '../../core/db';
 import { newId } from '../../core/ids';
 import { addDays, today } from '../../core/dates';
 
 export const TRAINING_LABEL = { voll: 'Training voll', weniger: 'Training reduziert', keine: 'Kein Training' } as const;
+
+/** Mögliche fest geplante Sportarten im Urlaub (ersetzen an diesen Tagen das geplante Training). */
+export const VACATION_SPORTS: { id: VacationSport; label: string }[] = [
+  { id: 'ski', label: 'Ski / Snowboard' }, { id: 'hochtour', label: 'Hochtour / Bergtour' }, { id: 'wandern', label: 'Wandern' },
+  { id: 'klettern', label: 'Klettern' }, { id: 'rad', label: 'Radfahren' }, { id: 'laufen', label: 'Laufen' },
+  { id: 'schwimmen', label: 'Schwimmen' }, { id: 'sonstiges', label: 'Anderer Sport' }
+];
+export const vacationSportLabel = (s: VacationSport) => VACATION_SPORTS.find(x => x.id === s)?.label ?? 'Sport';
+/** Beinlastige Urlaubssportarten – davor kein schweres Beintraining, harte Einheiten lockerer. */
+export const VACATION_LEG = new Set<VacationSport>(['ski', 'hochtour', 'wandern', 'klettern', 'rad']);
 
 export const vacationOn = (list: Vacation[], date: string) => list.find(v => date >= v.start && date <= v.end) ?? null;
 export async function vacationToday(date = today()) { return vacationOn(await db.vacations.toArray(), date); }

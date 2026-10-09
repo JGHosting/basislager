@@ -159,7 +159,12 @@ export interface PlanEdit { key: string; movedTo?: string; status?: 'erledigt' |
 export interface FixedEvent { id: string; type: 'ski' | 'hochtour' | 'urlaub' | 'sonstiges'; title?: string; start: string; end: string; createdAt: number; updatedAt: number }
 
 /** Urlaub: App-weit – kein Gewicht/Ernährung nötig, Kraft entfällt, Ausdauer voll/weniger/keine. */
-export interface Vacation { id: string; title?: string; start: string; end: string; training: 'voll' | 'weniger' | 'keine'; createdAt: number; updatedAt: number }
+export type VacationSport = 'ski' | 'hochtour' | 'wandern' | 'klettern' | 'rad' | 'laufen' | 'schwimmen' | 'sonstiges';
+/**
+ * Urlaub (app-weit). Optional mit fest geplantem Sport (z. B. Skiurlaub): an diesen Tagen ersetzt der Sport
+ * das geplante Training, und der Plan passt die umliegenden Tage an. Ohne Sport gilt die Trainingsstufe.
+ */
+export interface Vacation { id: string; title?: string; start: string; end: string; training: 'voll' | 'weniger' | 'keine'; sport?: VacationSport | null; createdAt: number; updatedAt: number }
 
 /** Interne Sicherheitskopie vor einem Import (wird selbst nicht exportiert). */
 export interface Snapshot { seq?: number; createdAt: number; reason: string; data: unknown }
@@ -215,6 +220,15 @@ export class BasislagerDB extends Dexie {
     this.version(10).stores({ mealTemplates: 'id, name' });
     // v11: neuer fester Split (Push / Pull / Arme) – fehlende Vorlagen ergänzen, eigene bleiben unberührt
     this.version(11).stores({}).upgrade(async tx => { for (const s of BUILTIN_SPLITS) if (!(await tx.table('splits').get(s.id))) await tx.table('splits').put(s); });
+    // v12: Fixtermine werden Teil des Urlaubs (sportliche Termine sind ohnehin Urlaub)
+    this.version(12).stores({}).upgrade(async tx => {
+      const map: Record<string, VacationSport> = { ski: 'ski', hochtour: 'hochtour', sonstiges: 'sonstiges' };
+      for (const e of await tx.table('fixedEvents').toArray() as FixedEvent[]) {
+        const sport = map[e.type]; if (!sport) continue;
+        await tx.table('vacations').put({ id: e.id, title: e.title, start: e.start, end: e.end, training: 'voll', sport, createdAt: e.createdAt, updatedAt: Date.now() });
+        await tx.table('fixedEvents').delete(e.id);
+      }
+    });
     this.on('populate', tx => { tx.table('splits').bulkPut(BUILTIN_SPLITS); });
   }
 }

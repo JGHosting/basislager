@@ -1,8 +1,8 @@
 <script lang="ts">
   import { liveQuery } from 'dexie';
-  import { db, getSetting, type FixedEvent } from '../../core/db';
+  import { db, getSetting } from '../../core/db';
   import { today, addDays, weekStart, fmtDay } from '../../core/dates';
-  import { planWeeks, setRunsPerWeek, saveEvent, deleteEvent } from '../../domain/planner/repo';
+  import { planWeeks, setRunsPerWeek } from '../../domain/planner/repo';
   import { PHASE_LABEL, adaptToLight, isoWeek } from '../../domain/planner/plan';
   import { goalLabel, fmtTime, fmtPace } from '../../domain/planner/goals';
   import { computeToday } from '../../domain/today';
@@ -10,8 +10,9 @@
   import SessionCard from '../planner/SessionCard.svelte';
   import { openActivity } from '../app.svelte';
   import { sportName, sportColor, dur as fdur, km } from '../format';
-  import { saveVacation, deleteVacation, TRAINING_LABEL } from '../../domain/vacation/vacation';
-  import type { Vacation } from '../../core/db';
+  import SportIcon from '../components/SportIcon.svelte';
+  import { saveVacation, deleteVacation, TRAINING_LABEL, VACATION_SPORTS, vacationSportLabel } from '../../domain/vacation/vacation';
+  import type { Vacation, VacationSport } from '../../core/db';
 
   const t = today();
   let offset = $state(0);
@@ -27,32 +28,28 @@
   const calc = liveQuery(() => computeToday());
   const runs = liveQuery(async () => (await getSetting<2 | 3>('runsPerWeek')) ?? 3);
   const kraftN = liveQuery(async () => (await getSetting<number>('strengthPerWeek')) ?? 3);
-  const events = liveQuery(() => db.fixedEvents.orderBy('start').toArray());
   const vacations = liveQuery(() => db.vacations.orderBy('start').toArray());
 
-  // Urlaub-Formular
+  // Urlaub-Formular (inkl. optional fest geplantem Sport – ersetzt die früheren Fixtermine)
   let vacOpen = $state(false), vacErr = $state('');
-  let vac = $state<{ id?: string; title: string; start: string; end: string; training: Vacation['training'] }>({ title: '', start: t, end: t, training: 'weniger' });
+  type VacForm = { id?: string; title: string; start: string; end: string; training: Vacation['training']; sport: VacationSport | null };
+  let vac = $state<VacForm>({ title: '', start: t, end: t, training: 'weniger', sport: null });
   /** Liegt der Urlaub im Zeitraum des Wettkampfplans? Dann ist "kein Training" nicht möglich. */
   const vacInGoal = $derived(!!planData?.ctx.goal && vac.start <= planData.ctx.goal.date && vac.end >= planData.ctx.goal.planStart);
   $effect(() => { if (vacInGoal && vac.training === 'keine') vac.training = 'weniger'; });
   async function addVacation() {
     vacErr = '';
     if (vac.end < vac.start) { vacErr = 'Das Ende liegt vor dem Start.'; return; }
-    await saveVacation({ ...vac, title: vac.title.trim() || undefined }); vacOpen = false;
+    await saveVacation({ ...vac, title: vac.title.trim() || undefined, sport: vac.sport }); vacOpen = false;
   }
-  function editVacation(v: Vacation) { vac = { id: v.id, title: v.title ?? '', start: v.start, end: v.end, training: v.training }; vacOpen = true; }
+  function editVacation(v: Vacation) { vac = { id: v.id, title: v.title ?? '', start: v.start, end: v.end, training: v.training, sport: v.sport ?? null }; vacOpen = true; }
+  /** Planer-Sportart zum Icon (für die Sport-Urlaubstage im Kalender). */
+  const VSPORT_ICON: Record<VacationSport, string> = { ski: 'AlpineSki', hochtour: 'Hike', wandern: 'Hike', klettern: 'RockClimbing', rad: 'Ride', laufen: 'Run', schwimmen: 'Swim', sonstiges: 'Workout' };
 
   const days = $derived(Array.from({ length: 7 }, (_, i) => addDays(ws, i)));
   const dur = (m: number) => `${Math.floor(m / 60)} h ${String(Math.round(m % 60)).padStart(2, '0')}`;
   const weeksTo = (d: string) => Math.ceil((Date.parse(d) - Date.parse(t)) / 604800000);
 
-  // Fixtermin-Formular
-  let evOpen = $state(false);
-  let ev = $state<{ type: FixedEvent['type']; title: string; start: string; end: string }>({ type: 'ski', title: '', start: t, end: t });
-  async function addEvent() { if (ev.end < ev.start) ev.end = ev.start; await saveEvent({ ...ev, title: ev.title.trim() || undefined }); evOpen = false; }
-  const EV = { ski: 'Ski/Snowboard', hochtour: 'Hochtour', urlaub: 'Urlaub', sonstiges: 'Sonstiges' } as const;
-  const EV_NEW = { ski: 'Ski/Snowboard', hochtour: 'Hochtour', sonstiges: 'Sonstiges' } as const;   // Urlaub hat einen eigenen Bereich
 </script>
 
 <header class="page-head">
@@ -138,12 +135,15 @@
     {@const list = offset < 0 ? [] : w.sessions.filter(s => s.date === d)}
     {@const linked = new Set(w.sessions.map(s => s.activityId).filter(Boolean))}
     {@const acts = planData.ctx.activities.filter(a => a.date === d && (offset < 0 || !linked.has(a.id))).sort((a, b) => a.start.localeCompare(b.start))}
-    {@const evs = w.events.filter(e => d >= e.start && d <= e.end)}
     {@const vday = ($vacations ?? []).find(v => d >= v.start && d <= v.end)}
     <section class="card day" class:today={d === t} class:past={d < t}>
       <div class="dh"><b>{d === t ? 'Heute' : fmtDay(d, { weekday: 'long' })}</b><span class="muted small">{fmtDay(d, { day: '2-digit', month: '2-digit' })}</span></div>
-      {#if vday}<p class="vac">Urlaub{vday.title ? ': ' + vday.title : ''} · {TRAINING_LABEL[vday.training === 'keine' && planData.ctx.goal ? 'weniger' : vday.training]}</p>{/if}
-      {#each evs as e}<p class="ev">{EV[e.type]}{e.title ? ': ' + e.title : ''}</p>{/each}
+      {#if vday?.sport}
+        <div class="vsport"><SportIcon type={VSPORT_ICON[vday.sport]} size={30} />
+          <span><b>{vacationSportLabel(vday.sport)}</b><small>Urlaub{vday.title ? ': ' + vday.title : ''}</small></span></div>
+      {:else if vday}
+        <p class="vac">Urlaub{vday.title ? ': ' + vday.title : ''} · {TRAINING_LABEL[vday.training === 'keine' && planData.ctx.goal ? 'weniger' : vday.training]}</p>
+      {/if}
       {#each list as s (s.key)}
         <SessionCard s={d === t && $calc ? adaptToLight(s, $calc.recovery.light) : s} />
       {/each}
@@ -154,52 +154,44 @@
           <span class="chev">›</span>
         </button>
       {/each}
-      {#if !list.length && !evs.length && !vday && !acts.length}<p class="muted small rest">{offset < 0 ? 'Kein Training' : 'Ruhetag'}</p>{/if}
+      {#if !list.length && !vday && !acts.length}<p class="muted small rest">{offset < 0 ? 'Kein Training' : 'Ruhetag'}</p>{/if}
     </section>
   {/each}
 
-  <h3 class="section">Urlaub</h3>
+  <h3 class="section">Urlaub & feste Termine</h3>
   <section class="card">
-    <p class="muted small">Im Urlaub entfällt Kraft, Gewicht ist egal und die Ernährung wird nicht getrackt. Die Ausdauereinheiten wählst du selbst.</p>
+    <p class="muted small">Im Urlaub entfällt Kraft, Gewicht ist egal und die Ernährung wird nicht getrackt. Planst du einen festen Sport ein (z. B. Skiurlaub), ersetzt der an diesen Tagen das Training – der Plan passt die umliegenden Tage automatisch an.</p>
     {#each ($vacations ?? []).filter(v => v.end >= t) as v (v.id)}
-      <div class="evrow"><button class="evtxt" onclick={() => editVacation(v)}><b>{v.title || 'Urlaub'}</b><small>{fmtDay(v.start, { day: '2-digit', month: '2-digit' })}{v.end !== v.start ? ' – ' + fmtDay(v.end, { day: '2-digit', month: '2-digit' }) : ''} · {TRAINING_LABEL[v.training]}</small></button>
-        <button aria-label="Urlaub löschen" onclick={() => deleteVacation(v.id)}>✕</button></div>
+      <div class="evrow"><button class="evtxt" onclick={() => editVacation(v)}>
+        <b>{v.sport ? vacationSportLabel(v.sport) : 'Urlaub'}{v.title ? ' · ' + v.title : ''}</b>
+        <small>{fmtDay(v.start, { day: '2-digit', month: '2-digit' })}{v.end !== v.start ? ' – ' + fmtDay(v.end, { day: '2-digit', month: '2-digit' }) : ''} · {v.sport ? 'fester Sport' : TRAINING_LABEL[v.training]}</small></button>
+        <button aria-label="Löschen" onclick={() => deleteVacation(v.id)}>✕</button></div>
     {/each}
     {#if vacOpen}
       <div class="evform">
         <input bind:value={vac.title} placeholder="z. B. Gardasee (optional)" />
         <div class="two"><label>Von<input type="date" bind:value={vac.start} oninput={() => { if (vac.end < vac.start) vac.end = vac.start; }} /></label><label>Bis<input type="date" bind:value={vac.end} min={vac.start} /></label></div>
-        <span class="muted small">Training im Urlaub</span>
-        <div class="tri3">
-          <button class:on={vac.training === 'voll'} onclick={() => (vac.training = 'voll')}><b>Voll</b><small>wie geplant</small></button>
-          <button class:on={vac.training === 'weniger'} onclick={() => (vac.training = 'weniger')}><b>Weniger</b><small>ca. 60 %, locker</small></button>
-          <button class:on={vac.training === 'keine'} disabled={vacInGoal} onclick={() => (vac.training = 'keine')}><b>Keins</b><small>{vacInGoal ? 'nicht im Wettkampfplan' : 'nur Urlaub'}</small></button>
+        <span class="muted small">Fester Sport an diesen Tagen?</span>
+        <div class="chips">
+          <button class:on={vac.sport === null} onclick={() => (vac.sport = null)}>Kein fester Sport</button>
+          {#each VACATION_SPORTS as sp}<button class:on={vac.sport === sp.id} onclick={() => (vac.sport = sp.id)}>{sp.label}</button>{/each}
         </div>
-        <p class="muted small">Kraft entfällt immer. Falls du doch trainierst, trägt Garmin es ein bzw. du erfasst es unter „Heute“.</p>
+        {#if vac.sport}
+          <p class="muted small">Diese Tage sind mit {vacationSportLabel(vac.sport)} belegt – es wird nichts anderes geplant. Davor gibt es {VACATION_SPORTS.find(s => s.id === vac.sport) && ['ski','hochtour','wandern','klettern','rad'].includes(vac.sport) ? 'kein schweres Beintraining und ' : ''}keine harten Einheiten.</p>
+        {:else}
+          <span class="muted small">Training im Urlaub</span>
+          <div class="tri3">
+            <button class:on={vac.training === 'voll'} onclick={() => (vac.training = 'voll')}><b>Voll</b><small>wie geplant</small></button>
+            <button class:on={vac.training === 'weniger'} onclick={() => (vac.training = 'weniger')}><b>Weniger</b><small>ca. 60 %, locker</small></button>
+            <button class:on={vac.training === 'keine'} disabled={vacInGoal} onclick={() => (vac.training = 'keine')}><b>Keins</b><small>{vacInGoal ? 'nicht im Wettkampfplan' : 'nur Urlaub'}</small></button>
+          </div>
+          <p class="muted small">Kraft entfällt immer. Falls du doch trainierst, trägt Garmin es ein bzw. du erfasst es unter „Heute“.</p>
+        {/if}
         {#if vacErr}<p class="error small">{vacErr}</p>{/if}
         <div class="two"><button class="btn ghost" onclick={() => (vacOpen = false)}>Abbrechen</button><button class="btn primary" onclick={addVacation}>Speichern</button></div>
       </div>
     {:else}
-      <button class="link" onclick={() => { vac = { title: '', start: t, end: t, training: 'weniger' }; vacOpen = true; }}>+ Urlaub planen</button>
-    {/if}
-  </section>
-
-  <h3 class="section">Fixtermine</h3>
-  <section class="card">
-    <p class="muted small">An diesen Tagen wird nichts geplant. Vor Ski- und Hochtouren-Tagen gibt es kein schweres Beintraining.</p>
-    {#each ($events ?? []).filter(e => e.end >= t) as e (e.id)}
-      <div class="evrow"><span><b>{EV[e.type]}{e.title ? ': ' + e.title : ''}</b><small>{fmtDay(e.start, { day: '2-digit', month: '2-digit' })}{e.end !== e.start ? ' – ' + fmtDay(e.end, { day: '2-digit', month: '2-digit' }) : ''}</small></span>
-        <button aria-label="Fixtermin löschen" onclick={() => deleteEvent(e.id)}>✕</button></div>
-    {/each}
-    {#if evOpen}
-      <div class="evform">
-        <div class="chips">{#each Object.entries(EV_NEW) as [k, l]}<button class:on={ev.type === k} onclick={() => (ev.type = k as FixedEvent['type'])}>{l}</button>{/each}</div>
-        <input bind:value={ev.title} placeholder="Titel (optional)" />
-        <div class="two"><label>Von<input type="date" bind:value={ev.start} /></label><label>Bis<input type="date" bind:value={ev.end} min={ev.start} /></label></div>
-        <div class="two"><button class="btn ghost" onclick={() => (evOpen = false)}>Abbrechen</button><button class="btn primary" onclick={addEvent}>Speichern</button></div>
-      </div>
-    {:else}
-      <button class="link" onclick={() => { ev = { type: 'ski', title: '', start: t, end: t }; evOpen = true; }}>+ Fixtermin</button>
+      <button class="link" onclick={() => { vac = { title: '', start: t, end: t, training: 'weniger', sport: null }; vacOpen = true; }}>+ Urlaub / Termin planen</button>
     {/if}
   </section>
 {/if}
@@ -243,8 +235,11 @@
   .adot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
   .atxt { flex: 1; display: flex; flex-direction: column; min-width: 0; } .atxt b { font-weight: 600; font-size: 15px; } .atxt small { font-size: 12px; color: var(--muted); }
   .chev { color: var(--muted); font-size: 20px; }
-  .ev { margin: 8px 0 0; font-size: 14px; font-weight: 600; color: var(--c-snow); }
   .vac { margin: 8px 0 0; font-size: 14px; font-weight: 600; color: var(--c-ride); }
+  .vsport { display: flex; align-items: center; gap: 10px; margin: 8px 0 2px; }
+  .vsport span { display: flex; flex-direction: column; min-width: 0; }
+  .vsport b { font-size: 15px; }
+  .vsport small { font-size: 12px; color: var(--muted); }
   .evtxt { flex: 1; display: flex; flex-direction: column; align-items: flex-start; background: none !important; border: none; width: auto !important; height: auto !important; font: inherit; color: var(--text) !important; text-align: left; cursor: pointer; padding: 0; }
   .tri3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
   .tri3 button { border: 1px solid var(--line); background: var(--bg); color: var(--text); border-radius: 12px; padding: 8px; font: inherit; display: flex; flex-direction: column; align-items: flex-start; cursor: pointer; }
