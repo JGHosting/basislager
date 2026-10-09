@@ -31,22 +31,28 @@ export function toLatLng(data: (number | null)[] | undefined, data2?: (number | 
   });
 }
 
-/** latlng → auf 0..1 normierte Punkte (Seitenverhältnis erhalten, y nach unten). */
-export function projectRoute(latlng: [number, number][]): [number, number][] | null {
+/** Gültige Punkte filtern und gleichmäßig auf ~n Stützpunkte ausdünnen (Roh-Koordinaten lat/lng). */
+export function downsampleRoute(latlng: [number, number][], n = 90): [number, number][] | null {
   const pts = latlng.filter(p => Array.isArray(p) && Number.isFinite(p[0]) && Number.isFinite(p[1]) && (p[0] !== 0 || p[1] !== 0));
   if (pts.length < 10) return null;
-  const lat0 = pts[Math.floor(pts.length / 2)][0] * Math.PI / 180;
+  const step = Math.max(1, Math.floor(pts.length / n));
+  const out = pts.filter((_, i) => i % step === 0);
+  if (out[out.length - 1] !== pts[pts.length - 1]) out.push(pts[pts.length - 1]);
+  return out.length >= 5 ? out : null;
+}
+
+/** Roh-Route (lat/lng) → auf 0..1 normierte Punkte (Seitenverhältnis erhalten, y nach unten) – für die einfache Form ohne Karte. */
+export function normalizeRoute(route: [number, number][]): { pts: [number, number][]; w: number; h: number } | null {
+  if (!route || route.length < 2) return null;
+  const lat0 = route[Math.floor(route.length / 2)][0] * Math.PI / 180;
   const cos = Math.cos(lat0);
-  const xy = pts.map(([la, lo]) => [lo * cos, -la] as [number, number]);   // y invertiert = Norden oben
+  const xy = route.map(([la, lo]) => [lo * cos, -la] as [number, number]);
   let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
   for (const [x, y] of xy) { if (x < minX) minX = x; if (x > maxX) maxX = x; if (y < minY) minY = y; if (y > maxY) maxY = y; }
   const span = Math.max(maxX - minX, maxY - minY) || 1;
-  // gleichmäßig auf ~64 Punkte ausdünnen
-  const norm = xy.map(([x, y]) => [(x - minX) / span, (y - minY) / span] as [number, number]);
-  const step = Math.max(1, Math.floor(norm.length / 64));
-  const out = norm.filter((_, i) => i % step === 0);
-  if (out[out.length - 1] !== norm[norm.length - 1]) out.push(norm[norm.length - 1]);
-  return out.length >= 5 ? out : null;
+  const pts = xy.map(([x, y]) => [(x - minX) / span, (y - minY) / span] as [number, number]);
+  let w = 0, h = 0; for (const [x, y] of pts) { if (x > w) w = x; if (y > h) h = y; }
+  return { pts, w: w || 1, h: h || 1 };
 }
 
 let chain: Promise<unknown> = Promise.resolve();
@@ -64,7 +70,7 @@ export async function ensureRoute(a: Activity): Promise<[number, number][] | nul
       if (!c) return null;
       const st = await icu.streams(c, a.sourceId, ['latlng']);
       const ll = st.find(x => x.type === 'latlng');
-      const route = ll ? projectRoute(toLatLng(ll.data, ll.data2)) : null;
+      const route = ll ? downsampleRoute(toLatLng(ll.data, ll.data2)) : null;   // Roh-Koordinaten (lat/lng) speichern – für Karte und Form
       await save(a, route);
       return route;
     } catch { return null; }   // keine Spur verfügbar – nicht als "null" speichern, später erneut versuchen
@@ -82,7 +88,7 @@ async function save(a: Activity, route: [number, number][] | null) {
 
 /** Einmalig: alte (falsch gespeicherte) Routen zurücksetzen, damit sie neu geholt werden. */
 export async function resetRoutes(): Promise<void> {
-  if (await getSetting<boolean>('routesFixedV2')) return;
+  if (await getSetting<boolean>('routesFixedV3')) return;
   const all = await db.activities.toArray();
   for (const a of all) {
     if (a.extra && a.extra.route !== undefined) {
@@ -90,5 +96,5 @@ export async function resetRoutes(): Promise<void> {
       await db.activities.update(a.id, { extra });
     }
   }
-  await setSetting('routesFixedV2', true);
+  await setSetting('routesFixedV3', true);
 }

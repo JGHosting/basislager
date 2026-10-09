@@ -32,7 +32,13 @@ export default defineConfig({
         // API-Aufrufe nie aus dem Cache beantworten
         navigateFallbackDenylist: [/^\/api/],
         globPatterns: ['**/*.{js,css,html,png,svg,webmanifest,json}'],
-        maximumFileSizeToCacheInBytes: 3 * 1024 * 1024   // BLS-Datei (~600 KB) offline verfügbar
+        maximumFileSizeToCacheInBytes: 3 * 1024 * 1024,   // BLS-Datei (~600 KB) offline verfügbar
+        runtimeCaching: [{
+          // Kartenkacheln (OpenStreetMap/CARTO) zwischenspeichern – einmal gesehene Routen bleiben offline
+          urlPattern: /^https:\/\/[a-d]\.basemaps\.cartocdn\.com\/.*/i,
+          handler: 'CacheFirst',
+          options: { cacheName: 'map-tiles', expiration: { maxEntries: 600, maxAgeSeconds: 60 * 60 * 24 * 60 }, cacheableResponse: { statuses: [0, 200] } }
+        }]
       }
     })
   ]
