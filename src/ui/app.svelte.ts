@@ -13,7 +13,7 @@ import { runSync, getSyncState, resetHistory, type SyncState } from '../sources/
 import { pushPlan, type PushResult } from '../domain/planner/garmin';
 import { refreshCurves } from '../domain/planner/besttimes';
 import { resetRoutes } from '../domain/activity/route';
-import { ensureBuiltinSplits, dedupeStrength } from '../domain/strength/repo';
+import { ensureBuiltinSplits, dedupeStrength, autoAssignStrength } from '../domain/strength/repo';
 import { liveQuery } from 'dexie';
 
 const AUTO_SYNC_AFTER_MS = 10 * 60 * 1000;
@@ -69,6 +69,7 @@ export async function initApp() {
   await weightSince();
   await ensureBuiltinSplits();
   await dedupeStrength();
+  void autoAssignStrength().catch(() => {});
   void resetRoutes();
   const cred = await getSetting<Credentials>('intervals');
   app.connected = !!cred;
@@ -179,7 +180,7 @@ export async function sync(userTriggered = false) {
   } finally {
     app.syncing = false;
     void maybeShowMorning();
-    if (!app.syncError) { schedulePush(500); refreshCurves().catch(() => { /* Bestzeiten notfalls aus ganzen Aktivitäten */ }); }
+    if (!app.syncError) { await autoAssignStrength().catch(() => {}); schedulePush(500); refreshCurves().catch(() => { /* Bestzeiten notfalls aus ganzen Aktivitäten */ }); }
   }
 }
 
@@ -197,6 +198,7 @@ export async function askPersist() {
 export async function refreshAfterImport() {
   await ensureBuiltinSplits();
   await dedupeStrength();
+  void autoAssignStrength().catch(() => {});
   void resetRoutes();
   app.syncState = await getSyncState();
   app.athleteName = (await getSetting<string>('athleteName')) ?? app.athleteName;

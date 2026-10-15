@@ -1,6 +1,7 @@
 /** Speichern/Laden von Krafteinheiten und Split-Einstellung. */
 import { db, getSetting, setSetting, BUILTIN_SPLITS, type StrengthSession, type MuscleGroup, type SplitTemplate } from '../../core/db';
 import { newId } from '../../core/ids';
+import { nextSplitDay } from './strength';
 
 export async function activeSplit(): Promise<SplitTemplate | null> {
   const id = await getSetting<string | null>('activeSplit');
@@ -33,6 +34,38 @@ export async function deleteSession(id: string) { await db.strength.delete(id); 
 /** Feste Split-Vorlagen ergänzen, falls sie fehlen (z. B. nach Import eines älteren Backups). */
 export async function ensureBuiltinSplits() {
   for (const s of BUILTIN_SPLITS) if (!(await db.splits.get(s.id))) await db.splits.put(s);
+}
+
+/**
+ * Nach dem Abgleich: Garmin-Krafttrainings ohne Zuordnung automatisch die nächste Split-Muskelgruppe
+ * zuweisen, damit der Plan sofort weiterrückt (ohne manuelles „Bearbeiten → Speichern").
+ * Die Zuordnung bleibt jederzeit änderbar; bereits zugeordnete oder manuell eingetragene Tage bleiben unberührt.
+ */
+export async function autoAssignStrength(): Promise<number> {
+  const split = await activeSplit();
+  if (!split || !split.days.length) return 0;                       // ohne Split keine sinnvolle Reihenfolge
+  const [acts, sessions] = await Promise.all([
+    db.activities.where('sportType').equals('WeightTraining').toArray(),
+    db.strength.toArray()
+  ]);
+  const linked = new Set(sessions.map(s => s.activityId).filter(Boolean));
+  const datesWithSession = new Set(sessions.map(s => s.date));
+  const cutoff = new Date(Date.now() - 180 * 86400000).toISOString().slice(0, 10);
+  const todo = acts.filter(a => a.date >= cutoff && !linked.has(a.id) && !datesWithSession.has(a.date))
+    .sort((a, b) => a.date.localeCompare(b.date) || a.start.localeCompare(b.start));
+  if (!todo.length) return 0;
+  const soFar = sessions.filter(s => !s.skipped && s.muscleGroups.length);   // Grundlage für die Reihenfolge
+  const now = Date.now();
+  let n = 0;
+  for (const a of todo) {
+    const groups = nextSplitDay(split, soFar).groups;
+    const row: StrengthSession = { id: newId(), date: a.date, activityId: a.id, muscleGroups: [...groups], intensity: null, createdAt: now + n, updatedAt: now + n };
+    await db.strength.put(row);
+    soFar.push(row);
+    datesWithSession.add(a.date);
+    n++;
+  }
+  return n;
 }
 
 /**
