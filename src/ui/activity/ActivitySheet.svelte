@@ -3,7 +3,9 @@
   import { swipeDismiss } from '../actions/swipeDismiss';
   import { db, getSetting, type ActivityExtra } from '../../core/db';
   import { fmtDay } from '../../core/dates';
-  import { app, closeActivity, openStrength } from '../app.svelte';
+  import { app, closeActivity, openStrength, openPhysio } from '../app.svelte';
+  import { activeInjury } from '../../domain/injury/injury';
+  import { isPhysioName } from '../../domain/injury/rehab';
   import { sportName, sportColor, dur, num } from '../format';
   import SportIcon from '../components/SportIcon.svelte';
   import RouteThumb from '../components/RouteThumb.svelte';
@@ -17,10 +19,14 @@
   const data = liveQuery(async () => {
     const a = await db.activities.get(id);
     if (!a) return null;
-    const [acts, morning, mMax, mRest, ss] = await Promise.all([db.activities.toArray(), db.morning.toArray(), getSetting<number | null>('hrMax'), getSetting<number | null>('hrRest'),
-      db.strength.where('activityId').equals(id).first()]);
+    const [acts, morning, mMax, mRest, ss, injuries] = await Promise.all([db.activities.toArray(), db.morning.toArray(), getSetting<number | null>('hrMax'), getSetting<number | null>('hrRest'),
+      db.strength.where('activityId').equals(id).first(), db.injuries.toArray()]);
+    const inj = activeInjury(injuries);
+    const check = injuries.flatMap(i => i.rehab ?? []).find(c => c.activityId === id) ?? null;
     const hr = hrProfile(acts, morning.filter(m => m.restingHr != null).map(m => m.restingHr!), { max: mMax, rest: mRest }, today());
-    return { a, hr, load: activityLoad(a, hr, ss?.intensity), strength: ss };
+    // Physio: per Name erkannt oder (bei aktiver Verletzung) jede Nicht-Ausdauer-Einheit als Physio bewertbar
+    const physio = isPhysioName(a) || !!check || (!!inj && a.date >= inj.startDate && !/Run|Ride|Swim|Walk|Hike|Ski|Snow|Row/.test(a.sportType));
+    return { a, hr, load: activityLoad(a, hr, ss?.intensity), strength: ss, inj, check, physio };
   });
   let extra = $state<ActivityExtra | null>(null), loading = $state(false), err = $state('');
   let loadingStarted = false;
@@ -101,6 +107,17 @@
           <p>{$data.strength.muscleGroups.map(groupLabel).join(' + ')}{$data.strength.intensity ? ` · Intensität ${$data.strength.intensity}/10` : ''}</p>
         {:else}<p class="muted">Noch keine Muskelgruppen eingetragen.</p>{/if}
         <button class="link" onclick={() => { closeActivity(); openStrength({ activityId: a.id }); }}>Muskelgruppen {($data.strength ? 'bearbeiten' : 'eintragen')}</button>
+      </section>
+    {/if}
+
+    {#if $data.physio && ($data.inj || $data.check)}
+      <section>
+        <h3>Physiotherapie</h3>
+        {#if $data.check && !$data.check.ignored}
+          <p>Bewertet: Schmerz {$data.check.painDuring ?? '–'}/10 · {$data.check.criteria.length} Ziele erreicht{$data.check.cleared ? ' · Freigabe der Physio' : ''}</p>
+        {:else if $data.check?.ignored}<p class="muted">Nicht bewertet.</p>
+        {:else}<p class="muted">{isPhysioName($data.a) ? 'Als Physio-Einheit erkannt.' : 'War das eine Physio-Einheit?'} Eine kurze Bewertung hilft bei der Rückkehrstufe.</p>{/if}
+        {#if $data.inj}<button class="link" onclick={() => { const aid = $data.a.id; closeActivity(); openPhysio({ activityId: aid }); }}>{$data.check ? 'Bewertung ändern' : 'Als Physio-Einheit bewerten'}</button>{/if}
       </section>
     {/if}
 

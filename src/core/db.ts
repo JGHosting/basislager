@@ -135,8 +135,26 @@ export interface Injury {
   /** 'stufen' = Rückkehr in Stufen; 'ausfall' = ernste Verletzung (z. B. Bruch, Bänderriss): nur erlaubte Bewegungen, Ende per Knopf. */
   mode?: 'stufen' | 'ausfall';
   stage: number;                                 // Rückkehrstufe 0–7 (siehe domain/injury)
-  stageHistory: { date: string; stage: number }[];
+  /** via: wie die Stufe gesetzt wurde (manuell oder nach Physio-Bewertung bestätigt). */
+  stageHistory: { date: string; stage: number; via?: 'manuell' | 'physio' }[];
+  /** Bewertete Physiotherapie-Einheiten (aus Garmin erkannt oder manuell eingetragen). */
+  rehab?: RehabCheck[];
   createdAt: number; updatedAt: number;
+}
+
+/** Rückmeldung zu einer Physio-Einheit – Grundlage für den Vorschlag, die Rückkehrstufe zu erhöhen. */
+export interface RehabCheck {
+  id: string;
+  date: string;
+  activityId?: string;          // erkannte Garmin-Aktivität (fehlt bei manuell eingetragener Einheit)
+  stage: number;                // Rückkehrstufe zum Zeitpunkt der Einheit
+  exercises: string[];          // Übungsarten (Kategorien)
+  note?: string;                // eigene Notiz, z. B. konkrete Übungen
+  painDuring: number | null;    // Schmerz während der Übungen 0–10
+  criteria: number[];           // erfüllte Reha-Ziele der Stufe (Index in rehabCriteria)
+  cleared?: boolean;            // Physio hat den nächsten Schritt freigegeben
+  ignored?: boolean;            // „nicht bewerten“ – zählt nicht für den Fortschritt
+  createdAt: number;
 }
 
 /* ---------- Planer ---------- */

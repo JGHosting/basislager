@@ -1,7 +1,7 @@
 /** Speichern/Laden von Krafteinheiten und Split-Einstellung. */
 import { db, getSetting, setSetting, BUILTIN_SPLITS, type StrengthSession, type MuscleGroup, type SplitTemplate } from '../../core/db';
 import { newId } from '../../core/ids';
-import { nextSplitDay } from './strength';
+import { nextSplitDay, isStrengthActivity } from './strength';
 
 export async function activeSplit(): Promise<SplitTemplate | null> {
   const id = await getSetting<string | null>('activeSplit');
@@ -51,7 +51,7 @@ export async function autoAssignStrength(): Promise<number> {
   const linked = new Set(sessions.map(s => s.activityId).filter(Boolean));
   const datesWithSession = new Set(sessions.map(s => s.date));
   const cutoff = new Date(Date.now() - 180 * 86400000).toISOString().slice(0, 10);
-  const todo = acts.filter(a => a.date >= cutoff && !linked.has(a.id) && !datesWithSession.has(a.date))
+  const todo = acts.filter(a => isStrengthActivity(a) && a.date >= cutoff && !linked.has(a.id) && !datesWithSession.has(a.date))
     .sort((a, b) => a.date.localeCompare(b.date) || a.start.localeCompare(b.start));
   if (!todo.length) return 0;
   const soFar = sessions.filter(s => !s.skipped && s.muscleGroups.length);   // Grundlage für die Reihenfolge

@@ -33,6 +33,7 @@ export const app = $state({
   strengthEdit: null as null | { activityId?: string; sessionId?: string; date?: string; fresh?: boolean },
   foodSheet: null as null | { mode: 'add'; date: string; meal: Meal } | { mode: 'edit'; entry: FoodLogEntry },
   injurySheet: null as null | { id?: string },
+  physioSheet: null as null | { activityId?: string; checkId?: string },
   goalSheet: null as null | { id?: string },
   activitySheet: null as null | { id: string },
   garmin: { busy: false, error: '', last: null as PushResult | null }
@@ -61,7 +62,7 @@ function watchPlanChanges() {
   let first = true;
   liveQuery(() => Promise.all([
     db.planEdits.toArray(), db.goals.toArray(), db.injuries.toArray(), db.vacations.toArray(), db.fixedEvents.toArray(),
-    db.strength.count(), db.settings.where('key').anyOf('runsPerWeek', 'strengthPerWeek', 'activeSplit', 'garmin', 'hrMax').toArray()
+    db.strength.count(), db.settings.where('key').anyOf('runsPerWeek', 'sports', 'strengthPerWeek', 'activeSplit', 'garmin', 'hrMax').toArray()
   ])).subscribe(() => { if (first) { first = false; return; } schedulePush(); });
 }
 
@@ -134,6 +135,8 @@ export function closeFood() { app.foodSheet = null; }
 /* ---------- Verletzung ---------- */
 export function openInjury(t: { id?: string } = {}) { app.injurySheet = t; }
 export function closeInjury() { app.injurySheet = null; }
+export function openPhysio(t: { activityId?: string; checkId?: string } = {}) { app.physioSheet = t; }
+export function closePhysio() { app.physioSheet = null; }
 
 /* ---------- Planer ---------- */
 export function openGoal(t: { id?: string } = {}) { app.goalSheet = t; }

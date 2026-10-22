@@ -4,7 +4,9 @@
   import { today, addDays, fmtDay } from '../../core/dates';
   import { STAGES, LAST_STAGE, MOVEMENTS, SHOWN_MOVEMENTS, STATUS_LABEL, daysSince, doctorHint, advanceCheck, isOutage } from '../../domain/injury/injury';
   import { setStage, endInjury, switchToStages } from '../../domain/injury/repo';
-  import { openInjury } from '../app.svelte';
+  import { openInjury, openPhysio } from '../app.svelte';
+  import { assessRehab, pendingPhysio, rehabCriteria } from '../../domain/injury/rehab';
+  import { dur } from '../format';
 
   let { injury }: { injury: Injury } = $props();
   const t = today();
@@ -12,6 +14,12 @@
   const pains = $derived(($morning ?? []).filter(m => m.date >= addDays(t, -13) && m.pain != null));
   const hint = $derived($morning ? doctorHint(injury, $morning, t) : null);
   let warn = $state<string | null>(null);
+  // Physio: erkannte, noch nicht bewertete Einheiten + Vorschlag aus den Bewertungen
+  const acts = liveQuery(() => db.activities.where('date').aboveOrEqual(addDays(t, -14)).toArray());
+  const pending = $derived($acts ? pendingPhysio(injury, $acts, t) : []);
+  const assess = $derived($morning ? assessRehab(injury, $morning, t) : null);
+  const recentChecks = $derived((injury.rehab ?? []).filter(c => !c.ignored).slice(-3).reverse());
+  const nCrit = $derived(rehabCriteria(injury).length);
 
   function next() {
     const w = $morning ? advanceCheck(injury, $morning, t) : null;
@@ -29,7 +37,7 @@
     <span class="sdot"></span>
     <span class="stxt">
       <b>{outage ? 'Ernste Verletzung' : 'Verletzung'}: {injury.region}{injury.side !== 'keine' && injury.side !== 'beidseitig' ? ' ' + injury.side : ''}</b>
-      <small>Tag {days + 1} · {outage ? 'nur erlaubte Bewegungen' : `Stufe ${injury.stage + 1}/${STAGES.length}: ${STAGES[injury.stage].label}`}{hint ? ' · Hinweis beachten' : ''}</small>
+      <small>Tag {days + 1} · {outage ? 'nur erlaubte Bewegungen' : `Stufe ${injury.stage + 1}/${STAGES.length}: ${STAGES[injury.stage].label}`}{pending.length ? ' · Physio bewerten' : assess?.status === 'bereit' ? ' · nächste Stufe möglich' : hint ? ' · Hinweis beachten' : ''}</small>
     </span>
     <i class:rot={expanded}>›</i>
   </button>
@@ -70,6 +78,28 @@
   {/if}
 
   {#if hint}<p class="doc">{hint}</p>{/if}
+
+  <div class="physio">
+    <div class="ph"><b>Physiotherapie</b><button class="edit" onclick={() => openPhysio({})}>+ Einheit eintragen</button></div>
+    {#each pending as a}
+      <button class="pend" onclick={() => openPhysio({ activityId: a.id })}>
+        <span><b>Physio-Einheit erkannt</b><small>{fmtDay(a.date, { weekday: 'short', day: 'numeric', month: 'short' })}{a.duration ? ` · ${dur(a.duration)}` : ''} · Wie lief's? Kurz bewerten</small></span><i>›</i>
+      </button>
+    {/each}
+    {#if assess?.status === 'bereit' && assess.nextLabel}
+      <p class="ready">Reha-Ziele erreicht ({assess.qualifying} Einheit{assess.qualifying > 1 ? 'en' : ''}). Vorschlag: <b>Stufe {injury.stage + 2}: {assess.nextLabel}</b></p>
+      <button class="btn primary wide" onclick={() => { warn = null; setStage(injury.id, injury.stage + 1, 'physio'); }}>Stufe {injury.stage + 2} freigeben</button>
+    {:else if assess && assess.status !== 'keine'}
+      <p class="muted small">{assess.status === 'fast' ? 'Auf gutem Weg: ' : 'Noch nicht steigern: '}{assess.reasons.join(' ')}</p>
+    {:else if !recentChecks.length && !pending.length}
+      <p class="muted small">Physio-Einheiten aus Garmin werden erkannt. Nach jeder Einheit fragt die App kurz nach – sind die Ziele der Stufe mehrmals erreicht, schlägt sie die nächste Stufe vor.</p>
+    {/if}
+    {#each recentChecks as c}
+      <button class="chk" onclick={() => openPhysio({ checkId: c.id })}>
+        {fmtDay(c.date, { weekday: 'short', day: 'numeric', month: 'short' })} · Stufe {c.stage + 1} · Schmerz {c.painDuring ?? '–'}/10{outage ? '' : ` · ${c.criteria.length}/${c.stage === injury.stage ? nCrit : c.criteria.length} Ziele`}{c.cleared ? ' · Freigabe' : ''}
+      </button>
+    {/each}
+  </div>
   {#if warn}<p class="warnmsg">{warn} <b>Tippe nochmal, um trotzdem freizugeben.</b></p>{/if}
 
   {#if outage}
@@ -119,5 +149,15 @@
   .pbars span { border-radius: 3px; }
   .doc { background: color-mix(in srgb, var(--red) 14%, transparent); border-radius: 12px; padding: 10px 12px; font-size: 14px; margin: 12px 0 0; }
   .warnmsg { background: var(--accent-soft); border-radius: 12px; padding: 10px 12px; font-size: 14px; margin: 12px 0 0; }
+  .physio { margin-top: 14px; border-top: 1px solid var(--line); padding-top: 10px; }
+  .ph { display: flex; justify-content: space-between; align-items: center; font-size: 15px; }
+  .pend { width: 100%; display: flex; align-items: center; gap: 10px; text-align: left; background: var(--accent-soft); border: none; border-radius: 12px; padding: 10px 12px; margin: 8px 0 0; font: inherit; color: var(--text); cursor: pointer; }
+  .pend span { flex: 1; display: flex; flex-direction: column; }
+  .pend small { font-size: 13px; color: var(--muted); }
+  .pend i { font-style: normal; color: var(--accent); font-size: 22px; }
+  .ready { background: color-mix(in srgb, var(--green) 18%, transparent); border-radius: 12px; padding: 10px 12px; font-size: 14px; margin: 8px 0; }
+  .chk { display: block; width: 100%; text-align: left; background: none; border: none; border-top: 1px solid var(--line); padding: 8px 0; font: inherit; font-size: 13px; color: var(--muted); cursor: pointer; }
+  .physio .chk:first-of-type { margin-top: 6px; }
+  .wide { width: 100%; }
   .actions { display: grid; grid-template-columns: 1fr 1.4fr; gap: 10px; margin-top: 14px; }
 </style>

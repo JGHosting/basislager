@@ -6,6 +6,7 @@
  * - Nächster Tag der aktiven Split-Vorlage wird vorgeschlagen.
  * Reine Funktionen (ohne Datenbank) → später in den Planer und eine native App übertragbar.
  */
+import { isPhysioName } from '../injury/rehab';
 import type { Activity, StrengthSession, SplitTemplate, MuscleGroup } from '../../core/db';
 import { addDays } from '../../core/dates';
 
@@ -22,7 +23,8 @@ export const CORE_GROUPS: MuscleGroup[] = ['push', 'pull', 'arme', 'beine', 'rum
 export const groupLabel = (g: MuscleGroup) => GROUPS.find(x => x.id === g)?.label ?? g;
 export const coversGroup = (s: StrengthSession, g: MuscleGroup) => s.muscleGroups.includes(g) || s.muscleGroups.includes('ganzkoerper');
 
-export const isStrengthActivity = (a: Activity) => a.sportType === 'WeightTraining';
+/** Krafttraining aus Garmin – ein als „Physiotherapie“ benanntes Training zählt nicht dazu. */
+export const isStrengthActivity = (a: Activity) => a.sportType === 'WeightTraining' && !isPhysioName(a);
 
 /** Krafttrainings der letzten 14 Tage, die noch keiner Einheit zugeordnet sind. Ältere bleiben in Ruhe. */
 export function openStrengthActivities(activities: Activity[], sessions: StrengthSession[], today: string): Activity[] {

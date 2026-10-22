@@ -8,6 +8,7 @@
   import BackupSection from '../components/BackupSection.svelte';
   import HrSettings from '../components/HrSettings.svelte';
   import SplitSettings from '../components/SplitSettings.svelte';
+  import SportSettings from '../components/SportSettings.svelte';
   import WeightSettings from '../components/WeightSettings.svelte';
   import GarminSettings from '../components/GarminSettings.svelte';
 
@@ -68,6 +69,9 @@
 
 <h3 class="section">Garmin-Uhr</h3>
 <GarminSettings />
+
+<h3 class="section">Sportarten</h3>
+<SportSettings />
 
 <h3 class="section">Kraft-Split</h3>
 <SplitSettings />

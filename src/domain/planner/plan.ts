@@ -1,8 +1,8 @@
 /**
  * Trainingsplaner.
  *
- * Standardwoche (ohne Wettkampf): 3× Kraft nach deinem Split, 2–3× Laufen.
- *   Laufumfang = Schnitt deiner letzten 4 Wochen + 8 %, für jede weitere Woche +5 %,
+ * Standardwoche (ohne Wettkampf): Kraft nach deinem Split (0–6×) + deine Ausdauer-Sportarten (je 0–5×, Grundlage oder Leistung).
+ *   Umfang je Sportart = Schnitt deiner letzten 4 Wochen + 8 %, für jede weitere Woche +5 %,
  *   jede 4. Kalenderwoche Entlastung (−25 %). Dadurch steigert sich der Plan langfristig mit dir.
  * Wettkampfmodus: Periodisierung rückwärts vom Wettkampftag (Grundlage → Aufbau → Spitze → Taper → Wettkampfwoche),
  *   Hauptsportart bekommt den Großteil, Kraft bleibt (zum Ende leichter), bei anderer Hauptsportart 1× locker Laufen,
@@ -19,6 +19,7 @@ import { estimatePaces, type Paces } from './paces';
 import { activityLoad, loadSeries, type HrProfile } from '../load/load';
 import { sportName } from '../../ui/format';
 import { VACATION_LEG, vacationSportLabel } from '../vacation/vacation';
+import { normalizeSports, rolesFor, ROLE_WEIGHT, MAX_PER_WEEK, type EnduranceSport, type SportConfig, type SportsSetting, type Role } from './sports';
 
 export type PlanSport = 'kraft' | 'lauf' | 'trail' | 'rad' | 'schwimmen' | 'gehen' | 'wettkampf';
 export type Intensity = 'locker' | 'mittel' | 'hart' | 'wettkampf';
@@ -41,7 +42,12 @@ export interface PlanWeek {
 export interface PlanContext {
   today: string; activities: Activity[]; strength: StrengthSession[]; split: SplitTemplate | null;
   goal: Goal | null; injury: Injury | null; events: FixedEvent[]; edits: Map<string, PlanEdit>;
+  /** Alt: Läufe pro Woche (nur noch Fallback, falls 'sports' fehlt). */
   runsPerWeek: 2 | 3; vacations: Vacation[];
+  /** Ausdauer-Sportarten mit Häufigkeit und Ziel (Mehr → Sportarten). */
+  sports?: SportsSetting;
+  /** Physio-Aktivitäten: zählen weder als Krafttraining noch als außerplanmäßige Belastung. */
+  physio?: Set<string>;
   /** Krafteinheiten pro Woche (1–6, Standard 3). */
   strengthPerWeek?: number;
   hr?: HrProfile;
@@ -212,6 +218,101 @@ function longRun(ws: string, day: number, slot: string, p: Paces, min: number, p
   return S(ws, day, slot, trail ? 'trail' : 'lauf', trail ? 'Langer Trailrun' : 'Langer Lauf', min, 'mittel', details, trail ? hm : undefined);
 }
 
+/* ---------- Ausdauer nach Sportarten ---------- */
+export const sportsOf = (ctx: PlanContext) => normalizeSports(ctx.sports, ctx.runsPerWeek);
+const FAMILY_RE: Record<EnduranceSport, RegExp> = { lauf: /Run/, rad: /Ride/, schwimmen: /Swim/ };
+const KEY_PREFIX: Record<EnduranceSport, string> = { lauf: 'run', rad: 'ride', schwimmen: 'swim' };
+/** Mindestumfang (min/Woche) bei wenig Verlauf; Laufen wie bisher ≥ 90 min. */
+const FLOOR_PER: Record<EnduranceSport, number> = { lauf: 30, rad: 45, schwimmen: 30 };
+const LONG_CAP: Record<EnduranceSport, number> = { lauf: 150, rad: 300, schwimmen: 90 };
+/** Für die Verteilung „hart“: harte Intensität, Qualitätseinheit oder lange Einheit, die nicht nur locker ist. */
+const isHardOrLong = (s: PlanSession) => s.sport !== 'kraft' && (s.intensity === 'hart' || s.intensity === 'wettkampf' || /(-q\d*|race)$/.test(s.key) || (/long\d*$/.test(s.key) && s.intensity !== 'locker'));
+const z2 = 'Zone 2 (60–70 % vom Maximalpuls)';
+
+function enduranceSession(ws: string, sport: EnduranceSport, role: Role, mode: SportConfig['mode'], key: string, min: number, phase: Phase, p: Paces, wk: number): PlanSession {
+  const base = mode === 'grundlage';
+  if (sport === 'lauf') {
+    if (role === 'long') return base ? S(ws, 0, key, 'lauf', 'Langer Lauf', Math.min(min, LONG_CAP.lauf), 'locker', `Lang und ruhig in ${z2}, ${pr(p.long)}. Trinken/Verpflegung testen.`)
+      : longRun(ws, 0, key, p, Math.min(min, LONG_CAP.lauf), phase, null, false);
+    if (role === 'easy') return base ? S(ws, 0, key, 'lauf', 'Grundlagenlauf', min, 'locker', `Ruhig in ${z2}, Gesprächstempo ${pr(p.easy)}.`) : easyRun(ws, 0, key, p, min);
+    // Leistung: in der Standardwoche wechseln Intervalle, Schwelle und Tempodauerlauf, Erholungswoche bleibt Fahrtspiel
+    return runQuality(ws, 0, key, phase === 'basis' ? 'aufbau' : phase, wk + (role === 'q2' ? 1 : 0), p, min, null, false);
+  }
+  if (sport === 'rad') {
+    if (role === 'long') return base ? S(ws, 0, key, 'rad', 'Lange Grundlagenausfahrt', Math.min(min, LONG_CAP.rad), 'locker', `Lang und gleichmäßig in ${z2}, hohe Trittfrequenz (85–95). Essen und trinken nicht vergessen.`)
+      : S(ws, 0, key, 'rad', 'Lange Ausfahrt', Math.min(min, LONG_CAP.rad), 'mittel', 'Lang und gleichmäßig, die letzte halbe Stunde gern etwas zügiger. Essen und trinken nicht vergessen.');
+    if (role === 'easy') return base ? S(ws, 0, key, 'rad', 'Grundlagenausfahrt', min, 'locker', `Gleichmäßig in ${z2}, hohe Trittfrequenz (85–95).`)
+      : S(ws, 0, key, 'rad', 'Lockere Ausfahrt', min, 'locker', 'Gleichmäßig locker, hohe Trittfrequenz (85–95).');
+    if (role === 'q2' || phase === 'erholung' || phase === 'urlaub')
+      return S(ws, 0, key, 'rad', 'Ausfahrt mit Tempowechseln', min, 'mittel', 'Locker, darin 6 × 2 min zügig mit 3 min locker.');
+    return wk % 2 === 0
+      ? S(ws, 0, key, 'rad', 'Rad-Intervalle', min, 'hart', '20 min einfahren, 4–5 × 8 min zügig (Schwelle), 4 min locker, ausfahren.')
+      : S(ws, 0, key, 'rad', 'Sweet-Spot-Ausfahrt', min, 'hart', '15 min einfahren, 2–3 × 12 min knapp unter der Schwelle, 5 min locker, ausfahren.');
+  }
+  if (role === 'long') return S(ws, 0, key, 'schwimmen', 'Lange Strecke', Math.min(min, LONG_CAP.schwimmen), base ? 'locker' : 'mittel', base ? 'Lange, ruhige Strecke ohne Pausen, Technik sauber halten.' : 'Lange gleichmäßige Strecke, möglichst ohne Pausen.');
+  if (role === 'easy') return S(ws, 0, key, 'schwimmen', 'Technik & Grundlage', min, 'locker', 'Einschwimmen, Technikübungen (z. B. Abschlag, Züge zählen), dann ruhig durchschwimmen.');
+  if (role === 'q2' || phase === 'erholung' || phase === 'urlaub') return S(ws, 0, key, 'schwimmen', 'Schwimmen Tempo', min, 'mittel', 'Einschwimmen, 4 × 400 m zügig-gleichmäßig, 1 min Pause, ausschwimmen.');
+  return S(ws, 0, key, 'schwimmen', 'Intervalle', min, 'hart', 'Einschwimmen, 10–12 × 100 m zügig, 20 s Pause, ausschwimmen.');
+}
+
+/**
+ * Erzeugt die Ausdauer-Einheiten der gewählten Sportarten und verteilt sie auf die Woche:
+ * 1) lange Einheiten (Hauptsportart Samstag, weitere Sonntag), 2) Qualität mit einem Tag Abstand zu harten/langen Einheiten,
+ * 3) lockere Einheiten dorthin, wo noch am wenigsten los ist (möglichst nicht zwei Ausdauereinheiten an einem Tag).
+ */
+function enduranceWeek(ws: string, ctx: PlanContext, phase: Phase, p: Paces, existing: PlanSession[], configs: SportConfig[],
+  o: { main: EnduranceSport | null; factor: number; ramp: number; demote: boolean; max: number }): PlanSession[] {
+  const items: { s: PlanSession; role: Role; main: boolean }[] = [];
+  const sorted = [...configs].sort((a, b) => Number(b.sport === o.main) - Number(a.sport === o.main));
+  for (const c of sorted) {
+    let roles = rolesFor(c);
+    if (o.demote) roles = roles.map(r => (r === 'q' || r === 'q2' ? 'easy' : r));
+    if (roles.length > o.max) roles = Array<Role>(o.max).fill('easy');
+    if (!roles.length) continue;
+    const recent = Math.max(FLOOR_PER[c.sport] * Math.max(roles.length, c.sport === 'lauf' ? 3 : 2), recentMinutes(ctx.activities, weekStart(ctx.today), FAMILY_RE[c.sport]));
+    const vol = Math.min(recent * o.ramp, recent * 1.5) * o.factor;
+    const wsum = roles.reduce((t, r) => t + ROLE_WEIGHT[r], 0);
+    const seen: Record<string, number> = {};
+    for (const r of roles) {
+      const base = r === 'q2' ? 'q2' : r;
+      seen[base] = (seen[base] ?? 0) + 1;
+      const key = `${KEY_PREFIX[c.sport]}-${base}${seen[base] > 1 ? seen[base] : ''}`;
+      items.push({ s: enduranceSession(ws, c.sport, r, c.mode, key, vol * ROLE_WEIGHT[r] / wsum, phase, p, isoWeek(ws)), role: r, main: c.sport === o.main });
+    }
+  }
+  const placed: PlanSession[] = [];
+  const all = () => [...existing, ...placed];
+  const on = (d: number) => all().filter(s => s.date === DAY(ws, d));
+  const blocked = (d: number) => on(d).some(s => s.sport === 'wettkampf') || existing.some(s => s.sport === 'wettkampf' && s.date < DAY(ws, d));
+  const hardNear = (d: number) => [d - 1, d, d + 1].some(x => x >= 0 && x <= 6 && on(x).some(isHardOrLong));
+  const put = (it: { s: PlanSession }, d: number) => placed.push({ ...it.s, date: DAY(ws, d), origDate: DAY(ws, d) });
+  const free = (prefs: number[], ok: (d: number) => boolean) => prefs.find(d => !blocked(d) && ok(d));
+  // 1) lange Einheiten
+  for (const it of items.filter(i => i.role === 'long')) {
+    const prefs = it.main ? [5, 6, 4, 2] : [6, 5, 2, 4];
+    const d = free(prefs, x => !on(x).some(isHardOrLong)) ?? free(prefs, () => true);
+    if (d != null) put(it, d);
+  }
+  // 2) Qualität (Hauptsportart zuerst)
+  for (const it of items.filter(i => i.role === 'q' || i.role === 'q2').sort((a, b) => Number(b.main) - Number(a.main))) {
+    const prefs = it.main ? [3, 1, 2, 0, 4, 6, 5] : [1, 3, 2, 0, 4, 6, 5];
+    const room = (x: number) => !on(x).some(y => y.sport === it.s.sport) && on(x).filter(y => y.sport !== 'kraft').length < 2;
+    const d = free(prefs, x => room(x) && !hardNear(x)) ?? free(prefs, x => room(x) && !on(x).some(isHardOrLong)) ?? free(prefs, room) ?? free(prefs, () => true);
+    if (d != null) put(it, d);
+  }
+  // 3) lockere Einheiten
+  const easyPrefs = [1, 3, 2, 4, 6, 0, 5];
+  for (const it of items.filter(i => i.role === 'easy')) {
+    const score = (d: number) => {
+      const day = on(d), endu = day.filter(x => x.sport !== 'kraft');
+      return endu.length * 10 + (endu.some(x => x.sport === it.s.sport) ? 20 : 0) + (day.some(isHardOrLong) ? 6 : 0) + (day.some(x => x.sport === 'kraft') ? 3 : 0) + easyPrefs.indexOf(d) * 0.1;
+    };
+    const d = easyPrefs.filter(x => !blocked(x)).sort((a, b) => score(a) - score(b))[0];
+    if (d != null) put(it, d);
+  }
+  return placed;
+}
+
 /* ---------- Woche erzeugen ---------- */
 export function buildWeek(ws: string, ctx: PlanContext): PlanWeek {
   const g = ctx.goal && !ctx.goal.archived && ws >= weekStart(ctx.goal.planStart) && ws <= weekStart(ctx.goal.date) ? ctx.goal : null;
@@ -227,16 +328,13 @@ export function buildWeek(ws: string, ctx: PlanContext): PlanWeek {
     // Erholung nach je 3 Belastungswochen; eine reduzierte Urlaubswoche zählt als Erholung und startet den Zähler neu
     const recovery = !vacWeek && baseRecovery(ws, vacs);
     phase = vacWeek ? 'urlaub' : recovery ? 'erholung' : 'basis';
-    const recent = Math.max(90, recentMinutes(ctx.activities, weekStart(ctx.today), /Run/));
-    const vol = Math.min(recent * 1.08 * Math.pow(1.05, ahead), recent * 1.5) * (recovery ? 0.75 : 1);
     const kDays = KRAFT_DAYS[kraftCount(ctx)];
     const kg = strengthGroups(ctx, ws, kDays.length);
     assignKraft(kDays, kg).forEach((k, i) => sessions.push(kraft(ws, k.day, `kraft${i + 1}`, k.groups, false, k.noLegs)));
-    if (ctx.runsPerWeek === 3) {
-      sessions.push(easyRun(ws, 1, 'run-easy', p, vol * 0.3), runQuality(ws, 3, 'run-q', phase, isoWeek(ws), p, vol * 0.3, null, false), longRun(ws, 5, 'run-long', p, Math.min(vol * 0.4, 150), phase, null, false));
-    } else {
-      sessions.push(runQuality(ws, 1, 'run-q', phase, isoWeek(ws), p, vol * 0.45, null, false), longRun(ws, 5, 'run-long', p, Math.min(vol * 0.55, 150), phase, null, false));
-    }
+    // Ausdauer nach deinen Sportarten (Mehr → Sportarten): Umfang je Sportart wächst langsam mit dir mit
+    sessions.push(...enduranceWeek(ws, ctx, phase, p, sessions, sportsOf(ctx).list.filter(c => c.perWeek > 0), {
+      main: sportsOf(ctx).main, factor: recovery ? 0.75 : 1, ramp: 1.08 * Math.pow(1.05, ahead), demote: false, max: MAX_PER_WEEK
+    }));
   } else {
     const gp = goalPhase(g, ws, ctx.vacations ?? []); phase = gp.phase; weekNo = gp.idx + 1; total = gp.total;
     const v = goalVolumes(g, ctx, weekStart(ctx.today));
@@ -254,6 +352,10 @@ export function buildWeek(ws: string, ctx: PlanContext): PlanWeek {
     assignKraft(kDays, kg).forEach((k, i) => sessions.push(kraft(ws, k.day, `kraft${i + 1}`, k.groups, phase === 'taper' || phase === 'wettkampfwoche',
       phase === 'wettkampfwoche' || k.noLegs || (phase === 'taper' && i > 0))));
     const trail = g.sport === 'trailrun';
+    // Weitere Sportarten aus deinen Einstellungen, die der Wettkampfplan nicht selbst abdeckt
+    const covered: EnduranceSport[] = g.sport === 'triathlon' ? ['lauf', 'rad', 'schwimmen'] : g.sport === 'rad' ? ['rad'] : g.sport === 'schwimmen' ? ['schwimmen'] : ['lauf'];
+    const extras = sportsOf(ctx).list.filter(c => c.perWeek > 0 && !covered.includes(c.sport));
+    const extraRun = extras.some(c => c.sport === 'lauf');
 
     if (g.sport === 'lauf' || g.sport === 'trailrun') {
       const four = peak >= 240 && phase !== 'wettkampfwoche';
@@ -271,13 +373,13 @@ export function buildWeek(ws: string, ctx: PlanContext): PlanWeek {
         phase === 'grundlage' || phase === 'erholung' ? 'Locker, darin 6 × 2 min zügig.' : phase === 'spitze' ? '20 min einfahren, 3 × 15 min im geplanten Wettkampftempo, 5 min locker dazwischen.' : '20 min einfahren, 4–5 × 8 min zügig (Schwelle), 4 min locker, ausfahren.'));
       if (phase !== 'wettkampfwoche') sessions.push(S(ws, 5, 'ride-long', 'rad', 'Lange Ausfahrt', Math.min(vol * 0.53, 360), 'mittel', `Lang und gleichmäßig${hm ? `, möglichst ca. ${hm} hm` : ''}. Verpflegung wie im Wettkampf testen.`, hm));
       // 1× locker Laufen – außer der Radumfang ist ohnehin sehr hoch
-      if (vol < 420 && phase !== 'wettkampfwoche') sessions.push(easyRun(ws, 6, 'run-easy', p, 35));
+      if (vol < 420 && phase !== 'wettkampfwoche' && !extraRun) sessions.push(easyRun(ws, 6, 'run-easy', p, 35));
     } else if (g.sport === 'schwimmen') {
       sessions.push(S(ws, 1, 'swim-tech', 'schwimmen', 'Technik & Grundlage', vol * 0.3, 'locker', 'Einschwimmen, Technikübungen (z. B. Abschlag, Zählen der Züge), dann ruhig durchschwimmen.'));
       sessions.push(S(ws, 3, 'swim-q', 'schwimmen', phase === 'spitze' ? 'Wettkampftempo' : 'Intervalle', vol * 0.3, phase === 'grundlage' ? 'mittel' : 'hart',
         phase === 'spitze' ? 'Einschwimmen, 4 × 400 m im Wettkampftempo, 1 min Pause.' : 'Einschwimmen, 10–12 × 100 m zügig, 20 s Pause, ausschwimmen.'));
       if (phase !== 'wettkampfwoche') sessions.push(S(ws, 5, 'swim-long', 'schwimmen', 'Lange Strecke', vol * 0.4, 'mittel', 'Lange gleichmäßige Strecke, möglichst im Freiwasser oder ohne Pausen.'));
-      if (phase !== 'wettkampfwoche') sessions.push(easyRun(ws, 6, 'run-easy', p, 35));
+      if (phase !== 'wettkampfwoche' && !extraRun) sessions.push(easyRun(ws, 6, 'run-easy', p, 35));
     } else {
       // Triathlon: Schwimmen 20 %, Rad 47 %, Laufen 33 %
       const tri = TRI[g.triDistance ?? 'olympisch'];
@@ -293,6 +395,16 @@ export function buildWeek(ws: string, ctx: PlanContext): PlanWeek {
         if (build) sessions.push(S(ws, 5, 'brick', 'lauf', 'Koppellauf (direkt nach dem Rad)', Math.min(10 + rn * 0.15, 30), 'mittel', `Direkt vom Rad in die Laufschuhe, erste Minuten ${pr(p.race ?? p.threshold + 0.1, 0.08)}, dann locker. Wechsel üben.`));
         sessions.push(longRun(ws, 6, 'run-long', p, Math.min(rn * 0.55, tri.run > 20 ? 150 : 80), phase, g, false));
       }
+    }
+
+    // Zusatzsportarten: Fokus liegt auf dem Wettkampf → keine Steigerung, in der Spitze nur Grundlage,
+    // im Taper höchstens eine lockere Einheit, in der Wettkampfwoche keine
+    if (extras.length && phase !== 'wettkampfwoche') {
+      const taperW = phase === 'taper';
+      sessions.push(...enduranceWeek(ws, ctx, phase, p, sessions, extras, {
+        main: null, factor: phase === 'erholung' || phase === 'urlaub' ? 0.75 : taperW ? 0.5 : 1, ramp: 1,
+        demote: taperW || phase === 'spitze', max: taperW ? 1 : MAX_PER_WEEK
+      }));
     }
 
     // Wettkampftag + Tag davor
@@ -312,7 +424,7 @@ export function buildWeek(ws: string, ctx: PlanContext): PlanWeek {
   if (ctx.injury) out = applyInjury(out, ctx.injury, ws, ctx.vacations ?? []);
   out = applyEdits(out, ctx.edits);
   const used = new Set<string>();
-  out = applyDone(out, ctx.activities, ctx.today, used);
+  out = applyDone(out, ctx.activities.filter(a => !ctx.physio?.has(a.id)), ctx.today, used);
   out = applyStrengthActual(out, ctx, ws, phase === 'wettkampfwoche');
   const inter = applyInteractions(out, ctx, ws, used);
   out = inter.list;
@@ -565,7 +677,7 @@ function applyInteractions(list: PlanSession[], ctx: PlanContext, ws: string, us
 
   // 2) Wochenbudget – nur für die laufende Woche
   if (ws === weekStart(t)) {
-    const unplanned = ctx.activities.filter(a => a.date >= ws && a.date <= t && !used.has(a.id) && !/Weight|Workout|Yoga/.test(a.sportType));
+    const unplanned = ctx.activities.filter(a => a.date >= ws && a.date <= t && !used.has(a.id) && !ctx.physio?.has(a.id) && !/Weight|Workout|Yoga/.test(a.sportType));
     const plannedLoad = out.filter(endurance).reduce((sum, s) => sum + s.minutes * LOAD_PER_MIN[s.intensity], 0);
     let budget = 0;
     for (const a of unplanned) {

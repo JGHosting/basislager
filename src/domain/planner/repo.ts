@@ -5,6 +5,8 @@ import { today, weekStart, addDays } from '../../core/dates';
 import { activeInjury } from '../injury/injury';
 import { buildWeek, type PlanContext, type PlanWeek, type PlanSession } from './plan';
 import { hrProfile } from '../load/load';
+import { normalizeSports, type SportsSetting } from './sports';
+import { physioIds } from '../injury/rehab';
 
 const plain = <T,>(v: T): T => JSON.parse(JSON.stringify(v));
 
@@ -21,10 +23,11 @@ export async function loadContext(): Promise<PlanContext> {
     db.morning.orderBy('date').toArray(), getSetting<number | null>('hrMax'), getSetting<number | null>('hrRest')
   ]);
   const kraftN = await getSetting<number>('strengthPerWeek');
+  const sports = normalizeSports(await getSetting<SportsSetting>('sports'), runs);
   const hr = hrProfile(activities, morning.filter(m => m.restingHr != null).map(m => m.restingHr!), { max: hrMax, rest: hrRest }, today());
   return {
     today: today(), activities, strength, split: splitId ? (await db.splits.get(splitId)) ?? null : null,
-    goal, injury: activeInjury(injuries), events, edits: new Map(edits.map(e => [e.key, e])), runsPerWeek: runs ?? 3, strengthPerWeek: kraftN ?? 3, vacations, hr
+    goal, injury: activeInjury(injuries), events, edits: new Map(edits.map(e => [e.key, e])), runsPerWeek: runs ?? 3, strengthPerWeek: kraftN ?? 3, sports, vacations, hr, physio: physioIds(activities, injuries)
   };
 }
 
@@ -66,6 +69,11 @@ export async function saveEvent(e: Omit<FixedEvent, 'id' | 'createdAt' | 'update
 }
 export async function deleteEvent(id: string) { await db.fixedEvents.delete(id); }
 export const setRunsPerWeek = (n: 2 | 3) => setSetting('runsPerWeek', n);
+/** Sportarten speichern (immer bereinigt). */
+export async function saveSports(s: SportsSetting) { await setSetting('sports', plain(normalizeSports(s))); }
+export async function loadSports(): Promise<SportsSetting> {
+  return normalizeSports(await getSetting<SportsSetting>('sports'), await getSetting<number>('runsPerWeek'));
+}
 export const setStrengthPerWeek = (n: number) => setSetting('strengthPerWeek', Math.max(0, Math.min(6, Math.round(n))));
 
 /** Wenig Grundlage? (Laufumfang der letzten 4 Wochen sehr gering) → Startempfehlung früher. */

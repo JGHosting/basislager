@@ -45,6 +45,7 @@ export function workoutText(s: PlanSession, p: Paces): string {
   if (s.sport === 'rad') {
     const t = s.title;
     if (/Intervalle/.test(t)) { const n = fit(total, 20, 12, 2, 5); out.push(step('Einfahren', m(Math.min(20, total - n * 12 - 5)), HR.z2), ...block('Hauptteil', n, [step('Zügig', '8m', HR.z4), step('Locker', '4m', HR.z2)]), step('Ausfahren', m(rest(Math.min(20, total - n * 12 - 5) + n * 12)), HR.z2)); }
+    else if (/Sweet-Spot/.test(t)) { const n = fit(total, 25, 17, 2, 3); out.push(step('Einfahren', '15m', HR.z2), ...block('Hauptteil', n, [step('Sweet Spot', '12m', HR.z34), step('Locker', '5m', HR.z2)]), step('Ausfahren', m(rest(15 + n * 17)), HR.z2)); }
     else if (/Wettkampftempo/.test(t)) { const n = fit(total, 25, 20, 1, 3); out.push(step('Einfahren', '15m', HR.z2), ...block('Hauptteil', n, [step('Wettkampftempo', '15m', HR.z34), step('Locker', '5m', HR.z2)]), step('Ausfahren', m(rest(15 + n * 20)), HR.z2)); }
     else if (/Tempowechsel/.test(t)) { const n = fit(total, 20, 5, 3, 6); out.push(step('Einfahren', '15m', HR.z2), ...block('Hauptteil', n, [step('Zügig', '2m', HR.z4), step('Locker', '3m', HR.z2)]), step('Locker', m(rest(15 + n * 5)), HR.z2)); }
     else out.push(step('Gleichmäßig', m(total), s.intensity === 'locker' ? HR.z2 : HR.z23));

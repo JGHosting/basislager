@@ -1,4 +1,4 @@
-import { db, type Injury, type Movement, type MoveStatus } from '../../core/db';
+import { db, type Injury, type Movement, type MoveStatus, type RehabCheck } from '../../core/db';
 import { newId } from '../../core/ids';
 import { today } from '../../core/dates';
 import { LAST_STAGE, activeInjury } from './injury';
@@ -23,12 +23,12 @@ export async function saveInjury(input: Omit<Injury, 'id' | 'createdAt' | 'updat
   return row;
 }
 
-export async function setStage(id: string, stage: number) {
+export async function setStage(id: string, stage: number, via: 'manuell' | 'physio' = 'manuell') {
   const inj = await db.injuries.get(id); if (!inj) return;
   const t = today();
   const s = Math.max(0, Math.min(LAST_STAGE, stage));
   inj.stage = s;
-  inj.stageHistory = [...inj.stageHistory, { date: t, stage: s }];
+  inj.stageHistory = [...inj.stageHistory, { date: t, stage: s, via }];
   if (s === LAST_STAGE) inj.endDate = t; else delete inj.endDate;
   inj.updatedAt = Date.now();
   await db.injuries.put(inj);
@@ -57,5 +57,24 @@ export async function savePain(date: string, pain: number | null) {
 export async function switchToStages(id: string, stage = 1) {
   const inj = await db.injuries.get(id); if (!inj) return;
   inj.mode = 'stufen'; inj.stage = stage; inj.stageHistory = [...inj.stageHistory, { date: today(), stage }]; inj.updatedAt = Date.now();
+  await db.injuries.put(inj);
+}
+
+/** Physio-Einheit bewerten (neu oder ändern). Ändert die Stufe NICHT – das bestätigst du separat. */
+export async function saveRehabCheck(injuryId: string, input: Omit<RehabCheck, 'id' | 'createdAt' | 'stage'> & { id?: string; stage?: number }) {
+  const inj = await db.injuries.get(injuryId); if (!inj) return null;
+  const data = plain(input);
+  const list = inj.rehab ?? [];
+  const prev = data.id ? list.find(c => c.id === data.id) : data.activityId ? list.find(c => c.activityId === data.activityId) : undefined;
+  const row: RehabCheck = { ...prev, ...data, id: prev?.id ?? newId(), stage: data.stage ?? prev?.stage ?? inj.stage, createdAt: prev?.createdAt ?? Date.now() } as RehabCheck;
+  for (const k of ['note', 'activityId', 'cleared', 'ignored'] as const) if (!row[k]) delete row[k];
+  inj.rehab = [...list.filter(c => c.id !== row.id), row].sort((a, b) => a.date.localeCompare(b.date));
+  inj.updatedAt = Date.now();
+  await db.injuries.put(inj);
+  return row;
+}
+export async function deleteRehabCheck(injuryId: string, checkId: string) {
+  const inj = await db.injuries.get(injuryId); if (!inj) return;
+  inj.rehab = (inj.rehab ?? []).filter(c => c.id !== checkId); inj.updatedAt = Date.now();
   await db.injuries.put(inj);
 }
