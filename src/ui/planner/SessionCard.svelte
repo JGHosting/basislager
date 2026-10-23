@@ -32,19 +32,23 @@
     {#if !moving}
       <div class="acts">
         {#if s.activityId}<button class="pri" onclick={() => openActivity(s.activityId!)}>Details</button>{/if}
-        <button class:pri={!s.activityId} onclick={() => (editing = !editing)} aria-expanded={editing}>Bearbeiten</button>
+        {#if !(s.status === 'erledigt' && s.autoDone && s.sport !== 'kraft')}<button class:pri={!s.activityId} onclick={() => (editing = !editing)} aria-expanded={editing}>Bearbeiten</button>{/if}
         {#if needsFuelPlan(s) && s.status !== 'ausgelassen'}<button class:pri={fuel} onclick={() => (fuel = !fuel)} aria-expanded={fuel}>Verpflegung</button>{/if}
       </div>
       {#if fuel}<FuelPanel {s} />{/if}
       {#if editing}
         <div class="acts edit">
-          {#if s.status !== 'erledigt'}<button onclick={() => editSession(s.key, { status: 'erledigt' })}>Erledigt</button>{/if}
-          {#if s.status !== 'ausgelassen'}<button onclick={() => editSession(s.key, { status: 'ausgelassen' })}>Auslassen</button>{/if}
-          {#if s.sport !== 'wettkampf'}<button onclick={() => (moving = true)}>Verschieben</button>{/if}
-          {#if s.status !== 'offen' || s.moved}<button onclick={() => editSession(s.key, null)}>Zurücksetzen</button>{/if}
+          {#if s.status === 'erledigt'}
+            <!-- Erledigt: nur rückgängig, wenn von Hand abgehakt (automatisch erkannte hängen an der Garmin-Aktivität) -->
+            {#if !s.autoDone}<button onclick={() => editSession(s.key, null)}>Doch nicht erledigt</button>{/if}
+          {:else}
+            {#if s.status !== 'ausgelassen'}<button onclick={() => editSession(s.key, { status: 'erledigt' })}>Erledigt</button><button onclick={() => editSession(s.key, { status: 'ausgelassen' })}>Auslassen</button>{/if}
+            {#if s.sport !== 'wettkampf' && s.status === 'offen'}<button onclick={() => (moving = true)}>Verschieben</button>{/if}
+            {#if s.status === 'ausgelassen' || s.moved}<button onclick={() => editSession(s.key, null)}>Zurücksetzen</button>{/if}
+          {/if}
           {#if s.sport === 'kraft' && s.status === 'erledigt'}<button onclick={() => openStrength(s.activityId ? { activityId: s.activityId } : { date: s.date })}>Muskelgruppen ändern</button>{/if}
         </div>
-        {#if warmupCategory(s.sport)}
+        {#if warmupCategory(s.sport) && s.status === 'offen'}
           <div class="acts edit warmup-modes">
             <small class="wlabel">Aufwärmen für diese Einheit:</small>
             {#each ['aus', 'auto', 'immer'] as mode}
