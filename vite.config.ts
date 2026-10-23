@@ -11,6 +11,7 @@ export default defineConfig({
     svelte(),
     VitePWA({
       registerType: 'autoUpdate',
+      injectRegister: false,   // Registrierung in main.ts (virtual:pwa-register)
       includeAssets: ['icons/apple-touch-icon.png'],
       manifest: {
         name: 'Basislager',
