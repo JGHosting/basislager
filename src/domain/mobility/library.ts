@@ -62,7 +62,8 @@ export function scaledReps(e: MobilityExercise, level: 0 | 1 | 2): number | unde
   return e.reps + level * 4;
 }
 
-export const LIBRARY: MobilityExercise[] = [
+/** Alle definierten Übungen – auch eigene ohne Bild (derzeit nicht in Gebrauch). */
+const ALL: MobilityExercise[] = [
   /* ---------- Hüfte / tiefe Hocke ---------- */
   { id: 'kneeling-hip-flexor-stretch', name: 'Kniende Hüftbeuger-Dehnung', source: 'repdb', category: 'dehnung', equipment: 'keins',
     regions: ['hüfte'], goals: ['hüfte', 'hohlkreuz'], difficulty: 0, sides: true, holdSec: 30,
@@ -270,3 +271,6 @@ export const LIBRARY: MobilityExercise[] = [
 
 export const byId = (id: string) => LIBRARY.find(e => e.id === id);
 export const usedImageIds = () => LIBRARY.filter(e => e.image).map(e => e.id);
+
+/** Nur Übungen mit Bild: ohne Bild ist unklar, was zu tun ist (Nutzerwunsch). */
+export const LIBRARY: MobilityExercise[] = ALL.filter(e => !!e.image);

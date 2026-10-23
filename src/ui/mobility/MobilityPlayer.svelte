@@ -113,9 +113,9 @@
     {/if}
 
     <div class="actions">
+      <button class="btn primary main" onclick={confirm}>{firstSide ? 'Seite wechseln →' : 'Gemacht ✓'}</button>
       <button class="btn ghost" onclick={swap}>Tauschen</button>
       <button class="btn ghost" onclick={skip}>Überspringen</button>
-      <button class="btn primary" onclick={confirm}>{firstSide ? 'Seite wechseln →' : 'Gemacht ✓'}</button>
     </div>
   {/if}
   <button class="close" onclick={() => close(false)} aria-label="Schließen">✕</button>
@@ -140,7 +140,9 @@
   .timer span { font-size: 48px; font-weight: 750; font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
   .timer.paused span { opacity: .5; }
   .reps { font-size: 32px; font-weight: 750; text-align: center; margin: 10px 0 20px; }
-  .actions { display: grid; grid-template-columns: 1fr 1fr 1.4fr; gap: 8px; margin-top: auto; }
+  .actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: auto; padding-top: 8px; }
+  .actions .btn { min-width: 0; white-space: nowrap; }
+  .actions .main { grid-column: 1 / -1; }
   .btn.small { min-height: 40px; padding: 0 12px; font-size: 14px; }
   .done { display: flex; flex-direction: column; align-items: center; justify-content: center; flex: 1; gap: 8px; text-align: center; }
   .muted { color: var(--muted); }
