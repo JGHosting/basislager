@@ -1,6 +1,6 @@
 # Basislager — Projekt-Kontext / Übergabe
 
-Kompakte, vollständige Übergabe für einen neuen Chat. Stand: 2026-10-23 spät (PR #1–#7 auf `main` und deployed, Merge-Commit `51dffef`).
+Kompakte, vollständige Übergabe für einen neuen Chat. Stand: 2026-10-23 23 Uhr (PR #1–#8 auf `main` und deployed, Merge-Commit `0661460`).
 
 ## Was ist das
 Persönliche Trainings- & Ernährungs-PWA fürs iPhone (deutsche UI), nur für Jakob. Kein Server, keine laufenden Kosten, offline nutzbar.
@@ -24,7 +24,7 @@ Persönliche Trainings- & Ernährungs-PWA fürs iPhone (deutsche UI), nur für J
 - **Mobility** `src/domain/mobility/`:
   - `library.ts` — `ALL` (alle Übungen) → `LIBRARY = ALL.filter(e => e.image)` (ohne Bild nicht in Auswahl). Felder: regions (hüfte, rueckseite, bws_schultern, sprunggelenk, nacken, rumpf), goals (+hohlkreuz), difficulty 0–2 (steuert Freischaltung, siehe `progression.ts`), sides, holdSec/reps (Basiswerte Stufe 0), avoid, image/image2, source repdb|fedb|custom.
   - `select.ts` — `buildRoutine`: Hälfte Rotation durch alle Regionen, Hälfte gewichtet nach Zielen (Ziel-Tag 1.5×, Region 1×, Selbsttest-Boost, zuletzt gemachte 0.4×), Rest auffüllen; `pickReplacement` (gleiche Region/Kategorie bevorzugt, verletzungsgerecht).
-  - `injury.ts` — Verletzungsregion → Übungen direkt/indirekt belastend; direkt aus bis Stufe 6 (dann nur difficulty 0), indirekt aus bis Stufe 3; schwer/Ausfall = immer aus; plus `avoid` ↔ Bewegung „nicht“. Zuordnung neuer Übungen in der `extra`-Liste.
+  - `injury.ts` — Verletzungsregion → Übungen direkt/indirekt belastend (`LOAD`-Listen + `extra`); zusätzlich **`BEARING`** je Übung (was trägt Gewicht: fuesse/knie/haende/unterarme) und `BEARING_BY_REGION` (Fuß/Sprunggelenk, Achilles/Wade, Schienbein → fuesse; Knie → knie; Hand → haende; Ellbogen/Schulter → haende+unterarme) → automatisch „indirekt“ (PR #8). Thorakale Brücke + Herabschauender Hund bei Sprunggelenk „direkt“. Direkt aus bis Stufe 6 (dann nur difficulty 0), indirekt aus bis Stufe 3; schwer/Ausfall = immer aus; plus `avoid` ↔ Bewegung „nicht“. **Neue Übungen immer in `BEARING` eintragen**, wenn sie im Stand/Knien/Stütz sind. Mit Sprunggelenk-Verletzung bis Stufe 3: 54 Übungen erlaubt, Stufe 4: 71.
   - `settings.ts` — Setting `mobility` (minutes 5/10/15, goals[{id, weight 1–3}] nur feste GOALS — eigene Ziele entfernt, intrusiveness aus/sanft/hartnaeckig/brutal, pauseMode/pauseAuto, level 0–2, testIntervalWeeks, rotationIdx) + `mobilityPauseRanges`.
   - `tests.ts` — 7 Selbsttests, `regionScore`, `regionWeightBoost`, `suggestedLevel` (Stufe +1 nur wenn die letzten zwei Tests in ≥2 Regionen ≥0.15 besser).
   - `repo.ts` — `ensureTodayRoutine` (ersetzt offene, inzwischen verletzungsbedingt ausgeschlossene/entfernte Übungen; plant neu, wenn `sig` abweicht und noch nichts erledigt), `rebuildToday` (Button „Routine aktualisieren“; erledigte bleiben), `swapExercise`, `sigOf`, `excludedCount`, `DONE_THRESHOLD 0.8`, `skipToday`, `currentStreak`.
@@ -48,10 +48,12 @@ Nutzerentscheidungen: Selbsttest-Stufe schaltet nur Schwierigkeit frei (keine pa
 - 32 neue Übungen (Free Exercise DB, je `<id>.webp` + `<id>-2.webp`): wadendehnung-wand, soleus-dehnung, knie-kreisen, hueftbeuger-stand, hueftkreisen-stand, figur-vier-liegend, knie-zur-brust-einbeinig, adduktoren-seitlage, quad-dehnung-seitlage, quad-dehnung-vierfuss, hueftkreisen-vierfuss, worlds-greatest-stretch, ausfallschritt-rotation, skorpion, adduktoren-einrollen, beinstrecken-9090, laeufer-dehnung, inchworm, oberschenkel-umarmen, rumpfdrehung-stand, armschwingen, seitdehnung-liegend, lat-dehnung-wand, strecken-nach-oben, drehsitz, knie-umarmen, windmuehle, superman, schultern-heben, oberer-ruecken-rund, ellbogen-zurueck, knie-ueber-koerper. Verletzungs-Zuordnung in `injury.ts` (`extra`). `deep-squat-hold` zusätzlich Region/Ziel Sprunggelenk. Jetzt 91 Übungen, 47 zu Beginn frei. Partner-/Gurt-/Stuhl-Übungen der FEDB bewusst weggelassen.
 - Geprüft: tsc, vite build, Domänentest (tsx), Playwright-Screens (Heute, Verlauf, Player, Timer, Feedback; Feedback „zu leicht“ hebt Stufe und schaltet 90/90 frei).
 - Offen: iPhone-Test (v. a. Signalton bei Stummschalter/gesperrtem Bildschirm, Feedback-Flow, Verlauf).
+- PR #8: Alle RepDB-Bilder gegen Texte geprüft (Kontaktbogen). Korrigiert: `thoracic-bridge` (Bild = Rückbeuge-Brücke aus Rückwärts-Stütz, keine Seiten), `low-lunge` (Arme über Kopf), `doorway-chest-stretch` → „Brustöffner (W-Arme)“ (kein Türrahmen im Bild, keine Seiten), `dead-bug` und `downward-dog-pedal` im Wechsel (`sides: false`). Arm-/Nackenübungen mit „Im Stehen oder Sitzen“. Regel: Wechselübungen (abwechselnd links/rechts) = `sides: false`, Wiederholungen insgesamt.
 - Weiterhin nicht gewählt: Programme über Wochen, Sprachansagen/Übergangspausen/Display-an.
 
 ## Weitere offene Punkte
-- iPhone-Test durch Jakob: neue Mobility-Ansicht, Player, Aufwärmen auf der Garmin-Uhr.
+- iPhone-Test durch Jakob: Signalton im Lautlos-Modus (PR #7, `<audio>`-Weg), Verletzungsfilter mit seiner Sprunggelenk-Verletzung (PR #8), Feedback-Flow, Verlauf-Tab, Aufwärmen auf der Garmin-Uhr. Bestätigt: Timer startet erst per „Start“ (nach Update).
+- Hinweis: FEDB-Bilder (Fotos) wurden nur grob gesichtet; bei Meldungen „Bild passt nicht zum Text“ Kontaktbogen bauen (PIL, Name unter jedes Bild) und abgleichen.
 - Nur am iPhone prüfbar: Kamera-Barcode, OSM-Kacheln standalone, Garmin-Übernahme der Workouts.
 
 ## Separate Projekte (NICHT Basislager)
