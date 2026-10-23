@@ -14,7 +14,7 @@ import type { Activity, StrengthSession, SplitTemplate, Goal, Injury, FixedEvent
 import { addDays, weekStart, today as todayFn } from '../../core/dates';
 import { nextSplitDay, groupLabel } from '../strength/strength';
 import { STAGES, STAGE_VOLUME, MOVEMENTS, isOutage } from '../injury/injury';
-import { TRI, goalLabel, fmtPace, raceLegs, type RaceLeg } from './goals';
+import { TRI, goalLabel, fmtPace, raceLegs, plannedSessions, ambitious, type RaceLeg } from './goals';
 import { estimatePaces, type Paces } from './paces';
 import { activityLoad, loadSeries, type HrProfile } from '../load/load';
 import { sportName } from '../../ui/format';
@@ -352,6 +352,10 @@ export function buildWeek(ws: string, ctx: PlanContext): PlanWeek {
     if (phase === 'erholung') vol *= 0.75;
     if (phase === 'taper') vol = peak * 0.65;
     if (phase === 'wettkampfwoche') vol = peak * 0.4;
+    // Einheiten pro Woche: Empfehlung nach Distanz/Zielzeit, gedeckelt durch deine verfügbare Zeit
+    const ps = plannedSessions(g);
+    if (ps.short) vol *= Math.max(0.8, ps.n / ps.rec);
+    else if (ambitious(g)) vol *= 1.1;
     const raceDay = (Date.parse(g.date) - Date.parse(ws)) / 86400000;   // 0..6 in der Wettkampfwoche
     // Kraft: wie eingestellt, Taper eine weniger und leichter, Wettkampfwoche 1× leicht ohne Beine
     const n = kraftCount(ctx);
@@ -366,43 +370,73 @@ export function buildWeek(ws: string, ctx: PlanContext): PlanWeek {
     const extras = sportsOf(ctx).list.filter(c => c.perWeek > 0 && !covered.includes(c.sport));
     const extraRun = extras.some(c => c.sport === 'lauf');
 
+    // Anteil am Umfang je Einheit; Slots in Prioritätsreihenfolge, die ersten n werden geplant
+    const race = phase === 'wettkampfwoche';
+    const pick = <T extends { w: number; key: string }>(all: T[], n: number, drop: string[]) => {
+      const list = all.slice(0, n).filter(x => !(race && drop.includes(x.key)));
+      const sum = list.reduce((t, x) => t + x.w, 0) || 1;
+      return list.map(x => ({ ...x, share: x.w / sum }));
+    };
     if (g.sport === 'lauf' || g.sport === 'trailrun') {
-      const four = peak >= 240 && phase !== 'wettkampfwoche';
       const longCap = trail ? Math.min(270, 60 + (g.distanceKm ?? 20) * 4) : (g.distanceKm ?? 10) <= 11 ? 95 : (g.distanceKm ?? 0) <= 22 ? 130 : 190;
       const hmWeek = trail ? Math.round((g.elevation ?? 800) * (0.35 + 0.35 * gp.ramp) * (phase === 'erholung' || phase === 'taper' ? 0.6 : 1) / 50) * 50 : 0;
-      sessions.push(easyRun(ws, 1, 'run-easy', p, vol * (four ? 0.2 : 0.28), trail));
-      sessions.push(runQuality(ws, 3, 'run-q', phase, gp.idx, p, vol * 0.24, g, trail));
-      if (phase !== 'wettkampfwoche') sessions.push(longRun(ws, 5, 'run-long', p, Math.min(vol * (four ? 0.36 : 0.45), longCap), phase, g, trail, Math.round(hmWeek * 0.6 / 50) * 50));
-      if (four) sessions.push(easyRun(ws, 6, 'run-easy2', p, vol * 0.2, trail));
+      const slots = [{ key: 'run-q', day: 3, w: 1.1 }, { key: 'run-long', day: 5, w: 1.8 }, { key: 'run-easy', day: 1, w: 1 }, { key: 'run-easy2', day: 6, w: 1 }, { key: 'run-easy3', day: 2, w: 0.9 }, { key: 'run-easy4', day: 4, w: 0.8 }];
+      for (const x of pick(slots, ps.n, ['run-long', 'run-easy2', 'run-easy3', 'run-easy4'])) {
+        // In der Wettkampfwoche ohne langen Lauf: Umfang wie bisher auf locker + Qualität
+        const m = vol * (race ? (x.key === 'run-q' ? 0.24 : 0.28) : x.share);
+        if (x.key === 'run-q') sessions.push(runQuality(ws, x.day, x.key, phase, gp.idx, p, m, g, trail));
+        else if (x.key === 'run-long') sessions.push(longRun(ws, x.day, x.key, p, Math.min(m, longCap), phase, g, trail, Math.round(hmWeek * 0.6 / 50) * 50));
+        else sessions.push(easyRun(ws, x.day, x.key, p, m, trail));
+      }
     } else if (g.sport === 'rad') {
       const hm = g.elevation ? Math.round(g.elevation * (0.4 + 0.4 * gp.ramp) / 50) * 50 : undefined;
-      sessions.push(S(ws, 1, 'ride-easy', 'rad', 'Lockere Ausfahrt', vol * 0.22, 'locker', 'Gleichmäßig locker, hohe Trittfrequenz (85–95).'));
-      sessions.push(S(ws, 3, 'ride-q', 'rad', phase === 'grundlage' || phase === 'erholung' ? 'Ausfahrt mit Tempowechseln' : phase === 'spitze' ? 'Wettkampftempo am Rad' : 'Rad-Intervalle', vol * 0.25,
-        phase === 'grundlage' || phase === 'erholung' ? 'mittel' : 'hart',
-        phase === 'grundlage' || phase === 'erholung' ? 'Locker, darin 6 × 2 min zügig.' : phase === 'spitze' ? '20 min einfahren, 3 × 15 min im geplanten Wettkampftempo, 5 min locker dazwischen.' : '20 min einfahren, 4–5 × 8 min zügig (Schwelle), 4 min locker, ausfahren.'));
-      if (phase !== 'wettkampfwoche') sessions.push(S(ws, 5, 'ride-long', 'rad', 'Lange Ausfahrt', Math.min(vol * 0.53, 360), 'mittel', `Lang und gleichmäßig${hm ? `, möglichst ca. ${hm} hm` : ''}. Verpflegung wie im Wettkampf testen.`, hm));
-      // 1× locker Laufen – außer der Radumfang ist ohnehin sehr hoch
-      if (vol < 420 && phase !== 'wettkampfwoche' && !extraRun) sessions.push(easyRun(ws, 6, 'run-easy', p, 35));
+      const easyQ = phase === 'grundlage' || phase === 'erholung';
+      const slots = [{ key: 'ride-q', day: 3, w: 1.1 }, { key: 'ride-long', day: 5, w: 2.3 }, { key: 'ride-easy', day: 1, w: 1 }, { key: 'ride-easy2', day: 6, w: 0.8 }, { key: 'ride-easy3', day: 2, w: 0.8 }];
+      for (const x of pick(slots, ps.n, ['ride-long', 'ride-easy2', 'ride-easy3'])) {
+        const m = vol * (race ? (x.key === 'ride-q' ? 0.25 : 0.22) : x.share);
+        if (x.key === 'ride-q') sessions.push(S(ws, x.day, x.key, 'rad', easyQ ? 'Ausfahrt mit Tempowechseln' : phase === 'spitze' ? 'Wettkampftempo am Rad' : 'Rad-Intervalle', m,
+          easyQ ? 'mittel' : 'hart',
+          easyQ ? 'Locker, darin 6 × 2 min zügig.' : phase === 'spitze' ? '20 min einfahren, 3 × 15 min im geplanten Wettkampftempo, 5 min locker dazwischen.' : '20 min einfahren, 4–5 × 8 min zügig (Schwelle), 4 min locker, ausfahren.'));
+        else if (x.key === 'ride-long') sessions.push(S(ws, x.day, x.key, 'rad', 'Lange Ausfahrt', Math.min(m, 360), 'mittel', `Lang und gleichmäßig${hm ? `, möglichst ca. ${hm} hm` : ''}. Verpflegung wie im Wettkampf testen.`, hm));
+        else sessions.push(S(ws, x.day, x.key, 'rad', 'Lockere Ausfahrt', m, 'locker', 'Gleichmäßig locker, hohe Trittfrequenz (85–95).'));
+      }
+      // 1× locker Laufen – außer der Radumfang ist ohnehin sehr hoch oder Sonntag ist schon belegt
+      if (vol < 420 && !race && !extraRun && ps.n < 4) sessions.push(easyRun(ws, 6, 'run-easy', p, 35));
     } else if (g.sport === 'schwimmen') {
-      sessions.push(S(ws, 1, 'swim-tech', 'schwimmen', 'Technik & Grundlage', vol * 0.3, 'locker', 'Einschwimmen, Technikübungen (z. B. Abschlag, Zählen der Züge), dann ruhig durchschwimmen.'));
-      sessions.push(S(ws, 3, 'swim-q', 'schwimmen', phase === 'spitze' ? 'Wettkampftempo' : 'Intervalle', vol * 0.3, phase === 'grundlage' ? 'mittel' : 'hart',
-        phase === 'spitze' ? 'Einschwimmen, 4 × 400 m im Wettkampftempo, 1 min Pause.' : 'Einschwimmen, 10–12 × 100 m zügig, 20 s Pause, ausschwimmen.'));
-      if (phase !== 'wettkampfwoche') sessions.push(S(ws, 5, 'swim-long', 'schwimmen', 'Lange Strecke', vol * 0.4, 'mittel', 'Lange gleichmäßige Strecke, möglichst im Freiwasser oder ohne Pausen.'));
-      if (phase !== 'wettkampfwoche' && !extraRun) sessions.push(easyRun(ws, 6, 'run-easy', p, 35));
+      const slots = [{ key: 'swim-q', day: 3, w: 1 }, { key: 'swim-long', day: 5, w: 1.33 }, { key: 'swim-tech', day: 1, w: 1 }, { key: 'swim-tech2', day: 0, w: 0.8 }, { key: 'swim-easy', day: 2, w: 0.8 }];
+      for (const x of pick(slots, ps.n, ['swim-long', 'swim-tech2', 'swim-easy'])) {
+        const m = vol * (race ? 0.3 : x.share);
+        if (x.key === 'swim-q') sessions.push(S(ws, x.day, x.key, 'schwimmen', phase === 'spitze' ? 'Wettkampftempo' : 'Intervalle', m, phase === 'grundlage' ? 'mittel' : 'hart',
+          phase === 'spitze' ? 'Einschwimmen, 4 × 400 m im Wettkampftempo, 1 min Pause.' : 'Einschwimmen, 10–12 × 100 m zügig, 20 s Pause, ausschwimmen.'));
+        else if (x.key === 'swim-long') sessions.push(S(ws, x.day, x.key, 'schwimmen', 'Lange Strecke', m, 'mittel', 'Lange gleichmäßige Strecke, möglichst im Freiwasser oder ohne Pausen.'));
+        else sessions.push(S(ws, x.day, x.key, 'schwimmen', 'Technik & Grundlage', m, 'locker', 'Einschwimmen, Technikübungen (z. B. Abschlag, Zählen der Züge), dann ruhig durchschwimmen.'));
+      }
+      if (!race && !extraRun) sessions.push(easyRun(ws, 6, 'run-easy', p, 35));
     } else {
-      // Triathlon: Schwimmen 20 %, Rad 47 %, Laufen 33 %
+      // Triathlon: Schwimmen 20 %, Rad 47 %, Laufen 33 %; Einheiten nach Priorität
       const tri = TRI[g.triDistance ?? 'olympisch'];
-      const sw = vol * 0.2, bk = vol * 0.47, rn = vol * 0.33;
+      const vols = { schwimmen: vol * 0.2, rad: vol * 0.47, lauf: vol * 0.33 };
       const build = phase === 'aufbau' || phase === 'spitze';
-      sessions.push(S(ws, 0, 'swim-tech', 'schwimmen', 'Schwimmen Technik', sw * 0.45, 'locker', 'Technikübungen + ruhige Strecke.'));
-      sessions.push(S(ws, 1, 'ride-easy', 'rad', 'Rad locker', bk * 0.25, 'locker', 'Locker, hohe Trittfrequenz.'));
-      sessions.push(easyRun(ws, 2, 'run-easy', p, rn * 0.3));
-      sessions.push(S(ws, 3, 'ride-q', 'rad', build ? 'Rad-Intervalle' : 'Rad mit Tempowechseln', bk * 0.3, build ? 'hart' : 'mittel', build ? '4–5 × 8 min zügig (≈ Wettkampftempo oder etwas darüber), 4 min locker.' : 'Locker mit 6 × 2 min zügig.'));
-      sessions.push(S(ws, 4, 'swim-q', 'schwimmen', 'Schwimmen Intervalle', sw * 0.55, 'hart', `10 × 100 m zügig, 20 s Pause${g.targetTimes?.swim ? ` (Ziel-Pace ${fmtPace(g.targetTimes.swim / 60 / tri.swim / 10)} min/100 m)` : ''}.`));
-      if (phase !== 'wettkampfwoche') {
-        sessions.push(S(ws, 5, 'ride-long', 'rad', 'Lange Radausfahrt', Math.min(bk * 0.45, 300), 'mittel', 'Lang und gleichmäßig, Wettkampfverpflegung testen.'));
-        if (build) sessions.push(S(ws, 5, 'brick', 'lauf', 'Koppellauf (direkt nach dem Rad)', Math.min(10 + rn * 0.15, 30), 'mittel', `Direkt vom Rad in die Laufschuhe, erste Minuten ${pr(p.race ?? p.threshold + 0.1, 0.08)}, dann locker. Wechsel üben.`));
-        sessions.push(longRun(ws, 6, 'run-long', p, Math.min(rn * 0.55, tri.run > 20 ? 150 : 80), phase, g, false));
+      type Slot = { key: string; day: number; w: number; sp: 'schwimmen' | 'rad' | 'lauf' };
+      const all: Slot[] = [
+        { key: 'ride-long', day: 5, w: 0.45, sp: 'rad' }, { key: 'run-long', day: 6, w: 0.55, sp: 'lauf' }, { key: 'ride-q', day: 3, w: 0.3, sp: 'rad' },
+        { key: 'swim-q', day: 4, w: 0.55, sp: 'schwimmen' }, { key: 'run-easy', day: 2, w: 0.3, sp: 'lauf' }, { key: 'swim-tech', day: 0, w: 0.45, sp: 'schwimmen' },
+        { key: 'ride-easy', day: 1, w: 0.25, sp: 'rad' }, { key: 'run-easy2', day: 4, w: 0.25, sp: 'lauf' }, { key: 'swim-easy', day: 2, w: 0.35, sp: 'schwimmen' }, { key: 'ride-easy2', day: 0, w: 0.2, sp: 'rad' }
+      ];
+      const chosen = all.slice(0, ps.n).filter(x => !(race && ['ride-long', 'run-long', 'run-easy2', 'swim-easy', 'ride-easy2'].includes(x.key)));
+      const wsum = (sp: Slot['sp']) => chosen.filter(x => x.sp === sp).reduce((t, x) => t + x.w, 0) || 1;
+      for (const x of chosen) {
+        const m = vols[x.sp] * x.w / (race ? 1 : wsum(x.sp));   // Wettkampfwoche: bewusst wenig
+        if (x.key === 'swim-tech' || x.key === 'swim-easy') sessions.push(S(ws, x.day, x.key, 'schwimmen', 'Schwimmen Technik', m, 'locker', 'Technikübungen + ruhige Strecke.'));
+        else if (x.key === 'swim-q') sessions.push(S(ws, x.day, x.key, 'schwimmen', 'Schwimmen Intervalle', m, 'hart', `10 × 100 m zügig, 20 s Pause${g.targetTimes?.swim ? ` (Ziel-Pace ${fmtPace(g.targetTimes.swim / 60 / tri.swim / 10)} min/100 m)` : ''}.`));
+        else if (x.key === 'ride-easy' || x.key === 'ride-easy2') sessions.push(S(ws, x.day, x.key, 'rad', 'Rad locker', m, 'locker', 'Locker, hohe Trittfrequenz.'));
+        else if (x.key === 'ride-q') sessions.push(S(ws, x.day, x.key, 'rad', build ? 'Rad-Intervalle' : 'Rad mit Tempowechseln', m, build ? 'hart' : 'mittel', build ? '4–5 × 8 min zügig (≈ Wettkampftempo oder etwas darüber), 4 min locker.' : 'Locker mit 6 × 2 min zügig.'));
+        else if (x.key === 'ride-long') {
+          sessions.push(S(ws, x.day, x.key, 'rad', 'Lange Radausfahrt', Math.min(m, 300), 'mittel', 'Lang und gleichmäßig, Wettkampfverpflegung testen.'));
+          if (build) sessions.push(S(ws, 5, 'brick', 'lauf', 'Koppellauf (direkt nach dem Rad)', Math.min(10 + vols.lauf * 0.15, 30), 'mittel', `Direkt vom Rad in die Laufschuhe, erste Minuten ${pr(p.race ?? p.threshold + 0.1, 0.08)}, dann locker. Wechsel üben.`));
+        }
+        else if (x.key === 'run-long') sessions.push(longRun(ws, x.day, x.key, p, Math.min(m, tri.run > 20 ? 150 : 80), phase, g, false));
+        else sessions.push(easyRun(ws, x.day, x.key, p, m));
       }
     }
 

@@ -30,6 +30,34 @@ export function goalLabel(g: Goal): string {
   return `${sp} ${preset ? preset.label : (g.distanceKm ?? 0).toLocaleString('de-DE') + ' km'}${g.elevation ? ` · ${g.elevation} hm` : ''}`;
 }
 
+/* ---------- Einheiten pro Woche im Wettkampfplan ---------- */
+/** Mögliche Anzahl Einheiten der Wettkampf-Sportart pro Woche (Triathlon: Schwimmen + Rad + Laufen zusammen). */
+export const SESSION_RANGE: Record<GoalSport, [number, number]> = { lauf: [2, 6], trailrun: [2, 6], rad: [2, 5], schwimmen: [2, 5], triathlon: [4, 10] };
+/** Ehrgeizige Zielzeit? (Lauf: Pace schneller als 4:30/km bis 10 km bzw. 5:00/km darüber) */
+export function ambitious(g: Pick<Goal, 'sport' | 'distanceKm' | 'targetTime'>): boolean {
+  if (g.sport !== 'lauf' || !g.targetTime || !g.distanceKm) return false;
+  const pace = g.targetTime / 60 / g.distanceKm;
+  return pace < (g.distanceKm <= 11 ? 4.5 : 5);
+}
+/** Empfohlene Einheiten pro Woche nach Distanz und Zielzeit (Faustregeln aus Trainingsplänen). */
+export function recommendedSessions(g: Pick<Goal, 'sport' | 'distanceKm' | 'targetTime' | 'triDistance' | 'elevation'>): number {
+  const km = g.distanceKm ?? 0;
+  switch (g.sport) {
+    case 'lauf': return (km <= 6 ? 3 : 4) + (ambitious(g) ? 1 : 0);
+    case 'trailrun': return km <= 25 ? 3 : 4;
+    case 'rad': return km <= 80 ? 3 : 4;
+    case 'schwimmen': return km <= 2 ? 3 : 4;
+    case 'triathlon': return { sprint: 6, olympisch: 7, '70.3': 8, lang: 9 }[g.triDistance ?? 'olympisch'];
+  }
+}
+/** Tatsächlich geplante Anzahl: Empfehlung, höchstens so viele wie du Zeit hast. */
+export function plannedSessions(g: Goal): { n: number; rec: number; short: boolean } {
+  const rec = recommendedSessions(g);
+  const [lo, hi] = SESSION_RANGE[g.sport];
+  const n = Math.max(lo, Math.min(hi, g.maxPerWeek ? Math.min(rec, g.maxPerWeek) : rec));
+  return { n, rec, short: n < rec };
+}
+
 /** Abschnitte eines Rennens mit geschätzter Dauer (Zielzeit, sonst aus Distanz und Tempo). Für die Verpflegung. */
 export type RaceLegSport = 'schwimmen' | 'rad' | 'lauf';
 export interface RaceLeg { sport: RaceLegSport; minutes: number }
