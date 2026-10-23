@@ -12,6 +12,7 @@
   import WeightSettings from '../components/WeightSettings.svelte';
   import GarminSettings from '../components/GarminSettings.svelte';
   import WarmupSettings from '../components/WarmupSettings.svelte';
+  import FuelSettings from '../components/FuelSettings.svelte';
   import Statistik from './Statistik.svelte';
 
   type Section = 'statistik' | 'training' | 'koerper' | 'verbindungen' | 'daten' | 'ueber' | null;
@@ -63,6 +64,8 @@
     <HrSettings />
     <h3 class="section">Aufwärmen</h3>
     <WarmupSettings />
+    <h3 class="section">Verpflegung</h3>
+    <FuelSettings />
   {:else if section === 'koerper'}
     <h3 class="section">Gewicht</h3>
     <WeightSettings />

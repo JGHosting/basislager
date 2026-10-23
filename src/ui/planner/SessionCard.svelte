@@ -4,9 +4,11 @@
   import { addDays, weekStart, fmtDay, today } from '../../core/dates';
   import { openStrength, openActivity } from '../app.svelte';
   import SportIcon from '../components/SportIcon.svelte';
+  import FuelPanel from './FuelPanel.svelte';
+  import { needsFuelPlan } from '../../domain/nutrition/fueling';
   import { warmupCategory, WARMUP_MODE_LABEL, type WarmupMode } from '../../domain/planner/warmup';
   let { s, compact = false }: { s: PlanSession; compact?: boolean } = $props();
-  let open = $state(false), moving = $state(false), editing = $state(false);
+  let open = $state(false), moving = $state(false), editing = $state(false), fuel = $state(false);
   const ws = $derived(weekStart(s.origDate));
   // Verschieben innerhalb derselben Woche (ab heute)
   const days = $derived(Array.from({ length: 7 }, (_, i) => addDays(ws, i)).filter(d => d >= today()));
@@ -14,7 +16,7 @@
 </script>
 
 <div class="sess {s.status}" class:race={s.sport === 'wettkampf'}>
-  <button class="main" onclick={() => { open = !open; if (!open) editing = false; }} aria-expanded={open}>
+  <button class="main" onclick={() => { open = !open; if (!open) { editing = false; fuel = false; } }} aria-expanded={open}>
     <SportIcon type={s.sport} size={34} done={s.status === 'erledigt'} />
     <span class="txt">
       <b>{s.title}</b>
@@ -31,7 +33,9 @@
       <div class="acts">
         {#if s.activityId}<button class="pri" onclick={() => openActivity(s.activityId!)}>Details</button>{/if}
         <button class:pri={!s.activityId} onclick={() => (editing = !editing)} aria-expanded={editing}>Bearbeiten</button>
+        {#if needsFuelPlan(s) && s.status !== 'ausgelassen'}<button class:pri={fuel} onclick={() => (fuel = !fuel)} aria-expanded={fuel}>Verpflegung</button>{/if}
       </div>
+      {#if fuel}<FuelPanel {s} />{/if}
       {#if editing}
         <div class="acts edit">
           {#if s.status !== 'erledigt'}<button onclick={() => editSession(s.key, { status: 'erledigt' })}>Erledigt</button>{/if}
