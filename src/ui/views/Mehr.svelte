@@ -103,6 +103,7 @@
   <p><b>Bundeslebensmittelschlüssel (BLS) 4.0</b><br />{BLS_ATTRIBUTION} <a href="https://creativecommons.org/licenses/by/4.0/deed.de" target="_blank" rel="noopener">Lizenztext</a> · <a href="https://blsdb.de" target="_blank" rel="noopener">blsdb.de</a></p>
   <p><b>Open Food Facts</b><br />{OFF_ATTRIBUTION} <a href="https://opendatacommons.org/licenses/odbl/1-0/" target="_blank" rel="noopener">ODbL</a> · <a href="https://world.openfoodfacts.org" target="_blank" rel="noopener">openfoodfacts.org</a>. An Open Food Facts wird nur der Suchbegriff bzw. Barcode gesendet.</p>
   <p><b>intervals.icu</b><br />Aktivitäten und Morgenwerte (Quelle: Garmin) über die API von intervals.icu.</p>
+  <p><b>Übungsbilder Mobility</b><br />Exercise data by <a href="https://repdb.co" target="_blank" rel="noopener">RepDB (repdb.co)</a>, RepDB Free Tier.</p>
   <p><b>Karten</b><br />Kartendaten und -kacheln © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>-Mitwirkende.</p>
   <p><b>Sport-Icons</b><br />Material Symbols (Google), Apache License 2.0.</p>
 </section>

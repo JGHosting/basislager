@@ -15,6 +15,11 @@
   import Mehr from './ui/views/Mehr.svelte';
   import Soon from './ui/views/Soon.svelte';
   import Statistik from './ui/views/Statistik.svelte';
+  import Mobility from './ui/views/Mobility.svelte';
+  import MobilityPlayer from './ui/mobility/MobilityPlayer.svelte';
+  import MobilityNag from './ui/mobility/MobilityNag.svelte';
+  import MobilityLock from './ui/mobility/MobilityLock.svelte';
+  import SelfTestSheet from './ui/mobility/SelfTestSheet.svelte';
 
   // Einfaches Hash-Routing (#/heute, #/mehr …) – funktioniert auf GitHub Pages ohne Server
   const parse = () => (location.hash.replace(/^#\/?/, '').split('/')[0] || 'heute');
@@ -28,20 +33,24 @@
   });
 </script>
 
-<main bind:this={scroller} inert={app.showMorning || !!app.strengthEdit || !!app.foodSheet || !!app.injurySheet || !!app.physioSheet || !!app.goalSheet || !!app.activitySheet}>
+<main bind:this={scroller} inert={app.showMorning || !!app.strengthEdit || !!app.foodSheet || !!app.injurySheet || !!app.physioSheet || !!app.goalSheet || !!app.activitySheet || !!app.mobilityPlayer || app.mobilitySelfTest || app.mobilityLocked}>
   {#key route}
     <div class="view">
       {#if route === 'heute'}<Heute />
       {:else if route === 'plan'}<Plan />
       {:else if route === 'ernaehrung'}<Ernaehrung />
+      {:else if route === 'mobility'}<Mobility />
       {:else if route === 'statistik'}<Statistik />
       {:else if route === 'mehr'}<Mehr />
       {:else}<Heute />{/if}
     </div>
   {/key}
 </main>
-<TabBar current={route} />
+<TabBar current={route} mobilityDue={app.mobilityDue} />
 {#if app.showMorning}<MorningSheet />{:else if app.strengthEdit}<StrengthSheet />{:else if app.foodSheet}<FoodSheet />{:else if app.injurySheet}<InjurySheet />{:else if app.physioSheet}<PhysioSheet />{:else if app.goalSheet}<GoalSheet />{:else if app.activitySheet}<ActivitySheet />{/if}
+{#if app.mobilityPlayer}<MobilityPlayer routine={app.mobilityPlayer} />{/if}
+{#if app.mobilitySelfTest}<SelfTestSheet />{/if}
+{#if app.mobilityLocked}<MobilityLock />{:else if app.mobilityNag}<MobilityNag />{/if}
 
 <style>
   /* Einziger Scrollbereich der App */

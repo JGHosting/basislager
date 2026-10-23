@@ -1,0 +1,83 @@
+/**
+ * Verlauf (mobilityLog), Streak und Fälligkeits-/Pausenlogik für die tägliche Routine.
+ */
+import { db } from '../../core/db';
+import { today, addDays } from '../../core/dates';
+import { getMobilitySettings, saveMobilitySettings, getPauseRanges, dayWasPaused } from './settings';
+import { buildTodayRoutine, type Routine } from './select';
+import { activeInjury } from '../injury/injury';
+import { byId, scaledHold, scaledReps } from './library';
+
+/** done = Anteil erledigter Übungen; die Routine zählt ab 80 % als erledigt. */
+export const DONE_THRESHOLD = 0.8;
+
+export async function todayLog() { return db.mobilityLog.get(today()); }
+
+export async function ensureTodayRoutine(): Promise<Routine> {
+  const existing = await todayLog();
+  const settings = await getMobilitySettings();
+  if (existing) {
+    return {
+      date: existing.date, minutes: existing.minutes,
+      items: existing.items.flatMap(i => {
+        const e = byId(i.exerciseId); if (!e) return [];
+        return [{ exerciseId: e.id, sides: e.sides, holdSec: scaledHold(e, settings.level), reps: scaledReps(e, settings.level) }];
+      })
+    };
+  }
+  const injury = activeInjury(await db.injuries.toArray());
+  const routine = await buildTodayRoutine(settings, injury);
+  await db.mobilityLog.put({ date: routine.date, minutes: routine.minutes, items: routine.items.map(i => ({ exerciseId: i.exerciseId, done: false })), createdAt: Date.now(), updatedAt: Date.now() });
+  return routine;
+}
+
+export async function setExerciseDone(exerciseId: string, done: boolean) {
+  const row = await todayLog(); if (!row) return;
+  const items = row.items.map(i => (i.exerciseId === exerciseId ? { ...i, done } : i));
+  await db.mobilityLog.put({ ...row, items, updatedAt: Date.now() });
+}
+export async function finishToday(allDone: boolean) {
+  const row = await todayLog(); if (!row) return;
+  const items = allDone ? row.items.map(i => ({ ...i, done: true })) : row.items;
+  await db.mobilityLog.put({ ...row, items, updatedAt: Date.now() });
+  const s = await getMobilitySettings();
+  await saveMobilitySettings({ rotationIdx: (s.rotationIdx + 3) % 6 });
+}
+export function completion(row: { items: { done: boolean }[] } | undefined): number {
+  if (!row || !row.items.length) return 0;
+  return row.items.filter(i => i.done).length / row.items.length;
+}
+export async function isTodayDone(): Promise<boolean> {
+  const row = await todayLog();
+  if (row && row.minutes === 0) return true;   // "Heute aussetzen" – für heute erledigt, zählt aber nicht für die Streak
+  return completion(row) >= DONE_THRESHOLD;
+}
+
+/** "Heute aussetzen" (Stufe Brutal) – zählt als erledigt mit 0 Übungen, kostet die Streak. */
+export async function skipToday() {
+  await db.mobilityLog.put({ date: today(), minutes: 0, items: [], createdAt: Date.now(), updatedAt: Date.now() });
+}
+
+/** Fällig, sobald es noch keinen (ausreichend erledigten) Eintrag für heute gibt und kein Pausenmodus aktiv ist. */
+export async function mobilityDueToday(): Promise<boolean> {
+  const s = await getMobilitySettings();
+  if (s.pauseMode) return false;
+  return !(await isTodayDone());
+}
+
+/** Fortlaufende Tagesstreak. Tage im Pausenmodus zählen weder als Erfolg noch als Abbruch. */
+export async function currentStreak(): Promise<number> {
+  const ranges = await getPauseRanges();
+  let streak = 0; let d = today();
+  // Heute selbst zählt nur mit, wenn schon erledigt; sonst wird ab gestern geprüft.
+  const todayRow = await db.mobilityLog.get(d);
+  const todayDone = completion(todayRow) >= DONE_THRESHOLD;
+  if (todayDone) { streak++; d = addDays(d, -1); } else if (!dayWasPaused(ranges, d)) { d = addDays(d, -1); }
+  for (;;) {
+    if (dayWasPaused(ranges, d)) { d = addDays(d, -1); continue; }
+    const row = await db.mobilityLog.get(d);
+    if (completion(row) >= DONE_THRESHOLD) { streak++; d = addDays(d, -1); continue; }
+    break;
+  }
+  return streak;
+}

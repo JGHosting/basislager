@@ -184,6 +184,17 @@ export type VacationSport = 'ski' | 'hochtour' | 'wandern' | 'klettern' | 'rad' 
  */
 export interface Vacation { id: string; title?: string; start: string; end: string; training: 'voll' | 'weniger' | 'keine'; sport?: VacationSport | null; createdAt: number; updatedAt: number }
 
+/* ---------- Mobility ---------- */
+/** Ein abgeschlossener oder abgebrochener Durchlauf der täglichen Mobility-Routine. */
+export interface MobilityLog {
+  date: string;                 // Schlüssel "YYYY-MM-DD" (eine Routine pro Tag)
+  items: { exerciseId: string; done: boolean }[];
+  minutes: number;               // geplante Länge
+  createdAt: number; updatedAt: number;
+}
+/** Ergebnis eines Beweglichkeits-Selbsttests. Werte je nach Test: cm, Stufe (0–3) oder 0/1/2. */
+export interface MobilityTest { id: string; date: string; results: Record<string, number>; createdAt: number }
+
 /** Interne Sicherheitskopie vor einem Import (wird selbst nicht exportiert). */
 export interface Snapshot { seq?: number; createdAt: number; reason: string; data: unknown }
 
@@ -203,6 +214,8 @@ export class BasislagerDB extends Dexie {
   fixedEvents!: Table<FixedEvent, string>;
   vacations!: Table<Vacation, string>;
   mealTemplates!: Table<MealTemplate, string>;
+  mobilityLog!: Table<MobilityLog, string>;
+  mobilityTests!: Table<MobilityTest, string>;
   /** name nur für die Backup-Prüfroutine abweichend (separate Test-Datenbank). */
   constructor(name = 'basislager') {
     super(name);
@@ -247,6 +260,8 @@ export class BasislagerDB extends Dexie {
         await tx.table('fixedEvents').delete(e.id);
       }
     });
+    // v13: Mobility (Stretching/Mobility-Routine + Selbsttests)
+    this.version(13).stores({ mobilityLog: 'date', mobilityTests: 'id, date' });
     this.on('populate', tx => { tx.table('splits').bulkPut(BUILTIN_SPLITS); });
   }
 }
