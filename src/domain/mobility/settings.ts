@@ -2,18 +2,16 @@
  * Mobility-Einstellungen (ein JSON-Setting, wie bei 'sports'/'hrMax') + Streak/Pausen-Verlauf.
  */
 import { getSetting, setSetting } from '../../core/db';
-import type { GoalId } from './library';
+import { GOALS, type GoalId } from './library';
 import { today, addDays } from '../../core/dates';
 
 export type Intrusiveness = 'aus' | 'sanft' | 'hartnaeckig' | 'brutal';
-export interface CustomGoal { id: string; label: string }
-export interface GoalWeight { id: GoalId | string; weight: 1 | 2 | 3 }
+export interface GoalWeight { id: GoalId; weight: 1 | 2 | 3 }
 
 export interface MobilitySettings {
   minutes: 5 | 10 | 15;
   time: string;                // "HH:mm", nur informativ (Auslöser ist weiterhin die Garmin-Morgenmeldung)
   goals: GoalWeight[];
-  customGoals: CustomGoal[];
   intrusiveness: Intrusiveness;
   pauseMode: boolean;
   pauseAuto: boolean;           // true = zuletzt automatisch (Verletzungsstufe "Pause") gesetzt, nicht manuell
@@ -24,7 +22,6 @@ export interface MobilitySettings {
 export const DEFAULT_SETTINGS: MobilitySettings = {
   minutes: 10, time: '07:00',
   goals: [{ id: 'hohlkreuz', weight: 2 }],
-  customGoals: [],
   intrusiveness: 'hartnaeckig',
   pauseMode: false, pauseAuto: false,
   level: 0, testIntervalWeeks: 3, rotationIdx: 0
@@ -33,7 +30,10 @@ export const DEFAULT_SETTINGS: MobilitySettings = {
 const KEY = 'mobility';
 export async function getMobilitySettings(): Promise<MobilitySettings> {
   const s = await getSetting<Partial<MobilitySettings>>(KEY);
-  return { ...DEFAULT_SETTINGS, ...s, goals: s?.goals ?? DEFAULT_SETTINGS.goals, customGoals: s?.customGoals ?? [] };
+  // Eigene Ziele gibt es nicht mehr – ältere Einträge werden ignoriert
+  const { customGoals: _old, ...rest } = (s ?? {}) as Partial<MobilitySettings> & { customGoals?: unknown };
+  const goals = (s?.goals ?? DEFAULT_SETTINGS.goals).filter(g => GOALS.some(x => x.id === g.id));
+  return { ...DEFAULT_SETTINGS, ...rest, goals };
 }
 export async function saveMobilitySettings(patch: Partial<MobilitySettings>) {
   const cur = await getMobilitySettings();

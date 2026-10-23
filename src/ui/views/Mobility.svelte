@@ -4,11 +4,10 @@
   import { today, fmtDay, addDays } from '../../core/dates';
   import { GOALS, REGIONS, type GoalId } from '../../domain/mobility/library';
   import { getMobilitySettings, saveMobilitySettings, setPauseMode, type Intrusiveness } from '../../domain/mobility/settings';
-  import { todayLog, completion, currentStreak, DONE_THRESHOLD, excludedCount } from '../../domain/mobility/repo';
+  import { todayLog, completion, currentStreak, DONE_THRESHOLD, excludedCount, rebuildToday, sigOf } from '../../domain/mobility/repo';
   import { TESTS, lastTest, testDue } from '../../domain/mobility/tests';
   import { activeInjury, STAGES } from '../../domain/injury/injury';
   import { app, startMobilityNow, openSelfTest } from '../app.svelte';
-  import { newId } from '../../core/ids';
 
   const row = liveQuery(() => todayLog());
   const injury = liveQuery(async () => activeInjury(await db.injuries.toArray()));
@@ -20,7 +19,13 @@
   const pct = $derived($row ? Math.round(completion($row) * 100) : 0);
   const isDone = $derived(pct / 100 >= DONE_THRESHOLD);
 
-  let newGoalLabel = $state('');
+  // Ziele/Gewichte/Länge geändert, aber heutige Routine noch mit altem Stand?
+  const outdated = $derived(!!$row && $row.minutes > 0 && !!$settings && $row.sig !== sigOf($settings));
+  let updated = $state(false);
+  async function refresh() {
+    await rebuildToday();
+    updated = true; setTimeout(() => (updated = false), 2500);
+  }
 
   function weightOf(s: Awaited<ReturnType<typeof getMobilitySettings>>, id: string) { return s.goals.find(g => g.id === id)?.weight ?? null; }
   async function toggleGoal(id: GoalId) {
@@ -32,17 +37,6 @@
   async function setWeight(id: string, weight: 1 | 2 | 3) {
     const s = await getMobilitySettings();
     await saveMobilitySettings({ goals: s.goals.map(g => (g.id === id ? { ...g, weight } : g)) });
-  }
-  async function addCustomGoal() {
-    const label = newGoalLabel.trim(); if (!label) return;
-    const id = 'custom:' + newId();
-    const s = await getMobilitySettings();
-    await saveMobilitySettings({ customGoals: [...s.customGoals, { id, label }], goals: [...s.goals, { id, weight: 2 }] });
-    newGoalLabel = '';
-  }
-  async function removeCustomGoal(id: string) {
-    const s = await getMobilitySettings();
-    await saveMobilitySettings({ customGoals: s.customGoals.filter(g => g.id !== id), goals: s.goals.filter(g => g.id !== id) });
   }
   async function setMinutes(minutes: 5 | 10 | 15) { await saveMobilitySettings({ minutes }); }
   async function setIntrusiveness(intrusiveness: Intrusiveness) { await saveMobilitySettings({ intrusiveness }); }
@@ -99,21 +93,9 @@
         </div>
       </div>
     {/each}
-    {#each $settings.customGoals as c}
-      <div class="weight-row">
-        <span>{c.label}</span>
-        <div class="seg w">
-          {#each [1, 2, 3] as n}<button class:on={weightOf($settings, c.id) === n} onclick={() => setWeight(c.id, n as 1 | 2 | 3)}>{n}</button>{/each}
-        </div>
-        <button class="rm" onclick={() => removeCustomGoal(c.id)} aria-label="Entfernen">✕</button>
-      </div>
-    {/each}
   {/if}
-  <div class="add-goal">
-    <input placeholder="Eigenes Ziel hinzufügen" bind:value={newGoalLabel} onkeydown={(e) => e.key === 'Enter' && addCustomGoal()} />
-    <button class="btn ghost" onclick={addCustomGoal}>Hinzufügen</button>
-  </div>
-  <p class="muted small hint">Eigene Ziele erhöhen den Anteil der allgemeinen Rotation durch alle Körperregionen, da dafür keine passenden Übungen automatisch gefunden werden.</p>
+  <button class="btn wide refresh" class:primary={outdated} class:ghost={!outdated} onclick={refresh}>{updated ? 'Routine aktualisiert ✓' : 'Routine aktualisieren'}</button>
+  {#if outdated && !updated}<p class="muted small hint">Änderungen sind noch nicht in der heutigen Routine – tippe auf „Routine aktualisieren“. Bereits abgehakte Übungen bleiben.</p>{/if}
 </section>
 
 <h3 class="section">Selbsttest</h3>
@@ -171,9 +153,7 @@
   .seg.n4 { grid-template-columns: repeat(4, 1fr); margin: 6px 0 14px; }
   .seg button { border: none; background: none; font: inherit; font-size: 14px; font-weight: 600; color: var(--muted); padding: 8px 2px; border-radius: 8px; cursor: pointer; }
   .seg button.on { background: var(--accent); color: #fff; }
-  .rm { border: none; background: none; color: var(--muted); font-size: 15px; cursor: pointer; padding: 4px; }
-  .add-goal { display: flex; gap: 8px; margin-top: 10px; }
-  .add-goal input { margin: 0; flex: 1; }
+  .refresh { margin-top: 12px; }
   .hint { margin: 10px 0 0; }
   .label { margin: 14px 0 0; font-size: 14px; color: var(--muted); }
   .label:first-child { margin-top: 0; }

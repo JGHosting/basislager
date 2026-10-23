@@ -15,8 +15,8 @@ export const DONE_THRESHOLD = 0.8;
 export async function todayLog() { return db.mobilityLog.get(today()); }
 
 /** Was die Auswahl beeinflusst – Änderung vor der ersten erledigten Übung plant die heutige Routine neu. */
-const sigOf = (s: Awaited<ReturnType<typeof getMobilitySettings>>) =>
-  JSON.stringify([s.minutes, s.level, s.goals.map(g => [g.id, g.weight]), s.customGoals.map(c => c.label)]);
+export const sigOf = (s: Awaited<ReturnType<typeof getMobilitySettings>>) =>
+  JSON.stringify([s.minutes, s.level, s.goals.map(g => [g.id, g.weight])]);
 
 export async function ensureTodayRoutine(): Promise<Routine> {
   let existing = await todayLog();
@@ -48,6 +48,23 @@ export async function ensureTodayRoutine(): Promise<Routine> {
   const routine = await buildTodayRoutine(settings, injury);
   await db.mobilityLog.put({ date: routine.date, minutes: routine.minutes, sig, items: routine.items.map(i => ({ exerciseId: i.exerciseId, done: false })), createdAt: Date.now(), updatedAt: Date.now() });
   return routine;
+}
+
+/**
+ * "Routine aktualisieren": plant die heutige Routine mit den aktuellen Zielen/Gewichten/Länge neu.
+ * Bereits abgehakte Übungen bleiben erhalten, der Rest wird neu ausgewählt.
+ */
+export async function rebuildToday(): Promise<void> {
+  const settings = await getMobilitySettings();
+  const injury = activeInjury(await db.injuries.toArray());
+  const row = await todayLog();
+  const done = row && row.minutes > 0 ? row.items.filter(i => i.done) : [];
+  const fresh = await buildTodayRoutine(settings, injury);
+  const open = fresh.items.filter(i => !done.some(d => d.exerciseId === i.exerciseId))
+    .slice(0, Math.max(0, fresh.items.length - done.length))
+    .map(i => ({ exerciseId: i.exerciseId, done: false }));
+  const now = Date.now();
+  await db.mobilityLog.put({ date: today(), minutes: settings.minutes, sig: sigOf(settings), items: [...done, ...open], createdAt: row?.createdAt ?? now, updatedAt: now });
 }
 
 /** "Tauschen" im Player: verletzungsgerechten Ersatz wählen und im Tageslog festhalten. */

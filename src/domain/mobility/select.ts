@@ -17,10 +17,6 @@ export interface RoutineItem {
 }
 export interface Routine { date: string; minutes: number; items: RoutineItem[] }
 
-const STOP = new Set(['mehr', 'besser', 'beweglicher', 'beweglichkeit', 'werden', 'wieder', 'ohne', 'mein', 'meine', 'können', 'schaffen']);
-const keywords = (label: string) => label.toLowerCase().split(/[^a-zäöüß]+/).filter(w => w.length >= 4 && !STOP.has(w)).map(w => w.slice(0, Math.max(4, w.length - 2)));
-const haystack = (e: MobilityExercise) => (e.name + ' ' + e.instructions + ' ' + (e.cue ?? '') + ' ' + e.regions.map(r => REGIONS.find(x => x.id === r)?.label ?? '').join(' ')).toLowerCase();
-
 const SLOTS: Record<MobilitySettings['minutes'], number> = { 5: 4, 10: 8, 15: 12 };
 
 /**
@@ -85,38 +81,27 @@ export function buildRoutine(ctx: SelectContext, rnd: () => number = Math.random
     if (picked) { chosen.push(picked); used.add(picked.id); }
   }
 
-  // 2) Ziele, gewichtet. Eigene Ziele: Stichwörter im Zieltext gegen Name, Anleitung und Region der Übungen
+  // 2) Ziele, gewichtet (Ziel-Tag zählt stärker als nur passende Region)
   const goalPool: { item: MobilityExercise; weight: number }[] = [];
-  let unmatchedCustom = 0;
   for (const g of settings.goals) {
-    const custom = settings.customGoals.find(c => c.id === g.id);
-    const words = custom ? keywords(custom.label) : [];
-    let matched = 0;
     for (const e of pool) {
       if (used.has(e.id)) continue;
-      let factor = 0;
-      if (custom) factor = words.some(w => haystack(e).includes(w)) ? 1.5 : 0;
-      else factor = e.goals.includes(g.id as any) ? 1.5 : e.regions.includes(g.id as Region) ? 1 : 0;
+      const factor = e.goals.includes(g.id) ? 1.5 : e.regions.includes(g.id as Region) ? 1 : 0;
       if (!factor) continue;
-      matched++;
       let weight = g.weight * factor;
       for (const r of e.regions) weight *= regionWeightBoost(ctx.testScores, r);
       if (recentIds.includes(e.id)) weight *= 0.4;
       const existing = goalPool.find(p => p.item.id === e.id);
       if (existing) existing.weight = Math.max(existing.weight, weight); else goalPool.push({ item: e, weight });
     }
-    if (custom && !matched) unmatchedCustom++;
   }
-  // Eigene Ziele ohne passende Übung: Platz geht an die allgemeine Rotation (ganzer Körper)
-  const customExtra = unmatchedCustom ? Math.round(goalSlots * 0.3) : 0;
-  let goalCount = Math.max(0, goalSlots - customExtra);
-  for (let i = 0; i < goalCount && goalPool.length; i++) {
+  for (let i = 0; i < goalSlots && goalPool.length; i++) {
     const avail = goalPool.filter(p => !used.has(p.item.id));
     if (!avail.length) break;
     const picked = weightedPick(avail, rnd);
     if (picked) used.add(picked.id), chosen.push(picked);
   }
-  // Rest (durch eigene Ziele "verdiente" Slots sowie nicht gefüllte Ziel-Slots) aus der allgemeinen Rotation auffüllen
+  // Nicht gefüllte Ziel-Slots aus der allgemeinen Rotation auffüllen
   while (chosen.length < slots) {
     const avail = pool.filter(e => !used.has(e.id));
     if (!avail.length) break;
