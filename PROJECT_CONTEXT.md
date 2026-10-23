@@ -1,6 +1,6 @@
 # Basislager — Projekt-Kontext / Übergabe
 
-Kompakte, vollständige Übergabe für einen neuen Chat. Stand: 2026-10-23 23 Uhr (PR #1–#8 auf `main` und deployed, Merge-Commit `0661460`).
+Kompakte, vollständige Übergabe für einen neuen Chat. Stand: 2026-10-23 23:30 Uhr (PR #1–#9 auf `main` und deployed, Merge-Commit `9219ca8`).
 
 ## Was ist das
 Persönliche Trainings- & Ernährungs-PWA fürs iPhone (deutsche UI), nur für Jakob. Kein Server, keine laufenden Kosten, offline nutzbar.
@@ -50,6 +50,13 @@ Nutzerentscheidungen: Selbsttest-Stufe schaltet nur Schwierigkeit frei (keine pa
 - Offen: iPhone-Test (v. a. Signalton bei Stummschalter/gesperrtem Bildschirm, Feedback-Flow, Verlauf).
 - PR #8: Alle RepDB-Bilder gegen Texte geprüft (Kontaktbogen). Korrigiert: `thoracic-bridge` (Bild = Rückbeuge-Brücke aus Rückwärts-Stütz, keine Seiten), `low-lunge` (Arme über Kopf), `doorway-chest-stretch` → „Brustöffner (W-Arme)“ (kein Türrahmen im Bild, keine Seiten), `dead-bug` und `downward-dog-pedal` im Wechsel (`sides: false`). Arm-/Nackenübungen mit „Im Stehen oder Sitzen“. Regel: Wechselübungen (abwechselnd links/rechts) = `sides: false`, Wiederholungen insgesamt.
 - Weiterhin nicht gewählt: Programme über Wochen, Sprachansagen/Übergangspausen/Display-an.
+
+## Verpflegung (PR #9, gemergt + deployed, wartet auf iPhone-/Uhr-Test)
+Idee nach felsr.com/verpflegung (nur Logik nachgebaut, kein fremder Code). Nutzerentscheidungen: Knopf ab 75 min; Wetter automatisch; Essenszeiten als Garmin-Schritte; nach der Einheit Nachfrage zum Eintragen; Intensität zählt (Z2 bis 2 h nichts).
+- `src/domain/nutrition/fueling.ts`: `carbRate` (Z2: ≤120 min 0, 120–180 optional 25, >180 40 g/h; mittel 30/45/60; hart 40/60/75; Wettkampf 45/60/80; Deckel nach Magen neu 60/manchmal 75/trainiert 90; Laufen ≤70 außer trainiert; Schwimmen ≤30 nur Iso), `fluidRate` (Temp/Gewicht), Natrium nach Salz-Einstellung (ab 120 min oder ≥22 °C), `FUEL_ITEMS` (Gel, Koffein-Gel, Iso 500 ml, Banane, Datteln, Fruchtgummi, Riegel, Brezel/Reiskuchen nur Rad), Zeitplan ~26 g pro Portion alle 20–50 min, erste nach 30 (hart) bzw. 45 min; Iso deckt 30 g/h ab 50 g/h. `levelOf` (Titel mit „Lang“/„(locker)“ = Z2). Settings: `fueling` (gut/salt/style/noGluten/noDairy/noCaffeine/watch), `fuelOverrides` (pro Session-Key level/tempC/logged, 60 Tage), `fuelLoc`, `fuelWeather` (Open-Meteo tmax 16 Tage, Cache 3 h). Keine DB-Änderung.
+- `insertIntakes` (Garmin): 1-min-Schritte „Essen: X“ (+ „trinken“ ab 25 °C), in Wiederholungsblöcken an nähere Blockgrenze, gleiche Zeit zusammengefasst. `workoutText(s, p, fuel?)`, `garmin.ts` lädt `loadFuelEnv(true)`.
+- UI: `src/ui/planner/FuelPanel.svelte` (in `SessionCard`, Knopf „Verpflegung“), `src/ui/components/FuelSettings.svelte` (Mehr → Training), `src/ui/nutrition/FuelLogPrompt.svelte` (Ernährung, nach erledigter Einheit Ja/Anpassen/Nein → `addItems` als Snack, foodId `fuel:<id>`).
+- Offen: iPhone-Test (Standortfreigabe, Nachfrage in Ernährung), Anzeige der Essens-Schritte auf der Uhr. Bekannt: Schritt vor einem Block verlängert Workout um 1 min.
 
 ## Weitere offene Punkte
 - iPhone-Test durch Jakob: Signalton im Lautlos-Modus (PR #7, `<audio>`-Weg), Verletzungsfilter mit seiner Sprunggelenk-Verletzung (PR #8), Feedback-Flow, Verlauf-Tab, Aufwärmen auf der Garmin-Uhr. Bestätigt: Timer startet erst per „Start“ (nach Update).
