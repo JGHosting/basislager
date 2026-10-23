@@ -190,6 +190,8 @@ export interface MobilityLog {
   date: string;                 // Schlüssel "YYYY-MM-DD" (eine Routine pro Tag)
   items: { exerciseId: string; done: boolean }[];
   minutes: number;               // geplante Länge
+  /** Stand der Einstellungen beim Erstellen (Ziele, Gewichte, Länge, Stufe) – ändert er sich vor der ersten Übung, wird neu geplant. */
+  sig?: string;
   createdAt: number; updatedAt: number;
 }
 /** Ergebnis eines Beweglichkeits-Selbsttests. Werte je nach Test: cm, Stufe (0–3) oder 0/1/2. */

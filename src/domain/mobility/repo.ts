@@ -14,10 +14,16 @@ export const DONE_THRESHOLD = 0.8;
 
 export async function todayLog() { return db.mobilityLog.get(today()); }
 
+/** Was die Auswahl beeinflusst – Änderung vor der ersten erledigten Übung plant die heutige Routine neu. */
+const sigOf = (s: Awaited<ReturnType<typeof getMobilitySettings>>) =>
+  JSON.stringify([s.minutes, s.level, s.goals.map(g => [g.id, g.weight]), s.customGoals.map(c => c.label)]);
+
 export async function ensureTodayRoutine(): Promise<Routine> {
-  const existing = await todayLog();
+  let existing = await todayLog();
   const settings = await getMobilitySettings();
   const injury = activeInjury(await db.injuries.toArray());
+  const sig = sigOf(settings);
+  if (existing && existing.minutes > 0 && !existing.items.some(i => i.done) && existing.sig !== sig) existing = undefined;
   if (existing) {
     // Verletzung kann sich seit dem Erstellen geändert haben: offene, jetzt ungeeignete Übungen ersetzen (oder streichen)
     let changed = false;
@@ -39,7 +45,7 @@ export async function ensureTodayRoutine(): Promise<Routine> {
     };
   }
   const routine = await buildTodayRoutine(settings, injury);
-  await db.mobilityLog.put({ date: routine.date, minutes: routine.minutes, items: routine.items.map(i => ({ exerciseId: i.exerciseId, done: false })), createdAt: Date.now(), updatedAt: Date.now() });
+  await db.mobilityLog.put({ date: routine.date, minutes: routine.minutes, sig, items: routine.items.map(i => ({ exerciseId: i.exerciseId, done: false })), createdAt: Date.now(), updatedAt: Date.now() });
   return routine;
 }
 
