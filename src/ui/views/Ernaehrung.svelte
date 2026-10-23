@@ -8,6 +8,7 @@
   import { openFood } from '../app.svelte';
   import KcalBar from '../nutrition/KcalBar.svelte';
   import MacroLine from '../nutrition/MacroLine.svelte';
+  import FuelLogPrompt from '../nutrition/FuelLogPrompt.svelte';
   import type { Meal } from '../../core/db';
 
   let date = $state(today());
@@ -62,6 +63,7 @@
       <button class="btn primary wide" onclick={() => setTracked(date, true)}>{v.vacation ? 'Trotzdem tracken' : date === t ? 'Tracking für heute aktivieren' : 'Tracking für diesen Tag aktivieren'}</button>
     </section>
   {:else}
+    <FuelLogPrompt {date} />
     <section class="card summary">
       {#if $goalQ == null || goalEdit}
         <h2>{goalEdit ? 'Kalorienziel ändern' : 'Tägliches Kalorienziel festlegen'}</h2>

@@ -9,6 +9,7 @@ import { today, addDays, weekStart } from '../../core/dates';
 import { icu, type Credentials, type IcuEventIn } from '../../sources/intervals/client';
 import { planWeeks } from './repo';
 import { workoutText, ICU_TYPE } from './workout';
+import { loadFuelEnv, planFor, needsFuelPlan } from '../nutrition/fueling';
 
 export interface GarminCfg { enabled: boolean; kraft: boolean; days: number }
 export interface SentInfo { id?: number | string; hash: string; date: string }
@@ -26,6 +27,7 @@ export async function desiredEvents(cfg: GarminCfg, t = today()) {
   const ws = weekStart(t);
   const { weeks } = await planWeeks(ws, Math.ceil((Date.parse(end) - Date.parse(ws)) / 604800000) + 1);
   const want = new Map<string, IcuEventIn>(); const keep = new Set<string>();
+  const fuelEnv = await loadFuelEnv(true).catch(() => null);
   for (const w of weeks) for (const s of w.sessions) {
     if (s.date < t || s.date > end) continue;
     const type = ICU_TYPE[s.sport];
@@ -33,9 +35,11 @@ export async function desiredEvents(cfg: GarminCfg, t = today()) {
     const ext = PREFIX + s.key;
     if (s.status === 'erledigt') { keep.add(ext); continue; }
     if (s.status !== 'offen') continue;
+    const fp = fuelEnv?.settings.watch && needsFuelPlan(s) ? planFor(s, fuelEnv) : null;
+    const fuel = fp ? { intakes: fp.intakes, hot: (fp.tempC ?? 0) >= 25 } : null;
     want.set(ext, {
       category: 'WORKOUT', start_date_local: s.date + 'T00:00:00', type, name: s.title,
-      description: workoutText(s, w.paces) + '\n\n' + MARK, moving_time: s.minutes * 60, external_id: ext
+      description: workoutText(s, w.paces, fuel) + '\n\n' + MARK, moving_time: s.minutes * 60, external_id: ext
     });
   }
   return { want, keep, end };

@@ -9,6 +9,7 @@
 import type { PlanSession } from './plan';
 import type { Paces } from './paces';
 import { fmtPace } from './goals';
+import { insertIntakes, type Intake } from '../nutrition/fueling';
 
 export const ICU_TYPE: Record<PlanSession['sport'], string | null> = {
   lauf: 'Run', trail: 'TrailRun', rad: 'Ride', schwimmen: 'Swim', gehen: 'Walk', kraft: 'WeightTraining', wettkampf: null
@@ -25,9 +26,10 @@ const m = (min: number) => `${Math.max(1, Math.round(min))}m`;
 const fit = (total: number, fixed: number, per: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, Math.floor((total - fixed) / per)));
 
 /** Baut den Workout-Text. Gesamtdauer entspricht der geplanten Dauer (Rest wird mit Auslaufen aufgefüllt). */
-export function workoutText(s: PlanSession, p: Paces): string {
+export function workoutText(s: PlanSession, p: Paces, fuel?: { intakes: Intake[]; hot: boolean } | null): string {
   const warmup = s.warmup && s.warmup.items.length ? ['', `Aufwärmen ${m(s.warmup.minutes)}`, ...s.warmup.items.map(i => `- ${i}`)] : [];
-  return [s.details, ...warmup, ...body(s, p)].join('\n');
+  const main = body(s, p);
+  return [s.details, ...warmup, ...(fuel?.intakes.length ? ['', ...insertIntakes(main, s.minutes, fuel.intakes, fuel.hot)] : main)].join('\n');
 }
 
 function body(s: PlanSession, p: Paces): Line[] {
