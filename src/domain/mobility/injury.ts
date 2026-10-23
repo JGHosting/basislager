@@ -113,6 +113,42 @@ const extra: [string, 'direct' | 'indirect', string[]][] = [
 ];
 for (const [id, kind, regions] of extra) for (const r of regions) LOAD[r][kind].push(id);
 
+/**
+ * Was trägt bei der Übung Gewicht? Ergänzt die Listen oben systematisch: Wer z. B. am Sprunggelenk verletzt
+ * ist, soll keine Übung im Stand, in der Hocke oder im Stütz auf den Füßen bekommen (indirekte Belastung),
+ * auch wenn die Übung eigentlich für eine andere Region gedacht ist.
+ */
+type Bearing = 'fuesse' | 'knie' | 'haende' | 'unterarme';
+const BEARING: Record<string, Bearing[]> = {
+  // Gewicht auf den Füßen (Stand, Hocke, Ausfallschritt, Stütz auf Händen und Füßen)
+  'squat-hold': ['fuesse'], 'deep-squat-hold': ['fuesse'], 'wall-sit': ['fuesse'],
+  'standing-forward-fold': ['fuesse'], 'wide-legged-forward-fold': ['fuesse', 'haende'], 'standing-calf-stretch': ['fuesse'],
+  'torso-twists': ['fuesse'], 'standing-side-bend': ['fuesse'], 'becken-aufrichten': ['fuesse'],
+  'rumpfdrehung-stand': ['fuesse'], 'lat-dehnung-wand': ['fuesse'], 'hueftbeuger-stand': ['fuesse'], 'hueftkreisen-stand': ['fuesse'],
+  'knie-kreisen': ['fuesse'], 'wadendehnung-wand': ['fuesse', 'haende'], 'soleus-dehnung': ['fuesse'], 'armschwingen': ['fuesse'],
+  'ausfallschritt-rotation': ['fuesse'], 'laeufer-dehnung': ['fuesse', 'haende'], 'worlds-greatest-stretch': ['fuesse', 'haende'],
+  'inchworm': ['fuesse', 'haende'], 'downward-dog': ['fuesse', 'haende'], 'downward-dog-pedal': ['fuesse', 'haende'],
+  'thoracic-bridge': ['fuesse', 'haende'], 'plank': ['fuesse', 'unterarme'], 'side-plank': ['fuesse', 'unterarme'],
+  'low-lunge': ['fuesse', 'knie'], 'lizard-stretch': ['fuesse', 'knie', 'unterarme'],
+  'kneeling-hip-flexor-stretch': ['fuesse', 'knie'], 'half-kneeling-hip-flexor-rock': ['fuesse', 'knie'],
+  // Kniend / Vierfüßlerstand
+  'cat-cow': ['knie', 'haende'], 'cat-stretch': ['knie', 'haende'], 'thread-the-needle': ['knie', 'haende'], 'puppy-pose': ['knie', 'haende'],
+  'childs-pose': ['knie'], 'kneeling-wrist-stretch': ['knie', 'haende'], 'bird-dog': ['knie', 'haende'],
+  'quad-dehnung-vierfuss': ['knie', 'haende'], 'hueftkreisen-vierfuss': ['knie', 'haende'],
+  // Stütz auf Händen/Unterarmen im Liegen oder Sitzen
+  'cobra-stretch': ['haende'], 'superman': [], 'seated-spinal-twist': ['haende'], 'drehsitz': ['haende'],
+  'faszienrolle-oberschenkel-vorne': ['unterarme'], 'faszienrolle-oberschenkel-aussen': ['unterarme'], 'faszienrolle-adduktoren': ['unterarme'],
+  'faszienrolle-wade-aussen': ['unterarme'], 'faszienrolle-wade': ['haende'], 'faszienrolle-hamstrings': ['haende'], 'faszienrolle-gesaess': ['haende'],
+  'faszienrolle-latissimus': ['unterarme'], 'faszienrolle-bws': ['fuesse']
+};
+const BEARING_BY_REGION: Record<string, Bearing[]> = {
+  'Fuß / Sprunggelenk': ['fuesse'], 'Achillessehne / Wade': ['fuesse'], 'Schienbein': ['fuesse'],
+  'Knie': ['knie'], 'Hand / Handgelenk': ['haende'], 'Ellbogen / Arm': ['haende', 'unterarme'], 'Schulter': ['haende', 'unterarme']
+};
+// Rückbeuge-Brücke drückt das Sprunggelenk unter Last in die Beugung → direkt
+LOAD['Fuß / Sprunggelenk'].direct.push('thoracic-bridge', 'downward-dog');
+LOAD['Achillessehne / Wade'].direct.push('thoracic-bridge');
+
 /** Ab dieser Rückkehrstufe (100 % Umfang) sind leichte, direkt belastende Übungen wieder erlaubt. */
 const DIRECT_OK_FROM = 6;
 /** Bis einschließlich dieser Stufe (50 % Umfang) bleiben auch indirekt belastende Übungen weg. */
@@ -123,6 +159,8 @@ export function injuryLoad(e: MobilityExercise, injury: Injury): 'direct' | 'ind
   if (!l) return null;
   if (l.direct.includes(e.id)) return 'direct';
   if (l.indirect.includes(e.id)) return 'indirect';
+  const carried = BEARING[e.id] ?? [];
+  if ((BEARING_BY_REGION[injury.region] ?? []).some(b => carried.includes(b))) return 'indirect';
   return null;
 }
 
