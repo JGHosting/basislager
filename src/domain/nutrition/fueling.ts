@@ -35,7 +35,9 @@ export function levelOf(s: Pick<PlanSession, 'intensity' | 'sport' | 'title'>): 
   return 'z2';
 }
 export const fuelSport = (s: Pick<PlanSession, 'sport'>) => s.sport === 'rad' ? 'rad' : s.sport === 'schwimmen' ? 'schwimmen' : s.sport === 'gehen' ? 'gehen' : 'lauf';
-export const needsFuelPlan = (s: Pick<PlanSession, 'sport' | 'minutes'>) => s.sport !== 'kraft' && s.minutes >= FUEL_MIN_MINUTES;
+export const needsFuelPlan = (s: Pick<PlanSession, 'sport' | 'minutes' | 'race'>) => s.sport === 'wettkampf' ? !!s.race : s.sport !== 'kraft' && s.minutes >= FUEL_MIN_MINUTES;
+export type LegSport = 'schwimmen' | 'rad' | 'lauf' | 'gehen';
+export const LEG_LABEL: Record<LegSport, string> = { schwimmen: 'Schwimmen', rad: 'Rad', lauf: 'Laufen', gehen: 'Gehen' };
 
 /* ---------- Verpflegungsmittel ---------- */
 export interface FuelItem {
@@ -59,12 +61,12 @@ export const FUEL_ITEMS: FuelItem[] = [
 const ITEM = Object.fromEntries(FUEL_ITEMS.map(i => [i.id, i])) as Record<string, FuelItem>;
 
 /* ---------- Ergebnis ---------- */
-export interface Intake { min: number; item: FuelItem }
+export interface Intake { min: number; item: FuelItem; leg?: LegSport }
 export interface FuelPlan {
-  level: FuelLevel; minutes: number; tempC: number | null; weight: number;
+  level: FuelLevel; minutes: number; legs: { sport: LegSport; minutes: number }[]; tempC: number | null; weight: number;
   carbsPerHour: number; optional: boolean;
   fluidPerHour: number; sodiumPerHour: number | null;
-  intakes: Intake[]; isoPerHour: number;
+  intakes: Intake[]; isoPerHour: number; isoBottles: number;
   totals: { carbs: number; kcal: number; fluid: number };
   before: string[]; during: string[]; after: string[]; dayBefore: string | null;
 }
@@ -79,10 +81,10 @@ export function carbRate(level: FuelLevel, minutes: number, gut: GutLevel, sport
   if (level === 'z2') { if (minutes > 180) rate = 40; else if (minutes > 120) { rate = 25; optional = true; } }
   else if (level === 'mittel') rate = minutes < 90 ? 30 : minutes < 150 ? 45 : 60;
   else if (level === 'hart') rate = minutes < 90 ? 40 : minutes < 150 ? 60 : 75;
-  else rate = minutes < 90 ? 45 : minutes < 150 ? 60 : 80;
+  else rate = minutes < 75 ? 0 : minutes < 90 ? 45 : minutes < 150 ? 60 : 80;
   const cap = gut === 'neu' ? 60 : gut === 'manchmal' ? 75 : 90;
   if (sport === 'lauf' && gut !== 'trainiert') rate = Math.min(rate, 70);   // laufend verträgt der Magen weniger
-  if (sport === 'schwimmen') rate = Math.min(rate, 30);
+  if (sport === 'schwimmen') rate = level === 'wettkampf' ? 0 : Math.min(rate, 30);
   return { rate: Math.min(rate, cap), optional };
 }
 
@@ -114,12 +116,15 @@ function pickItems(st: FuelSettings, sport: string, level: FuelLevel, n: number)
   return out;
 }
 
-export interface FuelInput { session: Pick<PlanSession, 'sport' | 'minutes' | 'intensity' | 'title'>; level?: FuelLevel; tempC: number | null; weight: number | null; settings: FuelSettings }
+export interface FuelInput { session: Pick<PlanSession, 'sport' | 'minutes' | 'intensity' | 'title'>; legs?: { sport: LegSport; minutes: number }[]; level?: FuelLevel; tempC: number | null; weight: number | null; settings: FuelSettings }
 
-export function buildFuelPlan({ session: s, level: lv, tempC, weight: w, settings: st }: FuelInput): FuelPlan {
+export function buildFuelPlan({ session: s, legs: lg, level: lv, tempC, weight: w, settings: st }: FuelInput): FuelPlan {
   const level = lv ?? levelOf(s);
-  const sport = fuelSport(s);
-  const minutes = s.minutes;
+  const legs = lg?.length ? lg : [{ sport: fuelSport(s) as LegSport, minutes: s.minutes }];
+  const multi = legs.length > 1;
+  const minutes = legs.reduce((a, l) => a + l.minutes, 0);
+  const main = [...legs].sort((x, y) => (x.sport === 'schwimmen' ? 1 : 0) - (y.sport === 'schwimmen' ? 1 : 0) || y.minutes - x.minutes)[0];
+  const sport = main.sport;
   const weight = w && w > 30 ? w : 70;
   const { rate, optional } = carbRate(level, minutes, st.gut, sport);
   const fluid = fluidRate(tempC, level, weight, sport);
@@ -127,20 +132,32 @@ export function buildFuelPlan({ session: s, level: lv, tempC, weight: w, setting
   const sodiumPerL = st.salt === 'kaum' ? 300 : st.salt === 'salzig' ? 900 : 500;
   const sodium = minutes >= 120 || hot ? r50(sodiumPerL * fluid / 1000) : null;
 
-  // Iso-Getränk deckt bei höheren Mengen einen Teil ab (außer "nur echtes Essen" und beim Schwimmen nur Iso)
-  const isoPerHour = sport === 'schwimmen' ? rate : rate >= 50 && st.style !== 'echt' ? 30 : 0;
-  const foodRate = rate - isoPerHour;
+  // Pro Abschnitt planen: Schwimmen im Rennen nichts, im Training nur Iso am Beckenrand.
+  // Iso-Getränk deckt bei höheren Mengen einen Teil ab (außer "nur echtes Essen").
   const intakes: Intake[] = [];
-  if (foodRate > 0) {
-    const every = clamp(Math.round(26 / foodRate * 60 / 5) * 5, 20, 50);   // ~26 g pro Portion
-    const first = level === 'z2' ? 45 : 30;
-    const times: number[] = [];
-    for (let t = first; t <= minutes - 15; t += every) times.push(t);
-    const items = pickItems(st, sport, level, times.length);
-    times.forEach((t, k) => intakes.push({ min: t, item: items[k] }));
-  }
+  let isoCount = 0, isoPerHour = 0, start = 0;
+  legs.forEach((leg, li) => {
+    const end = start + leg.minutes;
+    const r = carbRate(level, minutes, st.gut, leg.sport).rate;
+    if (leg.sport === 'schwimmen') {
+      if (!multi && level !== 'wettkampf' && r) { isoPerHour = r; isoCount += Math.round(leg.minutes / 60 * r / 30 * 2) / 2; }
+      start = end; return;
+    }
+    const iso = r >= 50 && st.style !== 'echt' ? 30 : 0;
+    isoPerHour = Math.max(isoPerHour, iso);
+    isoCount += iso ? Math.round(leg.minutes / 60 * iso / 30 * 2) / 2 : 0;
+    const foodRate = r - iso;
+    if (foodRate > 0) {
+      const every = clamp(Math.round(26 / foodRate * 60 / 5) * 5, 20, 50);   // ~26 g pro Portion
+      const first = li === 0 ? (level === 'z2' ? 45 : 30) : 10;
+      const times: number[] = [];
+      for (let t = start + first; t <= end - (li === legs.length - 1 ? 15 : 10); t += every) times.push(t);
+      const items = pickItems(st, leg.sport, level, times.length);
+      times.forEach((t, k) => intakes.push({ min: t, item: items[k], leg: multi ? leg.sport : undefined }));
+    }
+    start = end;
+  });
   const hours = minutes / 60;
-  const isoCount = isoPerHour ? Math.round(hours * isoPerHour / 30 * 2) / 2 : 0;
   const carbs = Math.round(intakes.reduce((a, i) => a + i.item.carbs, 0) + isoCount * 30);
   const kcal = Math.round(intakes.reduce((a, i) => a + (i.item.n.kcal ?? 0) * i.item.grams / 100, 0) + isoCount * 120);
   const fluidTotal = r50(fluid * hours);
@@ -150,13 +167,14 @@ export function buildFuelPlan({ session: s, level: lv, tempC, weight: w, setting
   const before = level === 'z2' && minutes <= 120
     ? ['Normal essen, keine extra Kohlenhydrate nötig.', 'Letzte größere Mahlzeit 2–3 h vorher, danach nur noch etwas Leichtes.']
     : [`2–3 h vorher: ca. ${preKh} g Kohlenhydrate (z. B. Haferflocken, Brot mit Honig, Reis), wenig Fett und Ballaststoffe.`,
-       'Vorher ca. 300–500 ml trinken.', ...(race ? ['Nur Lebensmittel, die du kennst – nichts Neues am Wettkampftag.'] : [])];
+       'Vorher ca. 300–500 ml trinken.', ...(race ? ['Nur Lebensmittel, die du kennst – nichts Neues am Wettkampftag.', ...(minutes >= 90 && !st.noCaffeine ? ['10–15 min vor dem Start: optional 1 Gel und ein paar Schlucke.'] : minutes >= 90 ? ['10–15 min vor dem Start: optional 1 Gel ohne Koffein und ein paar Schlucke.'] : [])] : [])];
   const during: string[] = [];
-  if (!rate) during.push('Kein Essen nötig – Wasser nach Durst reicht.');
+  if (!rate) during.push(sport === 'schwimmen' && level === 'wettkampf' ? 'Im Rennen nichts essen – vorher gut essen und trinken.' : 'Kein Essen nötig – Wasser nach Durst reicht.');
   else {
     during.push(optional ? `Optional ca. ${rate} g Kohlenhydrate pro Stunde – hält die Qualität am Ende hoch und hilft der Erholung.` : `Ca. ${rate} g Kohlenhydrate pro Stunde, früh anfangen statt aufholen.`);
+    if (multi) during.push('Schwimmen: nichts. Rad: Hauptteil der Verpflegung, dort verträgt der Magen am meisten. Laufen: Gels und Iso, gern an den Verpflegungsstellen.');
     if (isoPerHour && sport !== 'schwimmen') during.push(`Davon ca. ${isoPerHour} g über Iso-Getränk (≈ 500 ml/h), Rest über die Snacks unten.`);
-    if (sport === 'schwimmen') during.push('Im Wasser nichts essen – bei Pausen am Beckenrand Iso trinken.');
+    if (sport === 'schwimmen' && !multi && level !== 'wettkampf') during.push('Im Wasser nichts essen – bei Pausen am Beckenrand Iso trinken.');
   }
   during.push(`Trinken: ca. ${fluid} ml pro Stunde${hot ? ', bei Wärme lieber etwas mehr' : ''} – nach Durst, nicht mehr als nötig.`);
   if (sodium) during.push(`Salz: ca. ${sodium} mg Natrium pro Stunde (Iso, Salztabletten, Brezel).`);
@@ -166,9 +184,9 @@ export function buildFuelPlan({ session: s, level: lv, tempC, weight: w, setting
     `In den ersten 1–2 h: ca. ${recKh} g Kohlenhydrate und 20–30 g Eiweiß (z. B. Reis/Nudeln mit Hähnchen oder Joghurt mit Haferflocken und Obst).`,
     sodium ? 'Flüssigkeit auffüllen, gern mit etwas Salz (Brühe, salziges Essen).' : 'Nach Durst trinken.'
   ];
-  const dayBefore = race && minutes >= 90 ? `Vortag: kohlenhydratbetont essen, ca. ${r5(weight * (minutes >= 150 ? 8 : 6))} g Kohlenhydrate über den Tag verteilt, wenig Ballaststoffe am Abend.` : null;
+  const dayBefore = race && minutes >= 90 ? `Kohlenhydratbetont essen, ca. ${r5(weight * (minutes >= 150 ? 8 : 6))} g Kohlenhydrate über den Tag verteilt, wenig Ballaststoffe am Abend.` : null;
 
-  return { level, minutes, tempC, weight, carbsPerHour: rate, optional, fluidPerHour: fluid, sodiumPerHour: sodium, intakes, isoPerHour,
+  return { level, minutes, legs, tempC, weight, carbsPerHour: rate, optional, fluidPerHour: fluid, sodiumPerHour: sodium, intakes, isoPerHour, isoBottles: isoCount,
     totals: { carbs, kcal, fluid: fluidTotal }, before, during, after, dayBefore };
 }
 
@@ -203,7 +221,7 @@ export async function forecastTemps(force = false): Promise<Record<string, numbe
 export const cachedTemps = async () => (await getSetting<WeatherCache>('fuelWeather'))?.tmax ?? {};
 
 /** Eingriffe pro Einheit: Belastung bzw. Temperatur für den Tag ändern, Antwort auf "wie geplant gegessen?". */
-export interface FuelOverride { level?: FuelLevel; tempC?: number; logged?: 'ja' | 'nein'; at: number }
+export interface FuelOverride { level?: FuelLevel; tempC?: number; minutes?: number; logged?: 'ja' | 'nein'; at: number }
 export async function getOverrides(): Promise<Record<string, FuelOverride>> { return (await getSetting<Record<string, FuelOverride>>('fuelOverrides')) ?? {}; }
 export async function setOverride(key: string, change: Partial<FuelOverride> | null) {
   const all = await getOverrides();
@@ -220,7 +238,10 @@ export async function loadFuelEnv(fetchWeather = false): Promise<FuelEnv> {
 }
 export function planFor(s: PlanSession, env: FuelEnv): FuelPlan {
   const o = env.overrides[s.key];
-  return buildFuelPlan({ session: s, level: o?.level, tempC: o?.tempC ?? env.temps[s.date] ?? null, weight: env.weight, settings: env.settings });
+  let legs = s.race?.legs.map(l => ({ ...l })) as { sport: LegSport; minutes: number }[] | undefined;
+  const est = legs ? legs.reduce((a, l) => a + l.minutes, 0) : s.minutes;
+  if (o?.minutes && est > 0) legs = (legs ?? [{ sport: fuelSport(s) as LegSport, minutes: est }]).map(l => ({ ...l, minutes: Math.round(l.minutes * o.minutes! / est) }));
+  return buildFuelPlan({ session: s, legs, level: o?.level, tempC: o?.tempC ?? env.temps[s.date] ?? null, weight: env.weight, settings: env.settings });
 }
 
 /* ---------- Garmin: Essenszeitpunkte als eigene Schritte ---------- */

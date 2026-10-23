@@ -2,7 +2,7 @@
   import { swipeDismiss } from '../actions/swipeDismiss';
   import { db, type Goal, type GoalSport, type TriDistance } from '../../core/db';
   import { today, fmtDay, addDays } from '../../core/dates';
-  import { SPORTS, DISTANCE_PRESETS, TRI, recommendedStart, parseTime, fmtTime } from '../../domain/planner/goals';
+  import { SPORTS, DISTANCE_PRESETS, TRI, recommendedStart, parseTime, fmtTime, recommendedSessions, SESSION_RANGE } from '../../domain/planner/goals';
   import { saveGoal, archiveGoal, lowBase } from '../../domain/planner/repo';
   import { app, closeGoal } from '../app.svelte';
   import { predictFor } from '../../domain/planner/besttimes';
@@ -15,9 +15,10 @@
   let date = $state(addDays(today(), 84)), planStart = $state(''), startTouched = $state(false);
   let time = $state(''), tSwim = $state(''), tBike = $state(''), tRun = $state('');
   let low = $state(false), err = $state(''), confirmDel = $state(false);
+  let maxPW = $state<number | null>(null);
 
   $effect(() => { if (target.id) db.goals.get(target.id).then(g => { if (!g) return; existing = g; sport = g.sport; date = g.date; planStart = g.planStart; startTouched = true;
-    elevation = g.elevation ? String(g.elevation) : ''; tri = g.triDistance ?? 'olympisch';
+    elevation = g.elevation ? String(g.elevation) : ''; tri = g.triDistance ?? 'olympisch'; maxPW = g.maxPerWeek ?? null;
     const preset = g.sport !== 'triathlon' && DISTANCE_PRESETS[g.sport].find(p => Math.abs(p.km - (g.distanceKm ?? 0)) < 0.01);
     distance = preset ? String(preset.km) : 'custom'; customDist = preset ? '' : String(g.distanceKm ?? '');
     time = g.targetTime ? fmtTime(g.targetTime) : ''; tSwim = g.targetTimes?.swim ? fmtTime(g.targetTimes.swim) : ''; tBike = g.targetTimes?.bike ? fmtTime(g.targetTimes.bike) : ''; tRun = g.targetTimes?.run ? fmtTime(g.targetTimes.run) : ''; }); });
@@ -28,6 +29,9 @@
   const hasElev = $derived(SPORTS.find(s => s.id === sport)!.hasElevation);
   const rec = $derived(date > today() ? recommendedStart({ sport, distanceKm: km, triDistance: tri, elevation: Number(elevation) || null, date }, low, today()) : null);
   $effect(() => { if (rec && !startTouched) planStart = rec.start; });
+  const recN = $derived(recommendedSessions({ sport, distanceKm: km, targetTime: sport === 'triathlon' ? null : (Number.isNaN(parseTime(time)) ? null : parseTime(time)), triDistance: tri, elevation: Number(elevation) || null }));
+  const range = $derived(Array.from({ length: Math.max(1, recN - SESSION_RANGE[sport][0] + 1) }, (_, i) => SESSION_RANGE[sport][0] + i));
+  const unit = $derived(sport === 'triathlon' ? 'Einheiten (alle drei Sportarten)' : sport === 'rad' ? 'Ausfahrten' : sport === 'schwimmen' ? 'Schwimmeinheiten' : 'Läufe');
 
   // Zielzeit-Vorschlag aus Bestzeiten (Straßenlauf; Triathlon: Laufteil mit Zuschlag fürs Laufen nach dem Rad)
   let pred = $state<{ now: number; goal: number; from: string; weekKm: number } | null>(null);
@@ -54,7 +58,7 @@
     if (!planStart || planStart > date) { err = 'Der Planstart muss vor dem Wettkampf liegen.'; return; }
     await saveGoal({ id: existing?.id, sport, date, planStart, distanceKm: km, elevation: hasElev && elevation ? Number(elevation) : null,
       triDistance: sport === 'triathlon' ? tri : null, targetTime: sport === 'triathlon' ? null : tt[0],
-      targetTimes: sport === 'triathlon' ? { swim: tt[1], bike: tt[2], run: tt[3] } : null });
+      targetTimes: sport === 'triathlon' ? { swim: tt[1], bike: tt[2], run: tt[3] } : null, maxPerWeek: maxPW && maxPW < recN ? maxPW : null });
     closeGoal();
   }
   async function remove() { if (existing) await archiveGoal(existing.id); closeGoal(); }
@@ -109,6 +113,17 @@
       </div>
     {/if}
     <p class="muted small">Format h:mm:ss oder h:mm. Mit Zielzeit richten sich die Lauf-Paces danach, sonst nach deinen bisherigen Läufen.</p>
+  </section>
+
+  <section>
+    <h3>Training pro Woche</h3>
+    <p class="rec">Empfehlung für dein Ziel: <b>{recN} {unit}</b> pro Woche{sport === 'lauf' && recN >= 5 ? ' (wegen der ehrgeizigen Zielzeit eine mehr)' : ''}.</p>
+    <p class="muted small">Wie oft kannst du höchstens?</p>
+    <div class="chips">
+      {#each range as n}<button class:on={Math.min(maxPW ?? recN, recN) === n} onclick={() => (maxPW = n >= recN ? null : n)}>{n === recN ? `${n} oder mehr` : n}</button>{/each}
+    </div>
+    {#if maxPW && maxPW < recN}<p class="warn small">Mit {maxPW} statt {recN} wird es knapp: Der Plan setzt die wichtigsten Einheiten (Qualität, langer Lauf/Ausfahrt) und reduziert den Umfang etwas. Für eine ehrgeizige Zielzeit eher mehr Zeit einplanen.</p>
+    {:else}<p class="muted small">Mehr als die Empfehlung plant die App nicht – zusätzliche Sportarten stellst du unter Mehr → Sportarten ein.</p>{/if}
   </section>
 
   <section>

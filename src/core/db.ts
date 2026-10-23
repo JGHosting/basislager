@@ -168,6 +168,8 @@ export interface Goal {
   triDistance?: TriDistance | null;
   targetTime?: number | null;
   targetTimes?: { swim: number | null; bike: number | null; run: number | null } | null;
+  /** Höchstens so viele Einheiten der Wettkampf-Sportart pro Woche (Triathlon: alle drei zusammen). null = Empfehlung. */
+  maxPerWeek?: number | null;
   archived?: boolean;
   createdAt: number; updatedAt: number;
 }

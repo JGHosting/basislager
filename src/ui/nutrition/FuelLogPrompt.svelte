@@ -17,7 +17,7 @@
         const p = planFor(s, env);
         const counts: Record<string, number> = {};
         for (const i of p.intakes) counts[i.item.id] = (counts[i.item.id] ?? 0) + 1;
-        if (p.isoPerHour) counts.iso = Math.round(s.minutes / 60 * p.isoPerHour / 30 * 2) / 2;
+        if (p.isoBottles) counts.iso = p.isoBottles;
         if (Object.keys(counts).length) list.push({ s, counts });
       }
       if (d === date) asks = list;
