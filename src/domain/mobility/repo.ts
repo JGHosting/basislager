@@ -30,6 +30,7 @@ export async function ensureTodayRoutine(): Promise<Routine> {
     const items: { exerciseId: string; done: boolean }[] = [];
     for (const i of existing.items) {
       const e = byId(i.exerciseId);
+      if (!e && !i.done) { changed = true; continue; }   // Übung gibt es nicht mehr (z. B. ohne Bild entfernt)
       if (!e || i.done || !isExcluded(e, injury)) { items.push(i); continue; }
       changed = true;
       const rep = pickReplacement(i.exerciseId, injury, [...existing.items, ...items].map(x => x.exerciseId), settings.level);

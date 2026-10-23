@@ -133,7 +133,7 @@
       <p><b>intervals.icu</b><br />Aktivitäten und Morgenwerte (Quelle: Garmin) über die API von intervals.icu.</p>
       <p><b>Karten</b><br />Kartendaten und -kacheln © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>-Mitwirkende.</p>
       <p><b>Sport-Icons</b><br />Material Symbols (Google), Apache License 2.0.</p>
-      <p><b>Übungsbibliothek (Mobility)</b><br />Exercise data by RepDB (repdb.co).</p>
+      <p><b>Übungsbibliothek (Mobility)</b><br />Exercise data by RepDB (repdb.co). Ergänzende Übungen und Fotos: <a href="https://github.com/yuhonas/free-exercise-db" target="_blank" rel="noopener">Free Exercise DB</a> (Unlicense).</p>
     </section>
     <p class="muted small footer">Basislager · Version {__APP_VERSION__}</p>
   {/if}
