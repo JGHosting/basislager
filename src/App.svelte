@@ -14,7 +14,6 @@
   import Heute from './ui/views/Heute.svelte';
   import Mehr from './ui/views/Mehr.svelte';
   import Soon from './ui/views/Soon.svelte';
-  import Statistik from './ui/views/Statistik.svelte';
   import Mobility from './ui/views/Mobility.svelte';
   import MobilityPlayer from './ui/mobility/MobilityPlayer.svelte';
   import MobilityNag from './ui/mobility/MobilityNag.svelte';
@@ -40,7 +39,6 @@
       {:else if route === 'plan'}<Plan />
       {:else if route === 'ernaehrung'}<Ernaehrung />
       {:else if route === 'mobility'}<Mobility />
-      {:else if route === 'statistik'}<Statistik />
       {:else if route === 'mehr'}<Mehr />
       {:else}<Heute />{/if}
     </div>

@@ -20,6 +20,7 @@ import { activityLoad, loadSeries, type HrProfile } from '../load/load';
 import { sportName } from '../../ui/format';
 import { VACATION_LEG, vacationSportLabel } from '../vacation/vacation';
 import { normalizeSports, rolesFor, ROLE_WEIGHT, MAX_PER_WEEK, type EnduranceSport, type SportConfig, type SportsSetting, type Role } from './sports';
+import { resolveWarmup, type WarmupMode, type WarmupSettings, DEFAULT_WARMUP_SETTINGS } from './warmup';
 
 export type PlanSport = 'kraft' | 'lauf' | 'trail' | 'rad' | 'schwimmen' | 'gehen' | 'wettkampf';
 export type Intensity = 'locker' | 'mittel' | 'hart' | 'wettkampf';
@@ -28,6 +29,10 @@ export interface PlanSession {
   intensity: Intensity; details: string; groups?: MuscleGroup[]; elevation?: number;
   status: 'offen' | 'erledigt' | 'ausgelassen'; autoDone?: boolean; moved?: boolean; notes: string[];
   activityId?: string;   // passende Garmin-Aktivität (bei automatisch erledigt)
+  /** Aufwärmen vor dieser Einheit, passend ausgewählt (siehe domain/planner/warmup.ts). Null = keins geplant. */
+  warmup?: { minutes: number; items: string[] } | null;
+  /** Override der Aufwärm-Einstellung nur für diese Einheit (sonst Kategorie-Standard aus warmupSettings). */
+  warmupMode?: WarmupMode;
 }
 export type Phase = 'basis' | 'grundlage' | 'aufbau' | 'spitze' | 'taper' | 'wettkampfwoche' | 'erholung' | 'urlaub';
 export const PHASE_LABEL: Record<Phase, string> = {
@@ -51,6 +56,8 @@ export interface PlanContext {
   /** Krafteinheiten pro Woche (1–6, Standard 3). */
   strengthPerWeek?: number;
   hr?: HrProfile;
+  /** Aufwärm-Standard je Kategorie (Mehr → Training → Aufwärmen). */
+  warmupSettings?: WarmupSettings;
 }
 
 /* ---------- Hilfen ---------- */
@@ -428,6 +435,7 @@ export function buildWeek(ws: string, ctx: PlanContext): PlanWeek {
   out = applyStrengthActual(out, ctx, ws, phase === 'wettkampfwoche');
   const inter = applyInteractions(out, ctx, ws, used);
   out = inter.list;
+  out = applyWarmup(out, ctx);
   out.sort((a, b) => a.date.localeCompare(b.date) || order(a) - order(b));
   const minutes = out.filter(s => s.status !== 'ausgelassen').reduce((t, s) => t + s.minutes, 0);
   const runMinutes = out.filter(s => (s.sport === 'lauf' || s.sport === 'trail') && s.status !== 'ausgelassen').reduce((t, s) => t + s.minutes, 0);
@@ -577,6 +585,17 @@ export function applyInjury(list: PlanSession[], inj: Injury, ws?: string, vacat
 }
 
 /* ---------- Eigene Änderungen + erledigte Einheiten ---------- */
+/** Aufwärmen passend zur (durch Urlaub/Verletzung/Verschieben) endgültigen Einheit, mit Platz für einen Pro-Einheit-Override. */
+function applyWarmup(list: PlanSession[], ctx: PlanContext): PlanSession[] {
+  const settings = ctx.warmupSettings ?? DEFAULT_WARMUP_SETTINGS;
+  return list.map(s => {
+    if (s.status === 'ausgelassen') return s;
+    const edit = ctx.edits.get(s.key);
+    const warmupMode = edit?.warmup;
+    return { ...s, warmup: resolveWarmup(s, settings, warmupMode), warmupMode };
+  });
+}
+
 function applyEdits(list: PlanSession[], edits: Map<string, PlanEdit>): PlanSession[] {
   return list.map(s => {
     const e = edits.get(s.key); if (!e) return s;

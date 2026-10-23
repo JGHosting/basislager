@@ -7,6 +7,7 @@ import { buildWeek, type PlanContext, type PlanWeek, type PlanSession } from './
 import { hrProfile } from '../load/load';
 import { normalizeSports, type SportsSetting } from './sports';
 import { physioIds } from '../injury/rehab';
+import { getWarmupSettings } from './warmup';
 
 const plain = <T,>(v: T): T => JSON.parse(JSON.stringify(v));
 
@@ -25,9 +26,10 @@ export async function loadContext(): Promise<PlanContext> {
   const kraftN = await getSetting<number>('strengthPerWeek');
   const sports = normalizeSports(await getSetting<SportsSetting>('sports'), runs);
   const hr = hrProfile(activities, morning.filter(m => m.restingHr != null).map(m => m.restingHr!), { max: hrMax, rest: hrRest }, today());
+  const warmupSettings = await getWarmupSettings();
   return {
     today: today(), activities, strength, split: splitId ? (await db.splits.get(splitId)) ?? null : null,
-    goal, injury: activeInjury(injuries), events, edits: new Map(edits.map(e => [e.key, e])), runsPerWeek: runs ?? 3, strengthPerWeek: kraftN ?? 3, sports, vacations, hr, physio: physioIds(activities, injuries)
+    goal, injury: activeInjury(injuries), events, edits: new Map(edits.map(e => [e.key, e])), runsPerWeek: runs ?? 3, strengthPerWeek: kraftN ?? 3, sports, vacations, hr, physio: physioIds(activities, injuries), warmupSettings
   };
 }
 
@@ -54,12 +56,13 @@ export async function saveGoal(g: Omit<Goal, 'id' | 'createdAt' | 'updatedAt'> &
 }
 export async function archiveGoal(id: string) { const g = await db.goals.get(id); if (g) await db.goals.put({ ...g, archived: true, updatedAt: Date.now() }); }
 
-export async function editSession(key: string, change: Partial<Pick<PlanEdit, 'movedTo' | 'status'>> | null) {
+export async function editSession(key: string, change: Partial<Pick<PlanEdit, 'movedTo' | 'status' | 'warmup'>> | null) {
   if (change === null) { await db.planEdits.delete(key); return; }
   const prev = await db.planEdits.get(key);
   const row: PlanEdit = { ...prev, ...change, key, updatedAt: Date.now() };
   if (row.status === undefined) delete row.status;
   if (!row.movedTo) delete row.movedTo;
+  if (row.warmup === undefined) delete row.warmup;
   await db.planEdits.put(row);
 }
 

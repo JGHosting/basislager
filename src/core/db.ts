@@ -172,7 +172,7 @@ export interface Goal {
   createdAt: number; updatedAt: number;
 }
 /** Eigene Änderung an einer geplanten Einheit (verschoben, erledigt, ausgelassen). */
-export interface PlanEdit { key: string; movedTo?: string; status?: 'erledigt' | 'ausgelassen'; updatedAt: number }
+export interface PlanEdit { key: string; movedTo?: string; status?: 'erledigt' | 'ausgelassen'; warmup?: 'aus' | 'auto' | 'immer'; updatedAt: number }
 /** Fixtermin: an diesen Tagen wird nichts geplant (Skiwochenende, Hochtour, Urlaub …). */
 export interface FixedEvent { id: string; type: 'ski' | 'hochtour' | 'urlaub' | 'sonstiges'; title?: string; start: string; end: string; createdAt: number; updatedAt: number }
 

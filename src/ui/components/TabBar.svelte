@@ -6,7 +6,6 @@
     { id: 'plan', label: 'Plan', d: 'M5 6h14v13H5z M5 10h14 M9 4v4 M15 4v4' },
     { id: 'ernaehrung', label: 'Ernährung', d: 'M6 3v6a2.5 2.5 0 0 0 5 0V3 M8.5 3v18 M17.5 21V3c-2.2 1.6-3.2 4.6-3.2 8.5h3.2' },
     { id: 'mobility', label: 'Mobility', d: 'M4 12a8 8 0 0 1 14-5.3 M20 12a8 8 0 0 1-14 5.3 M18 4v4h-4 M6 20v-4h4' },
-    { id: 'statistik', label: 'Statistik', d: 'M5 20V12 M10 20V6 M15 20v-9 M20 20V9' },
     { id: 'mehr', label: 'Mehr', d: 'M6 12h.01 M12 12h.01 M18 12h.01' }
   ];
 </script>
@@ -27,7 +26,7 @@
   nav {
     /* Kein position:fixed – die Leiste ist Teil des Gerüsts und bleibt immer unten */
     flex-shrink: 0; z-index: 10;
-    display: grid; grid-template-columns: repeat(6, 1fr);
+    display: grid; grid-template-columns: repeat(5, 1fr);
     /* Wie die iOS-Tab-Leiste: Beschriftung sitzt knapp über dem Home-Balken */
     padding: 4px 4px max(calc(env(safe-area-inset-bottom) - 12px), 8px);
     background: color-mix(in srgb, var(--bg) 82%, transparent);
