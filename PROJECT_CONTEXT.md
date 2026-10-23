@@ -1,6 +1,6 @@
 # Basislager — Projekt-Kontext / Übergabe
 
-Kompakte, vollständige Übergabe für einen neuen Chat. Stand: 2026-10-24 ca. 0:20 Uhr (PR #1–#11 auf `main` und deployed, Merge-Commit `4752fca`).
+Kompakte, vollständige Übergabe für einen neuen Chat. Stand: 2026-10-24 ca. 0:20 Uhr (PR #1–#12 auf `main` und deployed, Merge-Commit `09eb91f`).
 
 ## Was ist das
 Persönliche Trainings- & Ernährungs-PWA fürs iPhone (deutsche UI), nur für Jakob. Kein Server, keine laufenden Kosten, offline nutzbar.
@@ -69,7 +69,7 @@ Idee nach felsr.com/verpflegung (nur Logik nachgebaut, kein fremder Code). Nutze
 - `applyMissed`: offene Ausdauer mit Datum < heute (auch manuell verschobene; manuell erledigt/ausgelassen nicht): locker → ausgelassen; lang/Qualität (`isKey`, ohne brick) → nächster Tag ab heute ohne harte Einheit (`isHard`: lang/hart/Wettkampf) am Vortag/Tag/Folgetag und ohne erledigte Ausdauer; lockere dort entfällt; sonst ausgelassen. `PlanSession.skipped` = 'manuell' (applyEdits) | 'verpasst'.
 - Ausgleich nur mit Rennziel, nicht bei Verletzung/Taper/Wettkampf-/Erholungs-/Urlaubswoche: 50 % (lang 60 %) der ausgefallenen Minuten auf offene nicht-harte Einheiten derselben Sportart (≤ +20 % je Einheit), Rest `PlanWeek.carry` → Folgewoche (≤ +10 % der Sportart, ≤ +15 % je Einheit; Folgewoche ruft `buildWeek(Vorwoche)` auf). Alltag: kein Ausgleich (Nutzerwunsch).
 - garmin.ts: erledigte + `autoDone && moved` nicht in `keep` → alter Termin wird gelöscht.
-- „Auslassen“ gibt es in SessionCard unter Bearbeiten (schon vorher).
+- „Auslassen“ gibt es in SessionCard unter Bearbeiten. PR #12: erledigte Einheiten ohne Auslassen/Verschieben/Aufwärm-Modus; von Hand abgehakt → „Doch nicht erledigt“; automatisch erkannt → kein Bearbeiten (Kraft: Muskelgruppen ändern); ausgelassen → nur Zurücksetzen.
 
 ## Weitere offene Punkte
 - iPhone-Test durch Jakob: Signalton im Lautlos-Modus (PR #7, `<audio>`-Weg), Verletzungsfilter mit seiner Sprunggelenk-Verletzung (PR #8), Feedback-Flow, Verlauf-Tab, Aufwärmen auf der Garmin-Uhr. Bestätigt: Timer startet erst per „Start“ (nach Update).
