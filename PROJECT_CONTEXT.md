@@ -1,6 +1,6 @@
 # Basislager — Projekt-Kontext / Übergabe
 
-Kompakte, vollständige Übergabe für einen neuen Chat. Stand: 2026-10-24 ca. 0 Uhr (PR #1–#10 auf `main` und deployed, Merge-Commit `fb17024`).
+Kompakte, vollständige Übergabe für einen neuen Chat. Stand: 2026-10-24 ca. 0:20 Uhr (PR #1–#11 auf `main` und deployed, Merge-Commit `4752fca`).
 
 ## Was ist das
 Persönliche Trainings- & Ernährungs-PWA fürs iPhone (deutsche UI), nur für Jakob. Kein Server, keine laufenden Kosten, offline nutzbar.
@@ -20,7 +20,7 @@ Persönliche Trainings- & Ernährungs-PWA fürs iPhone (deutsche UI), nur für J
 ## Wichtige Dateien
 - `src/core/db.ts` — Schema v1–v14. `PlanEdit.warmup?`, `MobilityLog {date, items[{exerciseId, done}], minutes, sig?}`, `MobilityTest {id, date, results}`, `MobilityProgress {exerciseId, step 0–4, count, total, hard?, lastDate?, lastFb?, unlockedAt?, updatedAt}`.
 - `src/backup/backup.ts` — neue Tabellen immer in BACKUP_TABLES, migrate, checkBackup, import (replace/merge), `canonical()` ergänzen.
-- **Planer:** `src/domain/planner/plan.ts` Pipeline `applyVacation → applyInjury → applyEdits → applyDone → applyStrengthActual → applyInteractions → applyWarmup → sort`. `warmup.ts` (Kategorien kraft/lauf/rad/schwimmen, Aus/Auto/Immer, Setting `warmup`, Override pro Einheit; kein Cool-down). `workout.ts` (`workoutText` = details + Aufwärmblock + `body()`), `garmin.ts`, `repo.ts` (`editSession` inkl. `warmup`), `sports.ts`.
+- **Planer:** `src/domain/planner/plan.ts` Pipeline `applyVacation → applyInjury → applyEdits → applyDone → applyMissed (nur lfd. Woche) → applyStrengthActual → applyInteractions → Ausgleich (applyCompensation lfd. Woche / applyCarry Folgewoche, nur Wettkampfplan) → applyWarmup → sort`. `warmup.ts` (Kategorien kraft/lauf/rad/schwimmen, Aus/Auto/Immer, Setting `warmup`, Override pro Einheit; kein Cool-down). `workout.ts` (`workoutText` = details + Aufwärmblock + `body()`), `garmin.ts`, `repo.ts` (`editSession` inkl. `warmup`), `sports.ts`.
 - **Mobility** `src/domain/mobility/`:
   - `library.ts` — `ALL` (alle Übungen) → `LIBRARY = ALL.filter(e => e.image)` (ohne Bild nicht in Auswahl). Felder: regions (hüfte, rueckseite, bws_schultern, sprunggelenk, nacken, rumpf), goals (+hohlkreuz), difficulty 0–2 (steuert Freischaltung, siehe `progression.ts`), sides, holdSec/reps (Basiswerte Stufe 0), avoid, image/image2, source repdb|fedb|custom.
   - `select.ts` — `buildRoutine`: Hälfte Rotation durch alle Regionen, Hälfte gewichtet nach Zielen (Ziel-Tag 1.5×, Region 1×, Selbsttest-Boost, zuletzt gemachte 0.4×), Rest auffüllen; `pickReplacement` (gleiche Region/Kategorie bevorzugt, verletzungsgerecht).
@@ -63,6 +63,13 @@ Idee nach felsr.com/verpflegung (nur Logik nachgebaut, kein fremder Code). Nutze
 - `buildFuelPlan` plant pro Abschnitt (`legs`), Intake hat `leg`; Schwimmen im Rennen 0 g/h; Rennen < 75 min 0; `FuelOverride.minutes` (Dauer im Panel änderbar, skaliert Abschnitte); `FuelPlan.isoBottles`.
 - `Goal.maxPerWeek` (kein Schema-Update, nur Feld). goals.ts: `SESSION_RANGE`, `ambitious` (Lauf-Pace < 4:30 bis 10 km, < 5:00 darüber), `recommendedSessions` (Lauf ≤6 km 3 sonst 4, +1 ehrgeizig; Trail ≤25 3 sonst 4; Rad ≤80 3 sonst 4; Schwimmen ≤2 3 sonst 4; Tri 6/7/8/9), `plannedSessions` (min(Empfehlung, Max), `short`). plan.ts: Wettkampfwochen als Slot-Listen in Prioritätsreihenfolge (`pick`), Umfang nach Gewichten; knapp → vol × max(0,8, n/rec), ehrgeizig → ×1,1; Wettkampfwoche reduziert wie zuvor. Zusatzsportarten unverändert (Nutzerwunsch).
 - GoalSheet: Abschnitt „Training pro Woche“ (Chips bis Empfehlung, „X oder mehr“, Hinweis „knapp“).
+
+## Plan: anderer Tag, Verpasstes, Ausgleich (PR #11, gemergt + deployed, wartet auf iPhone-Test)
+- `applyDone(list, acts, today, used, ws, hrMax)`: 1) gleicher Tag; 2) übrige Aktivitäten der Woche → passendste offene Ausdauereinheit (gleiche Familie, Dauerverhältnis 0,5–2,5, Score |ln r| + 0,25×Tage; hart nur mit Ø-Puls ≥ 78 % HFmax, ohne Puls nur nachträglich; lang vorab nur r ≥ 0,75). Einheit bekommt Trainingsdatum, `moved`, Notiz „Statt X am Y gemacht“.
+- `applyMissed`: offene Ausdauer mit Datum < heute (auch manuell verschobene; manuell erledigt/ausgelassen nicht): locker → ausgelassen; lang/Qualität (`isKey`, ohne brick) → nächster Tag ab heute ohne harte Einheit (`isHard`: lang/hart/Wettkampf) am Vortag/Tag/Folgetag und ohne erledigte Ausdauer; lockere dort entfällt; sonst ausgelassen. `PlanSession.skipped` = 'manuell' (applyEdits) | 'verpasst'.
+- Ausgleich nur mit Rennziel, nicht bei Verletzung/Taper/Wettkampf-/Erholungs-/Urlaubswoche: 50 % (lang 60 %) der ausgefallenen Minuten auf offene nicht-harte Einheiten derselben Sportart (≤ +20 % je Einheit), Rest `PlanWeek.carry` → Folgewoche (≤ +10 % der Sportart, ≤ +15 % je Einheit; Folgewoche ruft `buildWeek(Vorwoche)` auf). Alltag: kein Ausgleich (Nutzerwunsch).
+- garmin.ts: erledigte + `autoDone && moved` nicht in `keep` → alter Termin wird gelöscht.
+- „Auslassen“ gibt es in SessionCard unter Bearbeiten (schon vorher).
 
 ## Weitere offene Punkte
 - iPhone-Test durch Jakob: Signalton im Lautlos-Modus (PR #7, `<audio>`-Weg), Verletzungsfilter mit seiner Sprunggelenk-Verletzung (PR #8), Feedback-Flow, Verlauf-Tab, Aufwärmen auf der Garmin-Uhr. Bestätigt: Timer startet erst per „Start“ (nach Update).
