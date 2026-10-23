@@ -9,6 +9,7 @@ import type { Injury } from '../../core/db';
 import { regionScore, regionWeightBoost } from './tests';
 import { db } from '../../core/db';
 import { addDays, today } from '../../core/dates';
+import { isExcluded } from './injury';
 
 export interface RoutineItem {
   exerciseId: string;
@@ -18,9 +19,21 @@ export interface Routine { date: string; minutes: number; items: RoutineItem[] }
 
 const SLOTS: Record<MobilitySettings['minutes'], number> = { 5: 4, 10: 8, 15: 12 };
 
-function isExcluded(e: MobilityExercise, injury: Injury | null): boolean {
-  if (!injury || !e.avoid) return false;
-  return e.avoid.some(m => injury.movement[m] === 'nicht');
+/**
+ * Ersatz für eine Übung, die (wegen Verletzung oder per "Tauschen") nicht gemacht werden soll:
+ * bevorzugt gleiche Region, gleiche Art; nie eine bereits enthaltene oder verletzungsbedingt ausgeschlossene.
+ */
+export function pickReplacement(oldId: string, injury: Injury | null, usedIds: string[], level: MobilitySettings['level'], rnd: () => number = Math.random): RoutineItem | null {
+  const old = LIBRARY.find(e => e.id === oldId);
+  const pool = LIBRARY.filter(e => e.id !== oldId && !usedIds.includes(e.id) && !isExcluded(e, injury));
+  if (!pool.length) return null;
+  const weighted = pool.map(e => {
+    const sameRegion = !!old && e.regions.some(r => old.regions.includes(r));
+    const sameCat = !!old && e.category === old.category;
+    return { item: e, weight: (sameRegion ? 6 : 1) * (sameCat ? 2 : 1) };
+  });
+  const e = weightedPick(weighted, rnd);
+  return e ? { exerciseId: e.id, sides: e.sides, holdSec: scaledHold(e, level), reps: scaledReps(e, level) } : null;
 }
 
 function weightedPick<T>(pool: { item: T; weight: number }[], rnd: () => number): T | null {

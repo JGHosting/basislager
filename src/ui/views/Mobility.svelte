@@ -4,7 +4,7 @@
   import { today, fmtDay, addDays } from '../../core/dates';
   import { GOALS, REGIONS, type GoalId } from '../../domain/mobility/library';
   import { getMobilitySettings, saveMobilitySettings, setPauseMode, type Intrusiveness } from '../../domain/mobility/settings';
-  import { todayLog, completion, currentStreak, DONE_THRESHOLD } from '../../domain/mobility/repo';
+  import { todayLog, completion, currentStreak, DONE_THRESHOLD, excludedCount } from '../../domain/mobility/repo';
   import { TESTS, lastTest, testDue } from '../../domain/mobility/tests';
   import { activeInjury, STAGES } from '../../domain/injury/injury';
   import { app, startMobilityNow, openSelfTest } from '../app.svelte';
@@ -71,6 +71,9 @@
     </div>
     <div class="streak"><b>{$streak ?? 0}</b><span>Tage Streak</span></div>
   </div>
+  {#if $injury && $injury.stage > 0}
+    <p class="inj small">Rücksicht auf deine Verletzung ({$injury.region}, Stufe „{STAGES[$injury.stage]?.label}“): {excludedCount($injury)} Übungen pausieren, sie werden automatisch ersetzt.</p>
+  {/if}
   {#if !($injury && $injury.stage === 0)}
     <button class="btn primary wide" onclick={startMobilityNow}>{isDone ? 'Erneut durchführen' : $row ? 'Weiter' : 'Routine starten'}</button>
   {/if}
@@ -147,6 +150,7 @@
 </section>
 
 <style>
+  .inj { color: var(--yellow); margin: 8px 0 10px; line-height: 1.4; }
   .routine .row { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 12px; }
   .routine h3 { margin: 0 0 2px; font-size: 16px; }
   .streak { text-align: right; flex-shrink: 0; }

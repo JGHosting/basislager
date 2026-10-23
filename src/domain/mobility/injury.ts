@@ -1,0 +1,91 @@
+/**
+ * Verbindung Mobility ↔ Verletzungsmodus.
+ *
+ * Je Verletzungsregion (Regionen aus domain/injury) ist festgelegt, welche Übungen die Stelle
+ * - direkt belasten (dehnen/tragen genau diesen Bereich) → ausgeschlossen, solange die Verletzung aktiv ist;
+ *   erst ab Stufe „100 % Umfang“ sind leichte Varianten (Schwierigkeit 0) wieder erlaubt,
+ * - indirekt belasten (Abstützen, Knien, Mitbewegen) → ausgeschlossen bis einschließlich Stufe „50 % Umfang“,
+ *   bei schwerer Verletzung oder Ausfall-Modus dauerhaft.
+ * Zusätzlich gilt weiter die Bewegungsliste der Verletzung (Übung.avoid ↔ „geht nicht“).
+ * Bei Stufe „Pause“ ruht Mobility ganz (Pausenmodus, siehe app.svelte.ts).
+ */
+import type { Injury } from '../../core/db';
+import type { MobilityExercise } from './library';
+
+type Load = { direct: string[]; indirect: string[] };
+const QUADRUPED = ['cat-cow', 'cat-stretch', 'bird-dog', 'thread-the-needle', 'puppy-pose', 'childs-pose', 'kneeling-wrist-stretch'];
+const KNEELING = ['kneeling-hip-flexor-stretch', 'half-kneeling-hip-flexor-rock', 'low-lunge', 'lizard-stretch', ...QUADRUPED];
+const HAMSTRING = ['seated-forward-fold', 'standing-forward-fold', 'wide-legged-forward-fold', 'head-to-knee-pose', 'seated-straddle-stretch'];
+const HIP_FLEXOR = ['kneeling-hip-flexor-stretch', 'half-kneeling-hip-flexor-rock', 'low-lunge', 'lizard-stretch'];
+const HANDS = ['downward-dog', 'downward-dog-pedal', 'thoracic-bridge', 'cobra-stretch', 'kneeling-wrist-stretch'];
+
+const LOAD: Record<string, Load> = {
+  'Fuß / Sprunggelenk': {
+    direct: ['standing-calf-stretch', 'knie-zur-wand', 'ankle-circles', 'faszienrolle-wade', 'downward-dog-pedal', 'deep-squat-hold', 'squat-hold'],
+    indirect: ['downward-dog', 'wall-sit', 'low-lunge', 'lizard-stretch', 'standing-forward-fold', 'wide-legged-forward-fold', 'standing-side-bend', 'becken-aufrichten', 'childs-pose']
+  },
+  'Achillessehne / Wade': {
+    direct: ['standing-calf-stretch', 'knie-zur-wand', 'faszienrolle-wade', 'downward-dog', 'downward-dog-pedal', 'deep-squat-hold', 'squat-hold'],
+    indirect: ['ankle-circles', 'wall-sit', 'low-lunge', 'lizard-stretch', 'childs-pose']
+  },
+  'Schienbein': {
+    direct: ['knie-zur-wand', 'faszienrolle-wade', 'deep-squat-hold', 'squat-hold'],
+    indirect: ['standing-calf-stretch', 'downward-dog-pedal', 'wall-sit', 'childs-pose', ...KNEELING]
+  },
+  'Knie': {
+    direct: ['deep-squat-hold', 'squat-hold', 'wall-sit', 'kneeling-hip-flexor-stretch', 'half-kneeling-hip-flexor-rock', 'low-lunge', 'lizard-stretch', 'pigeon-stretch', 'faszienrolle-oberschenkel-vorne', 'knie-zur-wand', 'childs-pose'],
+    indirect: ['90-90-hold', 'butterfly-stretch', 'happy-baby', 'head-to-knee-pose', 'single-leg-glute-bridge', 'glute-bridge', ...QUADRUPED]
+  },
+  'Oberschenkel': {
+    direct: [...HAMSTRING, ...HIP_FLEXOR, 'faszienrolle-oberschenkel-vorne', 'downward-dog', 'deep-squat-hold', 'wall-sit', 'single-leg-glute-bridge'],
+    indirect: ['squat-hold', 'happy-baby', 'legs-up-the-wall', 'glute-bridge', 'pigeon-stretch', 'downward-dog-pedal']
+  },
+  'Hüfte / Leiste': {
+    direct: [...HIP_FLEXOR, 'pigeon-stretch', 'butterfly-stretch', '90-90-hold', 'deep-squat-hold', 'seated-straddle-stretch', 'wide-legged-forward-fold', 'faszienrolle-gesaess', 'clamshells', 'happy-baby'],
+    indirect: ['squat-hold', 'faszienrolle-oberschenkel-vorne', 'glute-bridge', 'single-leg-glute-bridge', 'wall-sit', 'bird-dog', 'head-to-knee-pose', 'seated-forward-fold', 'becken-aufrichten']
+  },
+  'Unterer Rücken': {
+    direct: ['seated-forward-fold', 'standing-forward-fold', 'wide-legged-forward-fold', 'head-to-knee-pose', 'cobra-stretch', 'seated-spinal-twist', 'supine-spinal-twist', 'torso-twists', 'standing-side-bend'],
+    indirect: ['plank', 'side-plank', 'bird-dog', 'dead-bug', 'thoracic-bridge', 'glute-bridge', 'single-leg-glute-bridge', 'cat-cow', 'pigeon-stretch', 'seated-straddle-stretch', 'downward-dog', 'becken-aufrichten']
+  },
+  'Oberer Rücken / Nacken': {
+    direct: ['neck-side-stretch', 'faszienrolle-bws', 'thread-the-needle', 'open-book', 'thoracic-bridge'],
+    indirect: ['kinn-einziehen', 'cat-cow', 'cat-stretch', 'puppy-pose', 'overhead-triceps-stretch', 'cow-face-pose', 'downward-dog', 'plank', 'side-plank', 'torso-twists']
+  },
+  'Schulter': {
+    direct: ['doorway-chest-stretch', 'cow-face-pose', 'cross-body-shoulder-stretch', 'overhead-triceps-stretch', 'wall-slides', 'puppy-pose', 'thread-the-needle', 'thoracic-bridge', 'downward-dog', 'downward-dog-pedal', 'plank', 'side-plank'],
+    indirect: ['bird-dog', 'cat-cow', 'cat-stretch', 'open-book', 'childs-pose', 'cobra-stretch', 'faszienrolle-bws', 'kneeling-wrist-stretch']
+  },
+  'Ellbogen / Arm': {
+    direct: ['overhead-triceps-stretch', 'cow-face-pose', 'kneeling-wrist-stretch'],
+    indirect: ['plank', 'side-plank', 'cobra-stretch', ...HANDS, ...QUADRUPED, 'faszienrolle-oberschenkel-vorne', 'faszienrolle-wade', 'faszienrolle-gesaess']
+  },
+  'Hand / Handgelenk': {
+    direct: [...HANDS],
+    indirect: [...QUADRUPED, 'plank', 'side-plank', 'faszienrolle-oberschenkel-vorne', 'faszienrolle-wade', 'faszienrolle-gesaess', 'cow-face-pose']
+  }
+};
+
+/** Ab dieser Rückkehrstufe (100 % Umfang) sind leichte, direkt belastende Übungen wieder erlaubt. */
+const DIRECT_OK_FROM = 6;
+/** Bis einschließlich dieser Stufe (50 % Umfang) bleiben auch indirekt belastende Übungen weg. */
+const INDIRECT_BLOCKED_UNTIL = 3;
+
+export function injuryLoad(e: MobilityExercise, injury: Injury): 'direct' | 'indirect' | null {
+  const l = LOAD[injury.region];
+  if (!l) return null;
+  if (l.direct.includes(e.id)) return 'direct';
+  if (l.indirect.includes(e.id)) return 'indirect';
+  return null;
+}
+
+/** Darf die Übung bei dieser Verletzung gerade gemacht werden? */
+export function isExcluded(e: MobilityExercise, injury: Injury | null): boolean {
+  if (!injury) return false;
+  if (e.avoid?.some(m => injury.movement[m] === 'nicht')) return true;
+  const strict = injury.mode === 'ausfall' || injury.severity === 'schwer';
+  const load = injuryLoad(e, injury);
+  if (load === 'direct') return strict || injury.stage < DIRECT_OK_FROM || e.difficulty > 0;
+  if (load === 'indirect') return strict || injury.stage <= INDIRECT_BLOCKED_UNTIL;
+  return false;
+}

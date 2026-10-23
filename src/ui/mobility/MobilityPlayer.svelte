@@ -1,7 +1,7 @@
 <script lang="ts">
   import { swipeDismiss } from '../actions/swipeDismiss';
-  import { byId, LIBRARY } from '../../domain/mobility/library';
-  import { setExerciseDone, finishToday } from '../../domain/mobility/repo';
+  import { byId } from '../../domain/mobility/library';
+  import { setExerciseDone, finishToday, swapExercise } from '../../domain/mobility/repo';
   import type { Routine } from '../../domain/mobility/select';
   import { closeMobilityPlayer } from '../app.svelte';
 
@@ -53,13 +53,17 @@
     if (isLast) { finished = true; void finishToday(false); return; }
     idx++;
   }
-  function swap() {
-    if (!ex) return;
-    const altPool = LIBRARY.filter(e => e.id !== ex.id && e.regions.some(r => ex.regions.includes(r)) && !steps.some(s => s.exerciseId === e.id));
-    if (!altPool.length) return;
-    const alt = altPool[Math.floor(Math.random() * altPool.length)];
-    const replacement: Step = { exerciseId: alt.id, side: step.side, holdSec: alt.holdSec, reps: alt.reps };
-    steps = steps.map((s, i) => (i === idx ? replacement : s));
+  async function swap() {
+    if (!ex || !step) return;
+    const oldId = ex.id;
+    // Ersatz berücksichtigt die aktive Verletzung und wird im Tageslog gespeichert
+    const rep = await swapExercise(oldId, [...new Set(steps.map(s => s.exerciseId))]);
+    if (!rep) return;
+    const first = steps.findIndex(s => s.exerciseId === oldId);
+    const base = { exerciseId: rep.exerciseId, holdSec: rep.holdSec, reps: rep.reps };
+    const fresh: Step[] = rep.sides ? [{ ...base, side: 'links' }, { ...base, side: 'rechts' }] : [base];
+    steps = [...steps.slice(0, first), ...fresh, ...steps.slice(first).filter(s => s.exerciseId !== oldId)];
+    idx = first;
     startTimer();
   }
   function togglePause() {
