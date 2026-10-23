@@ -1,7 +1,7 @@
 <script lang="ts">
   import { swipeDismiss } from '../actions/swipeDismiss';
-  import { byId, LIBRARY } from '../../domain/mobility/library';
-  import { setExerciseDone, finishToday } from '../../domain/mobility/repo';
+  import { byId } from '../../domain/mobility/library';
+  import { setExerciseDone, finishToday, swapExercise } from '../../domain/mobility/repo';
   import type { Routine } from '../../domain/mobility/select';
   import { closeMobilityPlayer } from '../app.svelte';
 
@@ -26,47 +26,58 @@
   const ex = $derived(step ? byId(step.exerciseId) : undefined);
   const isLast = $derived(idx === steps.length - 1);
 
+  let timeUp = $state(false);
+  let doneCount = $state(0);
+  // Nach dem Seitenwechsel ist die Übung erst mit der zweiten Seite "gemacht"
+  const firstSide = $derived(!!step?.side && steps[idx + 1]?.exerciseId === step.exerciseId);
+
+  function tick() {
+    remaining--;
+    if (remaining <= 0) { clearInterval(timer); running = false; timeUp = true; }   // kein automatisches Weiter – du bestätigst selbst
+  }
   function startTimer() {
-    clearInterval(timer);
+    clearInterval(timer); timeUp = false;
     if (!step?.holdSec) { running = false; return; }
     remaining = step.holdSec; running = true;
-    timer = setInterval(() => {
-      remaining--;
-      if (remaining <= 0) { clearInterval(timer); running = false; next(true); }
-    }, 1000);
+    timer = setInterval(tick, 1000);
   }
   $effect(() => { if (step) startTimer(); return () => clearInterval(timer); });
 
-  function markDone(exerciseId: string) {
-    // Nur beim letzten Schritt einer Übung (bei Seitenwechsel beim zweiten) als erledigt zählen.
-    const stillComing = steps.slice(idx + 1).some(s => s.exerciseId === exerciseId);
-    if (!stillComing) void setExerciseDone(exerciseId, true);
-  }
-  function next(auto = false) {
-    if (step) markDone(step.exerciseId);
-    if (isLast) { clearInterval(timer); finished = true; void finishToday(false); return; }
+  function finish() { clearInterval(timer); finished = true; void finishToday(false); }
+  /** Bestätigt: bei der ersten Seite → zur zweiten Seite, sonst Übung als gemacht speichern und weiter. */
+  function confirm() {
+    if (!step) return;
+    if (!firstSide) { void setExerciseDone(step.exerciseId, true); doneCount++; }
+    if (isLast) return finish();
     idx++;
-    if (!auto) startTimer();
   }
+  /** Überspringen: ganze Übung (beide Seiten) ohne Häkchen. */
   function skip() {
-    clearInterval(timer);
-    if (isLast) { finished = true; void finishToday(false); return; }
-    idx++;
+    if (!step) return;
+    const id = step.exerciseId;
+    let n = idx + 1;
+    while (n < steps.length && steps[n].exerciseId === id) n++;
+    if (n >= steps.length) return finish();
+    idx = n;
   }
-  function swap() {
-    if (!ex) return;
-    const altPool = LIBRARY.filter(e => e.id !== ex.id && e.regions.some(r => ex.regions.includes(r)) && !steps.some(s => s.exerciseId === e.id));
-    if (!altPool.length) return;
-    const alt = altPool[Math.floor(Math.random() * altPool.length)];
-    const replacement: Step = { exerciseId: alt.id, side: step.side, holdSec: alt.holdSec, reps: alt.reps };
-    steps = steps.map((s, i) => (i === idx ? replacement : s));
+  async function swap() {
+    if (!ex || !step) return;
+    const oldId = ex.id;
+    // Ersatz berücksichtigt die aktive Verletzung und wird im Tageslog gespeichert
+    const rep = await swapExercise(oldId, [...new Set(steps.map(s => s.exerciseId))]);
+    if (!rep) return;
+    const first = steps.findIndex(s => s.exerciseId === oldId);
+    const base = { exerciseId: rep.exerciseId, holdSec: rep.holdSec, reps: rep.reps };
+    const fresh: Step[] = rep.sides ? [{ ...base, side: 'links' }, { ...base, side: 'rechts' }] : [base];
+    steps = [...steps.slice(0, first), ...fresh, ...steps.slice(first).filter(s => s.exerciseId !== oldId)];
+    idx = first;
     startTimer();
   }
   function togglePause() {
     if (running) { clearInterval(timer); running = false; }
     else if (remaining > 0) {
       running = true;
-      timer = setInterval(() => { remaining--; if (remaining <= 0) { clearInterval(timer); running = false; next(true); } }, 1000);
+      timer = setInterval(tick, 1000);
     }
   }
   async function close(allDone: boolean) {
@@ -82,7 +93,7 @@
   {#if finished}
     <div class="done">
       <h2>Geschafft 🎉</h2>
-      <p class="muted">{steps.length} Schritte abgeschlossen.</p>
+      <p class="muted">{doneCount} {doneCount === 1 ? 'Übung' : 'Übungen'} bestätigt.</p>
       <button class="btn primary wide" onclick={() => close(false)}>Fertig</button>
     </div>
   {:else if ex}
@@ -94,8 +105,8 @@
 
     {#if step.holdSec}
       <div class="timer" class:paused={!running}>
-        <span>{mm(remaining)}</span>
-        <button class="btn ghost small" onclick={togglePause}>{running ? 'Pause' : 'Weiter'}</button>
+        <span>{timeUp ? 'Zeit um' : mm(remaining)}</span>
+        {#if !timeUp}<button class="btn ghost small" onclick={togglePause}>{running ? 'Pause' : 'Fortsetzen'}</button>{/if}
       </div>
     {:else if step.reps}
       <p class="reps">{step.reps}× {ex.sides ? 'je Seite' : ''}</p>
@@ -104,7 +115,7 @@
     <div class="actions">
       <button class="btn ghost" onclick={swap}>Tauschen</button>
       <button class="btn ghost" onclick={skip}>Überspringen</button>
-      <button class="btn primary" onclick={() => next()}>{isLast ? 'Fertig' : 'Weiter'}</button>
+      <button class="btn primary" onclick={confirm}>{firstSide ? 'Seite wechseln →' : 'Gemacht ✓'}</button>
     </div>
   {/if}
   <button class="close" onclick={() => close(false)} aria-label="Schließen">✕</button>

@@ -4,31 +4,65 @@
 import { db } from '../../core/db';
 import { today, addDays } from '../../core/dates';
 import { getMobilitySettings, saveMobilitySettings, getPauseRanges, dayWasPaused } from './settings';
-import { buildTodayRoutine, type Routine } from './select';
+import { buildTodayRoutine, pickReplacement, type Routine, type RoutineItem } from './select';
+import { isExcluded } from './injury';
 import { activeInjury } from '../injury/injury';
-import { byId, scaledHold, scaledReps } from './library';
+import { byId, scaledHold, scaledReps, LIBRARY } from './library';
 
 /** done = Anteil erledigter Übungen; die Routine zählt ab 80 % als erledigt. */
 export const DONE_THRESHOLD = 0.8;
 
 export async function todayLog() { return db.mobilityLog.get(today()); }
 
+/** Was die Auswahl beeinflusst – Änderung vor der ersten erledigten Übung plant die heutige Routine neu. */
+const sigOf = (s: Awaited<ReturnType<typeof getMobilitySettings>>) =>
+  JSON.stringify([s.minutes, s.level, s.goals.map(g => [g.id, g.weight]), s.customGoals.map(c => c.label)]);
+
 export async function ensureTodayRoutine(): Promise<Routine> {
-  const existing = await todayLog();
+  let existing = await todayLog();
   const settings = await getMobilitySettings();
+  const injury = activeInjury(await db.injuries.toArray());
+  const sig = sigOf(settings);
+  if (existing && existing.minutes > 0 && !existing.items.some(i => i.done) && existing.sig !== sig) existing = undefined;
   if (existing) {
+    // Verletzung kann sich seit dem Erstellen geändert haben: offene, jetzt ungeeignete Übungen ersetzen (oder streichen)
+    let changed = false;
+    const items: { exerciseId: string; done: boolean }[] = [];
+    for (const i of existing.items) {
+      const e = byId(i.exerciseId);
+      if (!e || i.done || !isExcluded(e, injury)) { items.push(i); continue; }
+      changed = true;
+      const rep = pickReplacement(i.exerciseId, injury, [...existing.items, ...items].map(x => x.exerciseId), settings.level);
+      if (rep) items.push({ exerciseId: rep.exerciseId, done: false });
+    }
+    if (changed) await db.mobilityLog.put({ ...existing, items, updatedAt: Date.now() });
     return {
       date: existing.date, minutes: existing.minutes,
-      items: existing.items.flatMap(i => {
+      items: items.flatMap(i => {
         const e = byId(i.exerciseId); if (!e) return [];
         return [{ exerciseId: e.id, sides: e.sides, holdSec: scaledHold(e, settings.level), reps: scaledReps(e, settings.level) }];
       })
     };
   }
-  const injury = activeInjury(await db.injuries.toArray());
   const routine = await buildTodayRoutine(settings, injury);
-  await db.mobilityLog.put({ date: routine.date, minutes: routine.minutes, items: routine.items.map(i => ({ exerciseId: i.exerciseId, done: false })), createdAt: Date.now(), updatedAt: Date.now() });
+  await db.mobilityLog.put({ date: routine.date, minutes: routine.minutes, sig, items: routine.items.map(i => ({ exerciseId: i.exerciseId, done: false })), createdAt: Date.now(), updatedAt: Date.now() });
   return routine;
+}
+
+/** "Tauschen" im Player: verletzungsgerechten Ersatz wählen und im Tageslog festhalten. */
+export async function swapExercise(oldId: string, inRoutine: string[]): Promise<RoutineItem | null> {
+  const settings = await getMobilitySettings();
+  const injury = activeInjury(await db.injuries.toArray());
+  const rep = pickReplacement(oldId, injury, inRoutine, settings.level);
+  if (!rep) return null;
+  const row = await todayLog();
+  if (row) await db.mobilityLog.put({ ...row, items: row.items.map(i => (i.exerciseId === oldId ? { exerciseId: rep.exerciseId, done: false } : i)), updatedAt: Date.now() });
+  return rep;
+}
+
+/** Wie viele Übungen der Bibliothek die aktive Verletzung gerade ausschließt (für den Hinweis im Mobility-Tab). */
+export function excludedCount(injury: import('../../core/db').Injury | null): number {
+  return injury ? LIBRARY.filter(e => isExcluded(e, injury)).length : 0;
 }
 
 export async function setExerciseDone(exerciseId: string, done: boolean) {
