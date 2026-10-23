@@ -14,7 +14,7 @@ import type { Activity, StrengthSession, SplitTemplate, Goal, Injury, FixedEvent
 import { addDays, weekStart, today as todayFn } from '../../core/dates';
 import { nextSplitDay, groupLabel } from '../strength/strength';
 import { STAGES, STAGE_VOLUME, MOVEMENTS, isOutage } from '../injury/injury';
-import { TRI, goalLabel, fmtPace } from './goals';
+import { TRI, goalLabel, fmtPace, raceLegs, type RaceLeg } from './goals';
 import { estimatePaces, type Paces } from './paces';
 import { activityLoad, loadSeries, type HrProfile } from '../load/load';
 import { sportName } from '../../ui/format';
@@ -33,6 +33,8 @@ export interface PlanSession {
   warmup?: { minutes: number; items: string[] } | null;
   /** Override der Aufwärm-Einstellung nur für diese Einheit (sonst Kategorie-Standard aus warmupSettings). */
   warmupMode?: WarmupMode;
+  /** Nur Wettkampf: Abschnitte mit geschätzter Dauer (für die Verpflegung; zählt nicht in Wochensummen). */
+  race?: { legs: RaceLeg[]; estimated: boolean };
 }
 export type Phase = 'basis' | 'grundlage' | 'aufbau' | 'spitze' | 'taper' | 'wettkampfwoche' | 'erholung' | 'urlaub';
 export const PHASE_LABEL: Record<Phase, string> = {
@@ -423,7 +425,7 @@ export function buildWeek(ws: string, ctx: PlanContext): PlanWeek {
       if (raceDay >= 1) sessions.push(S(ws, raceDay - 1, 'pre', g.sport === 'schwimmen' ? 'schwimmen' : g.sport === 'rad' ? 'rad' : 'lauf', 'Vorbelastung', 20, 'locker',
         'Sehr locker 15–20 min mit 3 kurzen Steigerungen. Früh schlafen, Material und Verpflegung vorbereiten.'));
       sessions.push({ key: `${ws}:race`, date: g.date, origDate: g.date, sport: 'wettkampf', title: `Wettkampf: ${goalLabel(g)}`, minutes: 0, intensity: 'wettkampf',
-        details: raceDetails(g, p), status: 'offen', notes: [] });
+        details: raceDetails(g, p), status: 'offen', notes: [], race: raceLegs(g, p) });
     }
   }
 

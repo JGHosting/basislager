@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import type { PlanSession } from '../../domain/planner/plan';
-  import { loadFuelEnv, planFor, setOverride, getLoc, setLoc, forecastTemps, LEVEL_LABEL, levelOf, type FuelEnv, type FuelLevel } from '../../domain/nutrition/fueling';
+  import { loadFuelEnv, planFor, setOverride, getLoc, setLoc, forecastTemps, LEVEL_LABEL, LEG_LABEL, levelOf, type FuelEnv, type FuelLevel } from '../../domain/nutrition/fueling';
   import { pushPlan } from '../../domain/planner/garmin';
   let { s }: { s: PlanSession } = $props();
   let env = $state.raw<FuelEnv | null>(null);
@@ -11,12 +11,12 @@
   const plan = $derived(env ? planFor(s, env) : null);
   const o = $derived(env?.overrides[s.key]);
   const autoTemp = $derived(env?.temps[s.date]);
-  async function change(c: { level?: FuelLevel; tempC?: number }) {
+  async function change(c: { level?: FuelLevel; tempC?: number; minutes?: number }) {
     await setOverride(s.key, { ...o, ...c });
     await load(false);
     pushPlan().catch(() => {});
   }
-  async function resetDay() { await setOverride(s.key, o?.logged ? { level: undefined, tempC: undefined } : null); await load(false); pushPlan().catch(() => {}); }
+  async function resetDay() { await setOverride(s.key, o?.logged ? { level: undefined, tempC: undefined, minutes: undefined } : null); await load(false); pushPlan().catch(() => {}); }
   function useLocation() {
     locErr = '';
     if (!navigator.geolocation) { locErr = 'Standort nicht verfügbar.'; return; }
@@ -30,20 +30,37 @@
   const TEMPS = [{ v: 5, l: 'Kalt' }, { v: 15, l: 'Mild' }, { v: 23, l: 'Warm' }, { v: 30, l: 'Heiß' }];
   const hm = (m: number) => `${Math.floor(m / 60)}:${String(m % 60).padStart(2, '0')}`;
   const levels: FuelLevel[] = ['z2', 'mittel', 'hart', 'wettkampf'];
+  const isRace = $derived(s.sport === 'wettkampf');
+  let durH = $state(''), durM = $state('');
+  $effect(() => { if (plan && isRace) { durH = String(Math.floor(plan.minutes / 60)); durM = String(plan.minutes % 60).padStart(2, '0'); } });
+  function setDur() {
+    const m = (parseInt(durH) || 0) * 60 + (parseInt(durM) || 0);
+    if (m >= 20 && m <= 24 * 60) change({ minutes: m });
+  }
 </script>
 
 {#if plan}
   <div class="fuel">
+    {#if isRace}
+      <div class="dur">
+        <span>Dauer</span>
+        <input inputmode="numeric" bind:value={durH} onchange={setDur} aria-label="Stunden" /><span>h</span>
+        <input inputmode="numeric" bind:value={durM} onchange={setDur} aria-label="Minuten" /><span>min</span>
+        <small class="muted">{o?.minutes ? 'von Hand' : s.race?.estimated ? 'geschätzt aus Distanz und Tempo' : 'aus deiner Zielzeit'}</small>
+      </div>
+      {#if plan.legs.length > 1}<p class="muted small legs">{plan.legs.map(l => `${LEG_LABEL[l.sport]} ${hm(l.minutes)}`).join(' · ')}</p>{/if}
+    {:else}
     <div class="chips">
       {#each levels as l}<button class:on={plan.level === l} onclick={() => change({ level: l })}>{LEVEL_LABEL[l]}</button>{/each}
     </div>
+    {/if}
     <div class="chips">
       {#each TEMPS as t}<button class:on={eff != null && bucket(eff) === t.v} onclick={() => change({ tempC: t.v })}>{t.l}</button>{/each}
       <small class="muted tlabel">{o?.tempC != null ? 'von Hand' : autoTemp != null ? `Vorhersage ${Math.round(autoTemp)} °C` : 'keine Vorhersage'}</small>
     </div>
     {#if !hasLoc}<button class="link" onclick={useLocation}>Wetter automatisch: Standort einmal freigeben</button>{/if}
     {#if locErr}<p class="muted small">{locErr}</p>{/if}
-    {#if o?.level || o?.tempC != null}<button class="link" onclick={resetDay}>Automatisch (aus dem Plan) verwenden</button>{/if}
+    {#if o?.level || o?.tempC != null || o?.minutes}<button class="link" onclick={resetDay}>Automatisch (aus dem Plan) verwenden</button>{/if}
 
     <div class="kpis">
       <div><b>{plan.carbsPerHour || '–'}</b><small>g KH/h{plan.optional ? ' (optional)' : ''}</small></div>
@@ -58,13 +75,13 @@
     <ul>{#each plan.during as t}<li>{t}</li>{/each}</ul>
     {#if plan.intakes.length}
       <ol class="sched">
-        {#each plan.intakes as i}<li><span class="t">{hm(i.min)}</span>{i.item.name}<small>{i.item.carbs} g</small></li>{/each}
+        {#each plan.intakes as i}<li><span class="t">{hm(i.min)}</span>{i.item.name}{#if i.leg}<em>{LEG_LABEL[i.leg]}</em>{/if}<small>{i.item.carbs} g</small></li>{/each}
       </ol>
-      <p class="muted small">Gesamt ca. {plan.totals.carbs} g Kohlenhydrate, {plan.totals.kcal} kcal{plan.isoPerHour && s.sport !== 'schwimmen' ? ' (inkl. Iso)' : ''}, {(plan.totals.fluid / 1000).toLocaleString('de-DE', { maximumFractionDigits: 1 })} l trinken.{env?.settings.watch && s.status === 'offen' ? ' Essenszeiten kommen als Schritte aufs Garmin-Workout.' : ''}</p>
+      <p class="muted small">Gesamt ca. {plan.totals.carbs} g Kohlenhydrate, {plan.totals.kcal} kcal{plan.isoPerHour && s.sport !== 'schwimmen' ? ' (inkl. Iso)' : ''}, {(plan.totals.fluid / 1000).toLocaleString('de-DE', { maximumFractionDigits: 1 })} l trinken.{env?.settings.watch && s.status === 'offen' && !isRace ? ' Essenszeiten kommen als Schritte aufs Garmin-Workout.' : ''}</p>
     {/if}
     <h4>Danach</h4>
     <ul>{#each plan.after as t}<li>{t}</li>{/each}</ul>
-    <p class="muted small">Allgemeine Richtwerte, keine Ernährungsberatung. Neues immer im Training ausprobieren, nie zuerst im Wettkampf. Belastung „{LEVEL_LABEL[levelOf(s)]}“ kommt aus dem Plan.</p>
+    <p class="muted small">Allgemeine Richtwerte, keine Ernährungsberatung. Neues immer im Training ausprobieren, nie zuerst im Wettkampf. {isRace ? 'Uhrzeiten ab Start.' : `Belastung „${LEVEL_LABEL[levelOf(s)]}“ kommt aus dem Plan.`}</p>
   </div>
 {/if}
 
@@ -86,4 +103,9 @@
   .sched .t { font-variant-numeric: tabular-nums; font-weight: 600; min-width: 40px; }
   .sched small { margin-left: auto; color: var(--muted); }
   .small { font-size: 12px; margin-top: 6px; }
+  .dur { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-bottom: 6px; }
+  .dur input { width: 44px; text-align: center; border: 1px solid var(--line); background: var(--card); color: var(--text); border-radius: 8px; padding: 6px 4px; font: inherit; font-size: 15px; }
+  .dur small { width: 100%; font-size: 12px; }
+  .legs { margin: 0 0 6px; }
+  .sched em { font-style: normal; font-size: 11px; color: var(--muted); border: 1px solid var(--line); border-radius: 6px; padding: 1px 5px; }
 </style>

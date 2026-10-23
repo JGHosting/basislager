@@ -20,7 +20,7 @@
     <SportIcon type={s.sport} size={34} done={s.status === 'erledigt'} />
     <span class="txt">
       <b>{s.title}</b>
-      <small>{s.minutes ? dur(s.minutes) + ' · ' : ''}{s.intensity}{s.elevation ? ` · ${s.elevation} hm` : ''}{s.moved ? ' · verschoben' : ''}</small>
+      <small>{s.minutes ? dur(s.minutes) + ' · ' : s.race ? '≈ ' + dur(s.race.legs.reduce((a, l) => a + l.minutes, 0)) + ' · ' : ''}{s.intensity}{s.elevation ? ` · ${s.elevation} hm` : ''}{s.moved ? ' · verschoben' : ''}</small>
     </span>
     <span class="st">{s.status === 'erledigt' ? '✓' : s.status === 'ausgelassen' ? '–' : ''}</span>
   </button>

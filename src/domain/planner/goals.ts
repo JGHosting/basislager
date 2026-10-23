@@ -30,6 +30,25 @@ export function goalLabel(g: Goal): string {
   return `${sp} ${preset ? preset.label : (g.distanceKm ?? 0).toLocaleString('de-DE') + ' km'}${g.elevation ? ` · ${g.elevation} hm` : ''}`;
 }
 
+/** Abschnitte eines Rennens mit geschätzter Dauer (Zielzeit, sonst aus Distanz und Tempo). Für die Verpflegung. */
+export type RaceLegSport = 'schwimmen' | 'rad' | 'lauf';
+export interface RaceLeg { sport: RaceLegSport; minutes: number }
+export function raceLegs(g: Goal, p: { threshold: number; race?: number }): { legs: RaceLeg[]; estimated: boolean } {
+  const km = g.distanceKm ?? 0, hm = g.elevation ?? 0;
+  const runPace = p.race ?? p.threshold * 1.08;   // min/km
+  if (g.sport === 'triathlon') {
+    const d = TRI[g.triDistance ?? 'olympisch'], t = g.targetTimes;
+    const swim = t?.swim ? t.swim / 60 : d.swim * 22 + 3;          // inkl. Wechsel
+    const bike = t?.bike ? t.bike / 60 : d.bike / 30 * 60 + 2;
+    const run = t?.run ? t.run / 60 : d.run * (p.race ?? p.threshold * 1.12);
+    return { legs: [{ sport: 'schwimmen', minutes: Math.round(swim) }, { sport: 'rad', minutes: Math.round(bike) }, { sport: 'lauf', minutes: Math.round(run) }], estimated: !(t?.swim && t?.bike && t?.run) };
+  }
+  const sport: RaceLegSport = g.sport === 'rad' ? 'rad' : g.sport === 'schwimmen' ? 'schwimmen' : 'lauf';
+  if (g.targetTime) return { legs: [{ sport, minutes: Math.round(g.targetTime / 60) }], estimated: false };
+  const min = g.sport === 'rad' ? km / 27 * 60 + hm / 15 : g.sport === 'schwimmen' ? km * 22 : g.sport === 'trailrun' ? km * runPace * 1.15 + hm / 10 : km * runPace;
+  return { legs: [{ sport, minutes: Math.round(min) }], estimated: true };
+}
+
 /** Ideale Vorbereitungsdauer in Wochen (Faustregeln aus der Trainingslehre, plus Zuschlag bei wenig Grundlage). */
 export function recommendedWeeks(g: Pick<Goal, 'sport' | 'distanceKm' | 'triDistance' | 'elevation'>, lowBase: boolean): number {
   const km = g.distanceKm ?? 0;
