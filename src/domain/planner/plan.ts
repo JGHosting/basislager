@@ -210,7 +210,7 @@ function runQuality(ws: string, day: number, slot: string, phase: Phase, wk: num
   const m = r5(minutes);
   const sport: PlanSport = trail ? 'trail' : 'lauf';
   if (phase === 'basis' || phase === 'grundlage' || phase === 'erholung')
-    return S(ws, day, slot, sport, 'Fahrtspiel', m, 'mittel', `Locker (${pr(p.easy)}), darin 6–8 × 1 min zügig nach Gefühl (≈ ${fmtPace(p.threshold)} min/km) mit 2 min locker. Zum Schluss 4 Steigerungen.`);
+    return S(ws, day, slot, sport, 'Fahrtspiel', m, 'mittel', `Locker in ${z2}, darin 6–8 × 1 min zügig nach Gefühl (≈ ${fmtPace(p.threshold)} min/km) mit 2 min locker. Zum Schluss 4 Steigerungen.`);
   if (phase === 'wettkampfwoche')
     return S(ws, day, slot, sport, 'Kurz & knackig', Math.min(m, 40), 'mittel', `15 min einlaufen, 3 × 4 min ${p.race ? 'Wettkampftempo ' + pr(p.race, 0.05) : 'zügig ' + pr(p.threshold, 0.05)}, 2 min Trabpause, auslaufen. Beine frisch halten.`);
   if (phase === 'spitze' && g) {
@@ -225,10 +225,11 @@ function runQuality(ws: string, day: number, slot: string, phase: Phase, wk: num
   if (variant === 1) return S(ws, day, slot, sport, 'Schwelle', m, 'hart', `15 min einlaufen, 3 × 8 min in ${pr(p.threshold, 0.06)}, 2 min Trabpause, 10 min auslaufen.`);
   return S(ws, day, slot, sport, 'Tempodauerlauf', m, 'mittel', `15 min einlaufen, 20–25 min gleichmäßig in ${pr(p.threshold + 0.1, 0.06)}, auslaufen.`);
 }
+const z2 = 'Zone 2 (60–70 % vom Maximalpuls)';
 const easyRun = (ws: string, day: number, slot: string, p: Paces, min: number, trail = false) =>
-  S(ws, day, slot, trail ? 'trail' : 'lauf', 'Lockerer Lauf', min, 'locker', `Ruhig im Gesprächstempo, ${pr(p.easy)}.${trail ? ' Gern auf Trails/Wegen.' : ''}`);
+  S(ws, day, slot, trail ? 'trail' : 'lauf', 'Lockerer Lauf', min, 'locker', `Ruhig im Gesprächstempo in ${z2} – nach Puls, nicht nach Pace.${trail ? ' Gern auf Trails/Wegen.' : ''}`);
 function longRun(ws: string, day: number, slot: string, p: Paces, min: number, phase: Phase, g: Goal | null, trail: boolean, hm?: number) {
-  let details = `Lang und ruhig, ${pr(p.long)}. Verpflegung/Trinken testen.`;
+  let details = `Lang und ruhig in ${z2} – nach Puls, nicht nach Pace. Verpflegung/Trinken testen.`;
   if (phase === 'spitze' && p.race && g?.sport === 'lauf' && (g.distanceKm ?? 0) > 20) details = `Lang, letzte 30–40 min im Wettkampftempo ${pr(p.race, 0.05)}. Wettkampfverpflegung testen.`;
   if (trail) details = `Lang auf Trails mit ca. ${hm ?? 0} hm, Tempo nach Gefühl (bergauf gehen ist okay). Bergab locker und kontrolliert.`;
   return S(ws, day, slot, trail ? 'trail' : 'lauf', trail ? 'Langer Trailrun' : 'Langer Lauf', min, 'mittel', details, trail ? hm : undefined);
@@ -243,14 +244,13 @@ const FLOOR_PER: Record<EnduranceSport, number> = { lauf: 30, rad: 45, schwimmen
 const LONG_CAP: Record<EnduranceSport, number> = { lauf: 150, rad: 300, schwimmen: 90 };
 /** Für die Verteilung „hart“: harte Intensität, Qualitätseinheit oder lange Einheit, die nicht nur locker ist. */
 const isHardOrLong = (s: PlanSession) => s.sport !== 'kraft' && (s.intensity === 'hart' || s.intensity === 'wettkampf' || /(-q\d*|race)$/.test(s.key) || (/long\d*$/.test(s.key) && s.intensity !== 'locker'));
-const z2 = 'Zone 2 (60–70 % vom Maximalpuls)';
 
 function enduranceSession(ws: string, sport: EnduranceSport, role: Role, mode: SportConfig['mode'], key: string, min: number, phase: Phase, p: Paces, wk: number): PlanSession {
   const base = mode === 'grundlage';
   if (sport === 'lauf') {
-    if (role === 'long') return base ? S(ws, 0, key, 'lauf', 'Langer Lauf', Math.min(min, LONG_CAP.lauf), 'locker', `Lang und ruhig in ${z2}, ${pr(p.long)}. Trinken/Verpflegung testen.`)
+    if (role === 'long') return base ? S(ws, 0, key, 'lauf', 'Langer Lauf', Math.min(min, LONG_CAP.lauf), 'locker', `Lang und ruhig in ${z2} – nach Puls, nicht nach Pace. Trinken/Verpflegung testen.`)
       : longRun(ws, 0, key, p, Math.min(min, LONG_CAP.lauf), phase, null, false);
-    if (role === 'easy') return base ? S(ws, 0, key, 'lauf', 'Grundlagenlauf', min, 'locker', `Ruhig in ${z2}, Gesprächstempo ${pr(p.easy)}.`) : easyRun(ws, 0, key, p, min);
+    if (role === 'easy') return base ? S(ws, 0, key, 'lauf', 'Grundlagenlauf', min, 'locker', `Ruhig im Gesprächstempo in ${z2} – nach Puls, nicht nach Pace.`) : easyRun(ws, 0, key, p, min);
     // Leistung: in der Standardwoche wechseln Intervalle, Schwelle und Tempodauerlauf, Erholungswoche bleibt Fahrtspiel
     return runQuality(ws, 0, key, phase === 'basis' ? 'aufbau' : phase, wk + (role === 'q2' ? 1 : 0), p, min, null, false);
   }
