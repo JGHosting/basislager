@@ -20,6 +20,7 @@ export interface IcuActivity {
   average_heartrate?: number | null;
   max_heartrate?: number | null;
   icu_training_load?: number | null;
+  calories?: number | null;
   source?: string;
 }
 export interface IcuWellness {

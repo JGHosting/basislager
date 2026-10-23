@@ -23,6 +23,8 @@ export interface Activity {
   avgHr: number | null;
   maxHr: number | null;
   sourceLoad: number | null;  // Belastungswert von intervals.icu (nur zur Info)
+  /** Aktive Kalorien der Einheit (Garmin über intervals.icu). Fehlt bei alten Einträgen. */
+  calories?: number | null;
   /** Zusatzdaten, beim ersten Öffnen der Detailansicht von intervals.icu geladen und gespeichert. */
   extra?: ActivityExtra;
   createdAt: number;
