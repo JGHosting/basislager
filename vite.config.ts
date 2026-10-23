@@ -31,7 +31,7 @@ export default defineConfig({
       workbox: {
         // API-Aufrufe nie aus dem Cache beantworten
         navigateFallbackDenylist: [/^\/api/],
-        globPatterns: ['**/*.{js,css,html,png,svg,webmanifest,json}'],
+        globPatterns: ['**/*.{js,css,html,png,svg,webp,webmanifest,json}'],
         maximumFileSizeToCacheInBytes: 3 * 1024 * 1024,   // BLS-Datei (~600 KB) offline verfügbar
         runtimeCaching: [{
           // Kartenkacheln (OpenStreetMap) zwischenspeichern – einmal gesehene Routen bleiben offline

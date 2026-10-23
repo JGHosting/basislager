@@ -26,13 +26,18 @@ const fit = (total: number, fixed: number, per: number, lo: number, hi: number) 
 
 /** Baut den Workout-Text. Gesamtdauer entspricht der geplanten Dauer (Rest wird mit Auslaufen aufgefüllt). */
 export function workoutText(s: PlanSession, p: Paces): string {
+  const warmup = s.warmup && s.warmup.items.length ? ['', `Aufwärmen ${m(s.warmup.minutes)}`, ...s.warmup.items.map(i => `- ${i}`)] : [];
+  return [s.details, ...warmup, ...body(s, p)].join('\n');
+}
+
+function body(s: PlanSession, p: Paces): Line[] {
   const total = s.minutes;
   const run = s.sport === 'lauf' || s.sport === 'trail';
   const out: Line[] = [];
   const rest = (used: number) => Math.max(5, total - used);
 
   if (s.sport === 'kraft') {
-    return [s.details, '', step(s.title.replace(/^Kraft · /, '').replace(/\+/g, 'und'), m(total), '')].join('\n');
+    return ['', step(s.title.replace(/^Kraft · /, '').replace(/\+/g, 'und'), m(total), '')];
   }
   if (s.sport === 'schwimmen') {
     // Pool-Workouts mit Bahnlängen sind auf Garmin heikel → zeitbasiert mit Hinweis
@@ -40,7 +45,7 @@ export function workoutText(s: PlanSession, p: Paces): string {
       const n = fit(total, 15, 2.5, 4, 12);
       out.push(step('Einschwimmen', '10m', HR.z2), ...block('Hauptteil', n, [step('Zügig', '2m', HR.z4), step('Pause', '30s', HR.z1)]), step('Ausschwimmen', m(rest(10 + n * 2.5)), HR.z2));
     } else out.push(step('Gleichmäßig', m(total), s.intensity === 'locker' ? HR.z2 : HR.z23));
-    return [s.details, '', ...out].join('\n');
+    return ['', ...out];
   }
   if (s.sport === 'rad') {
     const t = s.title;
@@ -49,11 +54,11 @@ export function workoutText(s: PlanSession, p: Paces): string {
     else if (/Wettkampftempo/.test(t)) { const n = fit(total, 25, 20, 1, 3); out.push(step('Einfahren', '15m', HR.z2), ...block('Hauptteil', n, [step('Wettkampftempo', '15m', HR.z34), step('Locker', '5m', HR.z2)]), step('Ausfahren', m(rest(15 + n * 20)), HR.z2)); }
     else if (/Tempowechsel/.test(t)) { const n = fit(total, 20, 5, 3, 6); out.push(step('Einfahren', '15m', HR.z2), ...block('Hauptteil', n, [step('Zügig', '2m', HR.z4), step('Locker', '3m', HR.z2)]), step('Locker', m(rest(15 + n * 5)), HR.z2)); }
     else out.push(step('Gleichmäßig', m(total), s.intensity === 'locker' ? HR.z2 : HR.z23));
-    return [s.details, '', ...out].join('\n');
+    return ['', ...out];
   }
   if (!run) {   // gehen u. a.
     out.push(step('Gleichmäßig', m(total), s.intensity === 'locker' ? HR.z1 : HR.z2));
-    return [s.details, '', ...out].join('\n');
+    return ['', ...out];
   }
 
   // Laufen: nach Titel der Einheit (abgeleitete Varianten wie "(locker)" fallen auf einfache Läufe zurück)
@@ -90,5 +95,5 @@ export function workoutText(s: PlanSession, p: Paces): string {
   } else {
     out.push(step('Gleichmäßig', m(total), s.intensity === 'hart' ? HR.z3 : HR.z23));
   }
-  return [s.details, '', ...out].join('\n');
+  return ['', ...out];
 }

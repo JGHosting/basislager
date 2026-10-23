@@ -15,6 +15,10 @@ import { refreshCurves } from '../domain/planner/besttimes';
 import { resetRoutes } from '../domain/activity/route';
 import { ensureBuiltinSplits, dedupeStrength, autoAssignStrength } from '../domain/strength/repo';
 import { liveQuery } from 'dexie';
+import { activeInjury } from '../domain/injury/injury';
+import { getMobilitySettings, setPauseMode } from '../domain/mobility/settings';
+import { ensureTodayRoutine, mobilityDueToday, skipToday } from '../domain/mobility/repo';
+import type { Routine } from '../domain/mobility/select';
 
 const AUTO_SYNC_AFTER_MS = 10 * 60 * 1000;
 
@@ -36,7 +40,12 @@ export const app = $state({
   physioSheet: null as null | { activityId?: string; checkId?: string },
   goalSheet: null as null | { id?: string },
   activitySheet: null as null | { id: string },
-  garmin: { busy: false, error: '', last: null as PushResult | null }
+  garmin: { busy: false, error: '', last: null as PushResult | null },
+  mobilityPlayer: null as null | Routine,
+  mobilitySelfTest: false,
+  mobilityDue: false,       // Banner (alle Stufen außer "Aus")
+  mobilityNag: false,       // Popup (Sanft: einmal täglich; Hartnäckig/Brutal: bei jedem Öffnen + alle 15 Min.)
+  mobilityLocked: false     // Sperre der Hauptansicht (Stufe Brutal)
 });
 
 /* ---------- Plan → Garmin (über intervals.icu) ---------- */
@@ -84,15 +93,61 @@ export async function initApp() {
   const stale = !app.syncState.lastSyncAt || Date.now() - app.syncState.lastSyncAt > AUTO_SYNC_AFTER_MS;
   if (app.connected && navigator.onLine && (stale || !app.syncState.historyDone)) void sync();
   void maybeShowMorning();
+  void checkMobilityPrompt();
   // Beim Zurückkehren in die App ebenfalls abgleichen, wenn es länger her ist
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState !== 'visible' || !app.connected) return;
     void maybeShowMorning();
+    void checkMobilityPrompt();
     if (app.syncing) return;
     const last = app.syncState.lastSyncAt ?? 0;
     if (Date.now() - last > AUTO_SYNC_AFTER_MS) void sync();
   });
+  // "Hartnäckig"/"Brutal": solange die App offen ist, alle 15 Minuten erneut nachfragen
+  setInterval(() => { if (document.visibilityState === 'visible') void checkMobilityPrompt(); }, 15 * 60 * 1000);
 }
+
+/* ---------- Mobility ---------- */
+
+/** Verletzungsstufe "Pause" → Pausenmodus automatisch an; endet die Stufe, automatisch wieder aus. */
+async function syncMobilityAutoPause() {
+  const injury = activeInjury(await db.injuries.toArray());
+  const s = await getMobilitySettings();
+  const shouldAuto = !!injury && injury.stage === 0;
+  if (shouldAuto && !s.pauseMode) await setPauseMode(true, true);
+  else if (!shouldAuto && s.pauseMode && s.pauseAuto) await setPauseMode(false, false);
+}
+
+async function checkMobilityPrompt() {
+  await syncMobilityAutoPause();
+  const s = await getMobilitySettings();
+  const due = !s.pauseMode && (await mobilityDueToday());
+  app.mobilityDue = due && s.intrusiveness !== 'aus';
+  app.mobilityLocked = due && s.intrusiveness === 'brutal' && !app.mobilityPlayer;
+  if (!app.mobilityDue || app.mobilityPlayer) { app.mobilityNag = false; return; }
+  if (s.intrusiveness === 'sanft') {
+    const shownDate = await getSetting<string>('mobilityNagShown');
+    if (shownDate === today()) return;
+    await setSetting('mobilityNagShown', today());
+  }
+  app.mobilityNag = true;
+}
+
+export async function startMobilityNow() {
+  app.mobilityNag = false;
+  app.mobilityPlayer = await ensureTodayRoutine();
+}
+export function closeMobilityPlayer() {
+  app.mobilityPlayer = null;
+  void checkMobilityPrompt();
+}
+export function dismissMobilityNag() { app.mobilityNag = false; }
+export async function skipMobilityToday() {
+  await skipToday();
+  await checkMobilityPrompt();
+}
+export function openSelfTest() { app.mobilitySelfTest = true; }
+export function closeSelfTest() { app.mobilitySelfTest = false; }
 
 /* ---------- Morgenpopup ---------- */
 
@@ -183,6 +238,7 @@ export async function sync(userTriggered = false) {
   } finally {
     app.syncing = false;
     void maybeShowMorning();
+    void checkMobilityPrompt();
     if (!app.syncError) { await autoAssignStrength().catch(() => {}); schedulePush(500); refreshCurves().catch(() => { /* Bestzeiten notfalls aus ganzen Aktivitäten */ }); }
   }
 }

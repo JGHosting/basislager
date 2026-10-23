@@ -7,12 +7,17 @@
   import { sessionsOn } from '../../domain/planner/repo';
   import { adaptToLight } from '../../domain/planner/plan';
   import SessionCard from '../planner/SessionCard.svelte';
-  import { app, closeMorning } from '../app.svelte';
+  import { app, closeMorning, startMobilityNow } from '../app.svelte';
   import { num, hours, dur, km, sportName, sportColor } from '../format';
   import { computeToday } from '../../domain/today';
   import AmpelRing from './AmpelRing.svelte';
   import { STAGES, isOutage } from '../../domain/injury/injury';
   import { savePain } from '../../domain/injury/repo';
+  import { todayLog, completion, DONE_THRESHOLD } from '../../domain/mobility/repo';
+  import { getMobilitySettings } from '../../domain/mobility/settings';
+  const mobilitySettings = liveQuery(() => getMobilitySettings());
+  const mobilityRow = liveQuery(() => todayLog());
+  const mobilityDone = $derived($mobilityRow ? completion($mobilityRow) >= DONE_THRESHOLD : false);
   let pain = $state<number | null>(null);
   let painInit = false;
   const calc = liveQuery(() => computeToday());
@@ -131,6 +136,16 @@
     </section>
   {/if}
 
+  {#if !$mobilitySettings?.pauseMode}
+    <section class="mob">
+      <div>
+        <h3>Mobility</h3>
+        <span class="muted">{mobilityDone ? 'Heute schon erledigt' : `${$mobilitySettings?.minutes ?? 10} Minuten · Stretching & Mobility`}</span>
+      </div>
+      <button class="btn {mobilityDone ? 'ghost' : 'primary'}" onclick={() => { closeMorning(false); startMobilityNow(); }}>{mobilityDone ? 'Erneut' : 'Starten'}</button>
+    </section>
+  {/if}
+
   <section>
     <label for="w"><h3>Gewicht <span class="muted opt">optional</span></h3></label>
     <div class="weight">
@@ -194,6 +209,9 @@
   .pscale button.on { background: var(--green); border-color: var(--green); color: #fff; }
   .pscale button.on.mid { background: var(--yellow); border-color: var(--yellow); }
   .pscale button.on.hi { background: var(--red); border-color: var(--red); }
+  .mob { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+  .mob h3 { margin: 0 0 2px; }
+  .mob span { font-size: 13px; }
   .amp { display: flex; gap: 14px; align-items: center; }
   .amp div { display: flex; flex-direction: column; gap: 2px; font-size: 14px; }
   .amp b { font-size: 17px; }

@@ -4,6 +4,7 @@
   import { addDays, weekStart, fmtDay, today } from '../../core/dates';
   import { openStrength, openActivity } from '../app.svelte';
   import SportIcon from '../components/SportIcon.svelte';
+  import { warmupCategory, WARMUP_MODE_LABEL, type WarmupMode } from '../../domain/planner/warmup';
   let { s, compact = false }: { s: PlanSession; compact?: boolean } = $props();
   let open = $state(false), moving = $state(false), editing = $state(false);
   const ws = $derived(weekStart(s.origDate));
@@ -24,6 +25,7 @@
   {#if s.notes.length && !compact}{#each s.notes as n}<p class="note">{n}</p>{/each}{/if}
   {#if open}
     <p class="det">{s.details}</p>
+    {#if s.warmup}<p class="warmup"><b>Aufwärmen ({s.warmup.minutes} min):</b> {s.warmup.items.join(' · ')}</p>{/if}
     {#if s.notes.length && compact}{#each s.notes as n}<p class="note">{n}</p>{/each}{/if}
     {#if !moving}
       <div class="acts">
@@ -38,6 +40,14 @@
           {#if s.status !== 'offen' || s.moved}<button onclick={() => editSession(s.key, null)}>Zurücksetzen</button>{/if}
           {#if s.sport === 'kraft' && s.status === 'erledigt'}<button onclick={() => openStrength(s.activityId ? { activityId: s.activityId } : { date: s.date })}>Muskelgruppen ändern</button>{/if}
         </div>
+        {#if warmupCategory(s.sport)}
+          <div class="acts edit warmup-modes">
+            <small class="wlabel">Aufwärmen für diese Einheit:</small>
+            {#each ['aus', 'auto', 'immer'] as mode}
+              <button class:pri={(s.warmupMode ?? 'auto') === mode} onclick={() => editSession(s.key, { warmup: mode as WarmupMode })}>{WARMUP_MODE_LABEL[mode as WarmupMode]}</button>
+            {/each}
+          </div>
+        {/if}
       {/if}
     {:else}
       <div class="days">
@@ -57,6 +67,9 @@
   .st { font-weight: 800; color: var(--green); font-size: 18px; }
   .erledigt .txt b { color: var(--muted); } .ausgelassen .txt b { text-decoration: line-through; color: var(--muted); }
   .det { font-size: 14px; line-height: 1.45; margin: 0 0 8px; }
+  .warmup { font-size: 13px; line-height: 1.4; margin: -2px 0 8px; color: var(--muted); }
+  .warmup b { color: var(--text); }
+  .wlabel { width: 100%; color: var(--muted); padding: 2px 0 2px 10px; }
   .note { font-size: 12px; color: var(--yellow); margin: -4px 0 8px 20px; }
   .acts, .days { display: flex; flex-wrap: wrap; gap: 6px; padding-bottom: 10px; }
   .acts.edit { padding-top: 2px; padding-left: 10px; border-left: 2px solid var(--line); margin-bottom: 4px; }
