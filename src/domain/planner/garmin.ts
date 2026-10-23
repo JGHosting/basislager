@@ -33,7 +33,8 @@ export async function desiredEvents(cfg: GarminCfg, t = today()) {
     const type = ICU_TYPE[s.sport];
     if (!type || s.minutes <= 0 || (s.sport === 'kraft' && !cfg.kraft)) continue;
     const ext = PREFIX + s.key;
-    if (s.status === 'erledigt') { keep.add(ext); continue; }
+    // Erledigt: drüben stehen lassen – außer sie wurde an einem anderen Tag gemacht (dann den alten Termin entfernen)
+    if (s.status === 'erledigt') { if (!(s.autoDone && s.moved)) keep.add(ext); continue; }
     if (s.status !== 'offen') continue;
     const fp = fuelEnv?.settings.watch && needsFuelPlan(s) ? planFor(s, fuelEnv) : null;
     const fuel = fp ? { intakes: fp.intakes, hot: (fp.tempC ?? 0) >= 25 } : null;

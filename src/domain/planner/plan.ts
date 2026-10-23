@@ -467,7 +467,8 @@ export function buildWeek(ws: string, ctx: PlanContext): PlanWeek {
   if (ctx.injury) out = applyInjury(out, ctx.injury, ws, ctx.vacations ?? []);
   out = applyEdits(out, ctx.edits);
   const used = new Set<string>();
-  out = applyDone(out, ctx.activities.filter(a => !ctx.physio?.has(a.id)), ctx.today, used);
+  out = applyDone(out, ctx.activities.filter(a => !ctx.physio?.has(a.id)), ctx.today, used, ws, ctx.hr?.max ?? 190);
+  if (ws === weekStart(ctx.today)) out = applyMissed(out, ctx.today, ws, ctx.edits);
   out = applyStrengthActual(out, ctx, ws, phase === 'wettkampfwoche');
   const inter = applyInteractions(out, ctx, ws, used);
   out = inter.list;
@@ -639,15 +640,73 @@ function applyEdits(list: PlanSession[], edits: Map<string, PlanEdit>): PlanSess
   });
 }
 const FAMILY: Record<PlanSport, RegExp> = { kraft: /Weight|Workout/, lauf: /Run/, trail: /Run/, rad: /Ride/, schwimmen: /Swim/, gehen: /Hike|Walk/, wettkampf: /./ };
-function applyDone(list: PlanSession[], acts: Activity[], today: string, used: Set<string>): PlanSession[] {
-  return list.map(s => {
+function applyDone(list: PlanSession[], acts: Activity[], today: string, used: Set<string>, ws: string, hrMax = 190): PlanSession[] {
+  // 1) Gleicher Tag, gleiche Sportart
+  const out = list.map(s => {
     if (s.status === 'ausgelassen' || s.date > today) return s;
     const a = acts.find(x => x.date === s.date && !used.has(x.id) && FAMILY[s.sport].test(x.sportType));
     if (!a) return s;
     if (s.status === 'erledigt') { used.add(a.id); return { ...s, activityId: a.id }; }
     used.add(a.id);
-    return { ...s, status: 'erledigt', autoDone: true, activityId: a.id };
+    return { ...s, status: 'erledigt' as const, autoDone: true, activityId: a.id };
   });
+  // 2) Anderer Tag derselben Woche: Aktivität der passendsten offenen Ausdauereinheit zuordnen
+  //    (gleiche Sportart, ähnliche Dauer; lange Aktivität → bevorzugt die lange Einheit). Die Einheit wandert auf den Trainingstag.
+  const end = addDays(ws, 6);
+  const rest = acts.filter(a => a.date >= ws && a.date <= end && a.date <= today && !used.has(a.id)).sort((x, y) => (y.duration ?? 0) - (x.duration ?? 0));
+  for (const a of rest) {
+    const min = (a.duration ?? a.elapsed ?? 0) / 60;
+    if (min < 15) continue;
+    let best: { i: number; score: number } | null = null;
+    out.forEach((s, i) => {
+      if (s.status !== 'offen' || !endurance(s) || s.date === a.date || s.date < ws || s.date > end || !FAMILY[s.sport].test(a.sportType)) return;
+      const ratio = min / Math.max(1, s.minutes);
+      if (ratio < 0.5 || ratio > 2.5) return;
+      // Harte Einheit nur mit erkennbar hartem Training (Ø-Puls ≥ 78 % vom Max); ohne Puls nur nachträglich (verpasst → später gemacht)
+      if (s.intensity === 'hart' && (a.avgHr ? a.avgHr / hrMax < 0.78 : s.date > a.date)) return;
+      // Lange Einheit vorab nur mit ähnlich langer Aktivität
+      if (/long/.test(s.key) && s.date > a.date && ratio < 0.75) return;
+      const score = Math.abs(Math.log(ratio)) + Math.abs(Date.parse(s.date) - Date.parse(a.date)) / 86400000 * 0.25;
+      if (!best || score < best.score) best = { i, score };
+    });
+    if (!best) continue;
+    const s = out[(best as { i: number }).i];
+    used.add(a.id);
+    out[(best as { i: number }).i] = { ...s, date: a.date, moved: a.date !== s.origDate, status: 'erledigt', autoDone: true, activityId: a.id,
+      notes: [...s.notes, `Statt ${fmtWeekday(s.date)} am ${fmtWeekday(a.date)} gemacht.`] };
+  }
+  return out;
+}
+
+const fmtWeekday = (iso: string) => ['Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag', 'Sonntag'][(new Date(iso + 'T12:00:00').getDay() + 6) % 7];
+const isKey = (s: PlanSession) => endurance(s) && !/brick/.test(s.key) && (/long|-q2?$/.test(s.key) || s.intensity === 'hart');
+const isHard = (s: PlanSession) => s.sport === 'wettkampf' || (endurance(s) && (/long/.test(s.key) || s.intensity === 'hart'));
+
+/**
+ * 3) Verpasst (Tag vorbei, nicht erledigt): wichtige Einheiten (lang, Qualität) auf den nächsten passenden Tag
+ *    dieser Woche schieben – kein harter Tag direkt davor/danach; ein lockerer Ausdauertermin dort entfällt dafür.
+ *    Passt nichts mehr oder ist die Einheit locker, entfällt sie. Manuell bearbeitete Einheiten bleiben unangetastet.
+ */
+function applyMissed(list: PlanSession[], today: string, ws: string, edits: Map<string, PlanEdit>): PlanSession[] {
+  const out = list.map(s => ({ ...s, notes: [...s.notes] }));
+  const end = addDays(ws, 6);
+  const missed = out.filter(s => s.status === 'offen' && endurance(s) && s.date < today && s.date >= ws && !edits.get(s.key)?.movedTo)
+    .sort((x, y) => Number(isKey(y)) - Number(isKey(x)) || (/long/.test(y.key) ? 1 : 0) - (/long/.test(x.key) ? 1 : 0));
+  for (const s of missed) {
+    const was = fmtWeekday(s.date);
+    if (!isKey(s)) { s.status = 'ausgelassen'; s.notes.push(`Am ${was} nicht gemacht – entfällt.`); continue; }
+    let target: string | null = null;
+    for (let d = today; d <= end && !target; d = addDays(d, 1)) {
+      const near = out.filter(o => o !== s && o.status !== 'ausgelassen' && [addDays(d, -1), d, addDays(d, 1)].includes(o.date));
+      if (near.some(isHard)) continue;
+      if (out.some(o => o !== s && o.date === d && endurance(o) && o.status === 'erledigt')) continue;
+      target = d;
+    }
+    if (!target) { s.status = 'ausgelassen'; s.notes.push(`Am ${was} nicht gemacht – passt diese Woche nicht mehr rein.`); continue; }
+    for (const o of out) if (o !== s && o.date === target && endurance(o) && o.status === 'offen') { o.status = 'ausgelassen'; o.notes.push(`Entfällt für ${s.title} (von ${was} verschoben).`); }
+    s.date = target; s.moved = true; s.notes.push(`Am ${was} verpasst – auf ${target === today ? 'heute' : fmtWeekday(target)} verschoben.`);
+  }
+  return out;
 }
 
 /* ---------- Kraft: tatsächlich trainierte Muskelgruppen ---------- */
