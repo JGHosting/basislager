@@ -6,6 +6,7 @@ import { vacationOn } from '../vacation/vacation';
 import { toGrams, sumEntries, MEALS, type Sums } from './calc';
 import { fold, searchBls } from './bls';
 import { offSearch } from './off';
+import { dayBudget } from './bonus';
 
 /* ---------- Cache / Favoriten ---------- */
 export async function cacheFood(input: Food): Promise<Food> {
@@ -136,13 +137,14 @@ export async function dayView(date: string): Promise<DayView> {
   return { date, tracked, vacation: !!vacationOn(vacs, date), entries, total: sumEntries(entries), meals };
 }
 export type DayState = 'getrackt' | 'nicht getrackt' | 'keine Einträge' | 'Urlaub';
-export async function recentDays(n: number, from: string): Promise<{ date: string; state: DayState; kcal: number }[]> {
+export async function recentDays(n: number, from: string): Promise<{ date: string; state: DayState; kcal: number; goal: number | null }[]> {
   const out = [];
+  const base = await getKcalGoal();
   for (let i = 0; i < n; i++) {
     const date = addDays(from, -i);
     const [entries, tracked] = await Promise.all([db.foodlog.where('date').equals(date).toArray(), isTracked(date)]);
     const vac = !!vacationOn(await db.vacations.toArray(), date);
-    out.push({ date, state: (!tracked ? (vac ? 'Urlaub' : 'nicht getrackt') : entries.length ? 'getrackt' : 'keine Einträge') as DayState, kcal: sumEntries(entries).kcal.value });
+    out.push({ date, state: (!tracked ? (vac ? 'Urlaub' : 'nicht getrackt') : entries.length ? 'getrackt' : 'keine Einträge') as DayState, kcal: sumEntries(entries).kcal.value, goal: (await dayBudget(date, base))?.total ?? null });
   }
   return out;
 }

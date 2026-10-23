@@ -19,6 +19,7 @@
   import { TRAINING_LABEL, vacationToday, vacationSportLabel } from '../../domain/vacation/vacation';
   import { openInjury } from '../app.svelte';
   import { dayView, getKcalGoal } from '../../domain/nutrition/repo';
+  import { dayBudget } from '../../domain/nutrition/bonus';
   import { groupLabel } from '../../domain/strength/strength';
   import { openStrength, openActivity } from '../app.svelte';
   import { computeToday } from '../../domain/today';
@@ -28,7 +29,7 @@
   const calc = liveQuery(() => computeToday());
   const todayPlan = liveQuery(async () => (await sessionsOn(today())).sessions);
   const vacation = liveQuery(() => vacationToday());
-  const food = liveQuery(async () => ({ day: await dayView(today()), goal: await getKcalGoal() }));
+  const food = liveQuery(async () => ({ day: await dayView(today()), goal: (await dayBudget(today(), await getKcalGoal()))?.total ?? null }));
 
   const t = today();
   const ws = weekStart(t);
