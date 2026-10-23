@@ -1,6 +1,6 @@
 # Basislager — Projekt-Kontext / Übergabe
 
-Kompakte, vollständige Übergabe für einen neuen Chat. Stand: 2026-10-23 spät (PR #1–#5 auf `main`/deployed; **PR #6 `feat/mobility-progression` offen, noch nicht gemergt**).
+Kompakte, vollständige Übergabe für einen neuen Chat. Stand: 2026-10-23 spät (PR #1–#6 auf `main` und deployed, Merge-Commit `2bd68f3`).
 
 ## Was ist das
 Persönliche Trainings- & Ernährungs-PWA fürs iPhone (deutsche UI), nur für Jakob. Kein Server, keine laufenden Kosten, offline nutzbar.
@@ -37,7 +37,7 @@ Persönliche Trainings- & Ernährungs-PWA fürs iPhone (deutsche UI), nur für J
 - Prüfen: `npx tsc --noEmit`, `npx vite build`; Domänenlogik mit `npx -y tsx <script>` (Script im Scratchpad, absolute Imports). Alte Build-Warnungen (Statistik unused CSS, BarcodeScanner `video`, a11y Heute) sind bekannt.
 - Commit-Attribution: die im jeweiligen Chat vorgegebene verwenden.
 
-## Mobility-Paket „App-Store-Niveau“ (PR #6, gebaut, wartet auf Merge + iPhone-Test)
+## Mobility-Paket „App-Store-Niveau“ (PR #6, gemergt + deployed, wartet auf iPhone-Test)
 Nutzerentscheidungen: Selbsttest-Stufe schaltet nur Schwierigkeit frei (keine pauschale Haltezeit mehr); Feedback freiwillig; alle Übungen starten bei Stufe 0; alles in einem PR; Seiten einzeln mit Weiterklicken; Halte-Timer per „Start“ mit Signalton.
 - `src/domain/mobility/progression.ts`: Stufe 0–4 je Übung, `holdFor` (+25 %/Stufe, auf 5 s gerundet), `repsFor` (+2/Stufe), `STEP_AFTER = 3` Durchgänge je Stufe; `applyFeedback` (leicht = sofort +1, schwer = −1 bzw. auf 0 `hard` → Gewicht 0.3; pro Tag zählt eine Übung nur einmal). „Sitzt“ = Stufe ≥ 1 (Anzeige 2. Punkt). `CHAINS` (Varianten-Ketten leicht→schwer, ODER-Vorgänger), `isUnlocked` (difficulty 0 oder ≤ settings.level immer frei; sonst Vorgänger aus Kette sitzt; ohne Kette: leichtere Übung derselben Region sitzt). `recordExercise` liefert neu freigeschaltete Übungen (+ `unlockedAt`).
 - `select.ts`: Pool nur freigeschaltete Übungen; `toItem(e, progress)`; `progressWeight` (neu freigeschaltete schwere 1.6×, `hard` 0.3×). `scaledHold/scaledReps` entfernt. `pickReplacement(..., progress)`.
@@ -46,7 +46,7 @@ Nutzerentscheidungen: Selbsttest-Stufe schaltet nur Schwierigkeit frei (keine pa
 - UI: Mobility-Tab mit Segment **Heute | Verlauf**; `src/ui/mobility/MobilityHistory.svelte` (Kennzahlen, Monatskalender, Selbsttest-Sparklines je Region, Übungsliste je Region mit Stufenpunkten, 🔒 + „frei, wenn … sitzt“, „neu“-Badge 7 Tage). Player: jede Seite eigener Schritt mit Pill „Linke/Rechte Seite“, Stufenpunkte neben Titel, Timer idle → „▶ Start“ → Pause/Fortsetzen → „Zeit um ✓“ + `beep()` (`src/ui/mobility/beep.ts`, Web Audio, `unlockAudio()` beim Start-Tippen, `navigator.audioSession.type='playback'` für iOS-Stummschalter, Vibration wo verfügbar), Zeit über `endAt` (stimmt nach Bildschirmsperre). Nach „Gemacht ✓“ Feedback-Leiste unten (Zu leicht/Passt/Zu schwer, 4-s-Balken → „passt“; beim Schließen offenes Feedback = „passt“). Abschluss-Screen zeigt „🔓 Neu freigeschaltet“.
 - 32 neue Übungen (Free Exercise DB, je `<id>.webp` + `<id>-2.webp`): wadendehnung-wand, soleus-dehnung, knie-kreisen, hueftbeuger-stand, hueftkreisen-stand, figur-vier-liegend, knie-zur-brust-einbeinig, adduktoren-seitlage, quad-dehnung-seitlage, quad-dehnung-vierfuss, hueftkreisen-vierfuss, worlds-greatest-stretch, ausfallschritt-rotation, skorpion, adduktoren-einrollen, beinstrecken-9090, laeufer-dehnung, inchworm, oberschenkel-umarmen, rumpfdrehung-stand, armschwingen, seitdehnung-liegend, lat-dehnung-wand, strecken-nach-oben, drehsitz, knie-umarmen, windmuehle, superman, schultern-heben, oberer-ruecken-rund, ellbogen-zurueck, knie-ueber-koerper. Verletzungs-Zuordnung in `injury.ts` (`extra`). `deep-squat-hold` zusätzlich Region/Ziel Sprunggelenk. Jetzt 91 Übungen, 47 zu Beginn frei. Partner-/Gurt-/Stuhl-Übungen der FEDB bewusst weggelassen.
 - Geprüft: tsc, vite build, Domänentest (tsx), Playwright-Screens (Heute, Verlauf, Player, Timer, Feedback; Feedback „zu leicht“ hebt Stufe und schaltet 90/90 frei).
-- Offen: Merge von PR #6 (nur auf ausdrückliches „mergen“), dann iPhone-Test (v. a. Signalton bei Stummschalter/gesperrtem Bildschirm, Feedback-Flow, Verlauf).
+- Offen: iPhone-Test (v. a. Signalton bei Stummschalter/gesperrtem Bildschirm, Feedback-Flow, Verlauf).
 - Weiterhin nicht gewählt: Programme über Wochen, Sprachansagen/Übergangspausen/Display-an.
 
 ## Weitere offene Punkte
