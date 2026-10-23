@@ -196,6 +196,18 @@ export interface MobilityLog {
 }
 /** Ergebnis eines Beweglichkeits-Selbsttests. Werte je nach Test: cm, Stufe (0–3) oder 0/1/2. */
 export interface MobilityTest { id: string; date: string; results: Record<string, number>; createdAt: number }
+/** Fortschritt je Übung: Stufe 0–4 (Haltezeit/Wdh.), Zähler bestätigter Durchgänge auf der aktuellen Stufe. */
+export interface MobilityProgress {
+  exerciseId: string;            // Schlüssel
+  step: number;                  // 0–4
+  count: number;                 // bestätigte Durchgänge auf dieser Stufe
+  total: number;                 // bestätigte Durchgänge insgesamt
+  hard?: boolean;                // zuletzt auf Stufe 0 „zu schwer“ → seltener auswählen
+  lastDate?: string;
+  lastFb?: 'leicht' | 'passt' | 'schwer';
+  unlockedAt?: string;           // Tag der Freischaltung (schwerere Varianten)
+  updatedAt: number;
+}
 
 /** Interne Sicherheitskopie vor einem Import (wird selbst nicht exportiert). */
 export interface Snapshot { seq?: number; createdAt: number; reason: string; data: unknown }
@@ -218,6 +230,7 @@ export class BasislagerDB extends Dexie {
   mealTemplates!: Table<MealTemplate, string>;
   mobilityLog!: Table<MobilityLog, string>;
   mobilityTests!: Table<MobilityTest, string>;
+  mobilityProgress!: Table<MobilityProgress, string>;
   /** name nur für die Backup-Prüfroutine abweichend (separate Test-Datenbank). */
   constructor(name = 'basislager') {
     super(name);
@@ -264,6 +277,8 @@ export class BasislagerDB extends Dexie {
     });
     // v13: Mobility (Stretching/Mobility-Routine + Selbsttests)
     this.version(13).stores({ mobilityLog: 'date', mobilityTests: 'id, date' });
+    // v14: Mobility-Fortschritt je Übung
+    this.version(14).stores({ mobilityProgress: 'exerciseId' });
     this.on('populate', tx => { tx.table('splits').bulkPut(BUILTIN_SPLITS); });
   }
 }

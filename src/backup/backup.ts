@@ -8,12 +8,12 @@
  * - Ein Import schreibt alles in EINER Transaktion: entweder komplett oder gar nicht.
  * - Vor jedem Import wird eine interne Sicherheitskopie angelegt.
  */
-import type { BasislagerDB, Activity, MorningEntry, SettingRow, StrengthSession, SplitTemplate, Food, FoodLogEntry, NutritionDay, Injury, Goal, PlanEdit, FixedEvent, Vacation, MealTemplate, MobilityLog, MobilityTest } from '../core/db';
+import type { BasislagerDB, Activity, MorningEntry, SettingRow, StrengthSession, SplitTemplate, Food, FoodLogEntry, NutritionDay, Injury, Goal, PlanEdit, FixedEvent, Vacation, MealTemplate, MobilityLog, MobilityTest, MobilityProgress } from '../core/db';
 import { db as mainDb, BasislagerDB as DBClass, setSetting } from '../core/db';
 import Dexie from 'dexie';
 
-export const SCHEMA_VERSION = 13;
-export const BACKUP_TABLES = ['settings', 'activities', 'morning', 'strength', 'splits', 'foods', 'foodlog', 'nutritionDays', 'injuries', 'goals', 'planEdits', 'fixedEvents', 'vacations', 'mealTemplates', 'mobilityLog', 'mobilityTests'] as const;
+export const SCHEMA_VERSION = 14;
+export const BACKUP_TABLES = ['settings', 'activities', 'morning', 'strength', 'splits', 'foods', 'foodlog', 'nutritionDays', 'injuries', 'goals', 'planEdits', 'fixedEvents', 'vacations', 'mealTemplates', 'mobilityLog', 'mobilityTests', 'mobilityProgress'] as const;
 export const EXCLUDED_TABLES = ['snapshots'];
 /** Einstellungen, die nicht ins Backup gehören (Geheimnisse, gerätespezifisch). */
 const EXCLUDED_SETTINGS = new Set(['intervals']);
@@ -23,13 +23,13 @@ export interface BackupFile {
   app: 'basislager';
   schemaVersion: number;
   exportedAt: string;
-  tables: { settings: SettingRow[]; activities: Activity[]; morning: MorningEntry[]; strength: StrengthSession[]; splits: SplitTemplate[]; foods: Food[]; foodlog: FoodLogEntry[]; nutritionDays: NutritionDay[]; injuries: Injury[]; goals: Goal[]; planEdits: PlanEdit[]; fixedEvents: FixedEvent[]; vacations: Vacation[]; mealTemplates: MealTemplate[]; mobilityLog: MobilityLog[]; mobilityTests: MobilityTest[] };
+  tables: { settings: SettingRow[]; activities: Activity[]; morning: MorningEntry[]; strength: StrengthSession[]; splits: SplitTemplate[]; foods: Food[]; foodlog: FoodLogEntry[]; nutritionDays: NutritionDay[]; injuries: Injury[]; goals: Goal[]; planEdits: PlanEdit[]; fixedEvents: FixedEvent[]; vacations: Vacation[]; mealTemplates: MealTemplate[]; mobilityLog: MobilityLog[]; mobilityTests: MobilityTest[]; mobilityProgress: MobilityProgress[] };
 }
 
 /* ---------- Export ---------- */
 
 export async function exportBackup(d: BasislagerDB = mainDb): Promise<BackupFile> {
-  return d.transaction('r', [d.settings, d.activities, d.morning, d.strength, d.splits, d.foods, d.foodlog, d.nutritionDays, d.injuries, d.goals, d.planEdits, d.fixedEvents, d.vacations, d.mealTemplates, d.mobilityLog, d.mobilityTests], async () => ({
+  return d.transaction('r', [d.settings, d.activities, d.morning, d.strength, d.splits, d.foods, d.foodlog, d.nutritionDays, d.injuries, d.goals, d.planEdits, d.fixedEvents, d.vacations, d.mealTemplates, d.mobilityLog, d.mobilityTests, d.mobilityProgress], async () => ({
     app: 'basislager' as const,
     schemaVersion: SCHEMA_VERSION,
     exportedAt: new Date().toISOString(),
@@ -49,7 +49,8 @@ export async function exportBackup(d: BasislagerDB = mainDb): Promise<BackupFile
       vacations: await d.vacations.toArray(),
       mealTemplates: await d.mealTemplates.toArray(),
       mobilityLog: await d.mobilityLog.toArray(),
-      mobilityTests: await d.mobilityTests.toArray()
+      mobilityTests: await d.mobilityTests.toArray(),
+      mobilityProgress: await d.mobilityProgress.toArray()
     }
   }));
 }
@@ -74,7 +75,7 @@ export interface Preview {
 }
 
 const isDate = (v: unknown) => typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v);
-const empty = (): Record<TableName, number> => ({ settings: 0, activities: 0, morning: 0, strength: 0, splits: 0, foods: 0, foodlog: 0, nutritionDays: 0, injuries: 0, goals: 0, planEdits: 0, fixedEvents: 0, vacations: 0, mealTemplates: 0, mobilityLog: 0, mobilityTests: 0 });
+const empty = (): Record<TableName, number> => ({ settings: 0, activities: 0, morning: 0, strength: 0, splits: 0, foods: 0, foodlog: 0, nutritionDays: 0, injuries: 0, goals: 0, planEdits: 0, fixedEvents: 0, vacations: 0, mealTemplates: 0, mobilityLog: 0, mobilityTests: 0, mobilityProgress: 0 });
 
 /** Bringt ältere Backups auf den aktuellen Stand. Für jede Schema-Änderung hier einen Schritt ergänzen. */
 function migrate(raw: any): any {
@@ -108,6 +109,7 @@ function migrate(raw: any): any {
     v = 12;
   }
   if (v < 13) { raw.tables.mobilityLog ??= []; raw.tables.mobilityTests ??= []; v = 13; }   // v13: Mobility
+  if (v < 14) { raw.tables.mobilityProgress ??= []; v = 14; }   // v14: Mobility-Fortschritt je Übung
   raw.schemaVersion = v;
   return raw;
 }
@@ -150,6 +152,7 @@ export function checkBackup(text: string): Preview {
   const mealTemplates = keep<MealTemplate>('Mahlzeit-Vorlagen', raw.tables.mealTemplates, r => typeof r.id === 'string' && typeof r.name === 'string' && Array.isArray(r.items));
   const mobilityLog = keep<MobilityLog>('Mobility-Verlauf', raw.tables.mobilityLog, r => isDate(r.date) && Array.isArray(r.items));
   const mobilityTests = keep<MobilityTest>('Mobility-Selbsttests', raw.tables.mobilityTests, r => typeof r.id === 'string' && isDate(r.date) && !!r.results);
+  const mobilityProgress = keep<MobilityProgress>('Mobility-Fortschritt', raw.tables.mobilityProgress, r => typeof r.exerciseId === 'string' && typeof r.step === 'number');
   for (const [t, n] of Object.entries(bad)) warnings.push(`${n} fehlerhafte(r) Eintrag/Einträge bei ${t} werden übersprungen.`);
 
   const dates = [...activities.map(a => a.date), ...morning.map(m => m.date)].sort();
@@ -157,9 +160,9 @@ export function checkBackup(text: string): Preview {
     ok: true, warnings,
     schemaVersion: fromVersion,
     exportedAt: typeof raw.exportedAt === 'string' ? raw.exportedAt : undefined,
-    counts: { settings: settings.length, activities: activities.length, morning: morning.length, strength: strength.length, splits: splits.length, foods: foods.length, foodlog: foodlog.length, nutritionDays: nutritionDays.length, injuries: injuries.length, goals: goals.length, planEdits: planEdits.length, fixedEvents: fixedEvents.length, vacations: vacations.length, mealTemplates: mealTemplates.length, mobilityLog: mobilityLog.length, mobilityTests: mobilityTests.length },
+    counts: { settings: settings.length, activities: activities.length, morning: morning.length, strength: strength.length, splits: splits.length, foods: foods.length, foodlog: foodlog.length, nutritionDays: nutritionDays.length, injuries: injuries.length, goals: goals.length, planEdits: planEdits.length, fixedEvents: fixedEvents.length, vacations: vacations.length, mealTemplates: mealTemplates.length, mobilityLog: mobilityLog.length, mobilityTests: mobilityTests.length, mobilityProgress: mobilityProgress.length },
     range: dates.length ? { from: dates[0], to: dates[dates.length - 1] } : undefined,
-    data: { app: 'basislager', schemaVersion: SCHEMA_VERSION, exportedAt: raw.exportedAt, tables: { settings, activities, morning, strength, splits, foods, foodlog, nutritionDays, injuries, goals, planEdits, fixedEvents, vacations, mealTemplates, mobilityLog, mobilityTests } }
+    data: { app: 'basislager', schemaVersion: SCHEMA_VERSION, exportedAt: raw.exportedAt, tables: { settings, activities, morning, strength, splits, foods, foodlog, nutritionDays, injuries, goals, planEdits, fixedEvents, vacations, mealTemplates, mobilityLog, mobilityTests, mobilityProgress } }
   };
 }
 
@@ -181,10 +184,10 @@ export async function importBackup(data: BackupFile, mode: ImportMode, d: Basisl
   // Reine Kopie der Daten (entfernt UI-Proxys, die IndexedDB nicht speichern kann)
   const t: BackupFile['tables'] = JSON.parse(JSON.stringify(data.tables));
 
-  await d.transaction('rw', [d.settings, d.activities, d.morning, d.strength, d.splits, d.foods, d.foodlog, d.nutritionDays, d.injuries, d.goals, d.planEdits, d.fixedEvents, d.vacations, d.mealTemplates, d.mobilityLog, d.mobilityTests], async () => {
+  await d.transaction('rw', [d.settings, d.activities, d.morning, d.strength, d.splits, d.foods, d.foodlog, d.nutritionDays, d.injuries, d.goals, d.planEdits, d.fixedEvents, d.vacations, d.mealTemplates, d.mobilityLog, d.mobilityTests, d.mobilityProgress], async () => {
     if (mode === 'replace') {
       const keepSettings = (await d.settings.toArray()).filter(s => EXCLUDED_SETTINGS.has(s.key));
-      await Promise.all([d.settings.clear(), d.activities.clear(), d.morning.clear(), d.strength.clear(), d.splits.clear(), d.foods.clear(), d.foodlog.clear(), d.nutritionDays.clear(), d.injuries.clear(), d.goals.clear(), d.planEdits.clear(), d.fixedEvents.clear(), d.vacations.clear(), d.mealTemplates.clear(), d.mobilityLog.clear(), d.mobilityTests.clear()]);
+      await Promise.all([d.settings.clear(), d.activities.clear(), d.morning.clear(), d.strength.clear(), d.splits.clear(), d.foods.clear(), d.foodlog.clear(), d.nutritionDays.clear(), d.injuries.clear(), d.goals.clear(), d.planEdits.clear(), d.fixedEvents.clear(), d.vacations.clear(), d.mealTemplates.clear(), d.mobilityLog.clear(), d.mobilityTests.clear(), d.mobilityProgress.clear()]);
       await d.settings.bulkPut([...t.settings, ...keepSettings]);
       await d.activities.bulkPut(t.activities);
       await d.morning.bulkPut(t.morning);
@@ -201,6 +204,7 @@ export async function importBackup(data: BackupFile, mode: ImportMode, d: Basisl
       await d.mealTemplates.bulkPut(t.mealTemplates);
       await d.mobilityLog.bulkPut(t.mobilityLog);
       await d.mobilityTests.bulkPut(t.mobilityTests);
+      await d.mobilityProgress.bulkPut(t.mobilityProgress);
       res.added = BACKUP_TABLES.reduce((n, k) => n + t[k].length, 0);
       return;
     }
@@ -254,6 +258,7 @@ export async function importBackup(data: BackupFile, mode: ImportMode, d: Basisl
     await mergeByKey(d.vacations, t.vacations, r => r.id);
     await mergeByKey(d.mealTemplates, t.mealTemplates, r => r.id);
     await mergeByKey(d.mobilityLog, t.mobilityLog, r => r.date);
+    await mergeByKey(d.mobilityProgress, t.mobilityProgress, r => r.exerciseId);
     // Selbsttests sind unveränderlich (kein updatedAt) → nur neue Ids übernehmen
     for (const r of t.mobilityTests) {
       if (await d.mobilityTests.get(r.id)) res.unchanged++; else { await d.mobilityTests.put(r); res.added++; }
@@ -288,7 +293,7 @@ const countsOf = (b: BackupFile) => ({ activities: b.tables.activities.length, m
 export function canonical(b: BackupFile): string {
   const sortKeys = (v: any): any => Array.isArray(v) ? v.map(sortKeys)
     : v && typeof v === 'object' ? Object.fromEntries(Object.keys(v).sort().map(k => [k, sortKeys(v[k])])) : v;
-  const key: Record<TableName, (r: any) => string> = { settings: r => r.key, activities: r => r.id, morning: r => r.date, strength: r => r.id, splits: r => r.id, foods: r => r.id, foodlog: r => r.id, nutritionDays: r => r.date, injuries: r => r.id, goals: r => r.id, planEdits: r => r.key, fixedEvents: r => r.id, vacations: r => r.id, mealTemplates: r => r.id, mobilityLog: r => r.date, mobilityTests: r => r.id };
+  const key: Record<TableName, (r: any) => string> = { settings: r => r.key, activities: r => r.id, morning: r => r.date, strength: r => r.id, splits: r => r.id, foods: r => r.id, foodlog: r => r.id, nutritionDays: r => r.date, injuries: r => r.id, goals: r => r.id, planEdits: r => r.key, fixedEvents: r => r.id, vacations: r => r.id, mealTemplates: r => r.id, mobilityLog: r => r.date, mobilityTests: r => r.id, mobilityProgress: r => r.exerciseId };
   const tables: any = {};
   for (const t of BACKUP_TABLES) tables[t] = [...b.tables[t]].sort((x, y) => key[t](x).localeCompare(key[t](y))).map(sortKeys);
   return JSON.stringify({ schemaVersion: b.schemaVersion, tables });

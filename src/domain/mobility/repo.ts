@@ -4,10 +4,11 @@
 import { db } from '../../core/db';
 import { today, addDays } from '../../core/dates';
 import { getMobilitySettings, saveMobilitySettings, getPauseRanges, dayWasPaused } from './settings';
-import { buildTodayRoutine, pickReplacement, type Routine, type RoutineItem } from './select';
+import { buildTodayRoutine, pickReplacement, toItem, type Routine, type RoutineItem } from './select';
+import { loadProgress, recordExercise, type Feedback } from './progression';
 import { isExcluded } from './injury';
 import { activeInjury } from '../injury/injury';
-import { byId, scaledHold, scaledReps, LIBRARY } from './library';
+import { byId, LIBRARY } from './library';
 
 /** done = Anteil erledigter Übungen; die Routine zählt ab 80 % als erledigt. */
 export const DONE_THRESHOLD = 0.8;
@@ -25,6 +26,7 @@ export async function ensureTodayRoutine(): Promise<Routine> {
   const sig = sigOf(settings);
   if (existing && existing.minutes > 0 && !existing.items.some(i => i.done) && existing.sig !== sig) existing = undefined;
   if (existing) {
+    const progress = await loadProgress();
     // Verletzung kann sich seit dem Erstellen geändert haben: offene, jetzt ungeeignete Übungen ersetzen (oder streichen)
     let changed = false;
     const items: { exerciseId: string; done: boolean }[] = [];
@@ -33,7 +35,7 @@ export async function ensureTodayRoutine(): Promise<Routine> {
       if (!e && !i.done) { changed = true; continue; }   // Übung gibt es nicht mehr (z. B. ohne Bild entfernt)
       if (!e || i.done || !isExcluded(e, injury)) { items.push(i); continue; }
       changed = true;
-      const rep = pickReplacement(i.exerciseId, injury, [...existing.items, ...items].map(x => x.exerciseId), settings.level);
+      const rep = pickReplacement(i.exerciseId, injury, [...existing.items, ...items].map(x => x.exerciseId), settings.level, progress);
       if (rep) items.push({ exerciseId: rep.exerciseId, done: false });
     }
     if (changed) await db.mobilityLog.put({ ...existing, items, updatedAt: Date.now() });
@@ -41,7 +43,7 @@ export async function ensureTodayRoutine(): Promise<Routine> {
       date: existing.date, minutes: existing.minutes,
       items: items.flatMap(i => {
         const e = byId(i.exerciseId); if (!e) return [];
-        return [{ exerciseId: e.id, sides: e.sides, holdSec: scaledHold(e, settings.level), reps: scaledReps(e, settings.level) }];
+        return [toItem(e, progress)];
       })
     };
   }
@@ -71,7 +73,7 @@ export async function rebuildToday(): Promise<void> {
 export async function swapExercise(oldId: string, inRoutine: string[]): Promise<RoutineItem | null> {
   const settings = await getMobilitySettings();
   const injury = activeInjury(await db.injuries.toArray());
-  const rep = pickReplacement(oldId, injury, inRoutine, settings.level);
+  const rep = pickReplacement(oldId, injury, inRoutine, settings.level, await loadProgress());
   if (!rep) return null;
   const row = await todayLog();
   if (row) await db.mobilityLog.put({ ...row, items: row.items.map(i => (i.exerciseId === oldId ? { exerciseId: rep.exerciseId, done: false } : i)), updatedAt: Date.now() });
@@ -132,4 +134,10 @@ export async function currentStreak(): Promise<number> {
     break;
   }
   return streak;
+}
+
+/** Durchgang + Feedback in den Fortschritt übernehmen; liefert neu freigeschaltete Übungen. */
+export async function rateExercise(exerciseId: string, fb: Feedback) {
+  const s = await getMobilitySettings();
+  return recordExercise(exerciseId, fb, s.level);
 }
