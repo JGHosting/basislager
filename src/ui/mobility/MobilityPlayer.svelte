@@ -27,6 +27,13 @@
   const isLast = $derived(idx === steps.length - 1);
 
   let timeUp = $state(false);
+  // Fotos mit Start- und Endposition wechseln sich ab
+  let frame = $state(0);
+  $effect(() => {
+    if (!ex?.image2) { frame = 0; return; }
+    const t = setInterval(() => (frame = 1 - frame), 1600);
+    return () => clearInterval(t);
+  });
   let doneCount = $state(0);
   // Nach dem Seitenwechsel ist die Übung erst mit der zweiten Seite "gemacht"
   const firstSide = $derived(!!step?.side && steps[idx + 1]?.exerciseId === step.exerciseId);
@@ -99,7 +106,15 @@
   {:else if ex}
     <p class="eyebrow">Schritt {idx + 1} / {steps.length}{step.side ? ` · ${step.side === 'links' ? 'Links' : 'Rechts'}` : ''}</p>
     <h2 class="title">{ex.name}</h2>
-    {#if ex.image}<img class="img" src={`mobility/${ex.image}.webp`} alt="" />{/if}
+    {#if ex.image}
+      <div class="imgwrap">
+        <img class="img" src={`mobility/${ex.image}.webp`} alt="" />
+        {#if ex.image2}
+          <img class="img second" class:show={frame === 1} src={`mobility/${ex.image2}.webp`} alt="" />
+          <span class="frame">{frame === 0 ? 'Start' : 'Ende'}</span>
+        {/if}
+      </div>
+    {/if}
     {#if ex.cue}<p class="cue">{ex.cue}</p>{/if}
     <p class="instr">{ex.instructions}</p>
 
@@ -133,7 +148,11 @@
            border: none; background: var(--card); color: var(--muted); font-size: 16px; cursor: pointer; }
   .eyebrow { margin: 0; color: var(--muted); font-size: 14px; font-weight: 600; }
   .title { font-size: 26px; margin: 4px 0 12px; letter-spacing: -0.02em; }
-  .img { width: 100%; max-height: 42vh; object-fit: contain; border-radius: 18px; background: var(--card); margin-bottom: 12px; }
+  .imgwrap { position: relative; margin-bottom: 12px; }
+  .img { display: block; width: 100%; max-height: 42vh; object-fit: contain; border-radius: 18px; background: var(--card); }
+  .img.second { position: absolute; inset: 0; height: 100%; opacity: 0; transition: opacity .4s; }
+  .img.second.show { opacity: 1; }
+  .frame { position: absolute; left: 10px; bottom: 10px; font-size: 12px; font-weight: 600; color: #fff; background: rgba(0,0,0,.5); padding: 3px 8px; border-radius: 8px; }
   .cue { background: var(--accent-soft); color: var(--accent); font-weight: 600; font-size: 14px; padding: 10px 12px; border-radius: 12px; margin: 0 0 10px; }
   .instr { font-size: 16px; line-height: 1.5; margin: 0 0 16px; }
   .timer { display: flex; align-items: center; justify-content: center; gap: 16px; margin: 10px 0 20px; }

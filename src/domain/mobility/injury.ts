@@ -66,6 +66,20 @@ const LOAD: Record<string, Load> = {
   }
 };
 
+/* Ergänzungen (Free-Exercise-DB-Übungen) */
+const extra: [string, 'direct' | 'indirect', string[]][] = [
+  ['faszienrolle-hamstrings', 'direct', ['Oberschenkel']], ['faszienrolle-hamstrings', 'indirect', ['Knie', 'Hand / Handgelenk', 'Ellbogen / Arm']],
+  ['faszienrolle-latissimus', 'direct', ['Schulter']], ['faszienrolle-latissimus', 'indirect', ['Oberer Rücken / Nacken']],
+  ['faszienrolle-oberschenkel-aussen', 'direct', ['Oberschenkel', 'Hüfte / Leiste']], ['faszienrolle-oberschenkel-aussen', 'indirect', ['Knie', 'Ellbogen / Arm', 'Schulter']],
+  ['faszienrolle-adduktoren', 'direct', ['Hüfte / Leiste', 'Oberschenkel']], ['faszienrolle-adduktoren', 'indirect', ['Knie', 'Ellbogen / Arm']],
+  ['faszienrolle-wade-aussen', 'direct', ['Fuß / Sprunggelenk', 'Achillessehne / Wade', 'Schienbein']], ['faszienrolle-wade-aussen', 'indirect', ['Ellbogen / Arm', 'Schulter']],
+  ['wadendehnung-sitzend', 'direct', ['Achillessehne / Wade', 'Fuß / Sprunggelenk']], ['wadendehnung-sitzend', 'indirect', ['Schienbein', 'Oberschenkel', 'Unterer Rücken']],
+  ['kinn-zur-brust', 'direct', ['Oberer Rücken / Nacken']],
+  ['beckenkippen-bruecke', 'indirect', ['Unterer Rücken', 'Hüfte / Leiste']],
+  ['schulterkreisen', 'indirect', ['Schulter', 'Oberer Rücken / Nacken']]
+];
+for (const [id, kind, regions] of extra) for (const r of regions) LOAD[r][kind].push(id);
+
 /** Ab dieser Rückkehrstufe (100 % Umfang) sind leichte, direkt belastende Übungen wieder erlaubt. */
 const DIRECT_OK_FROM = 6;
 /** Bis einschließlich dieser Stufe (50 % Umfang) bleiben auch indirekt belastende Übungen weg. */

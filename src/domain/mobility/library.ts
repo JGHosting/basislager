@@ -2,8 +2,9 @@
  * Übungsbibliothek für Stretching/Mobility.
  * Bilder (public/mobility/<id>.webp) stammen aus dem RepDB Free Tier (repdb.co, Namensnennung
  * siehe Mehr → Über & Lizenzen) – nur Übungen ohne Geräte wurden übernommen. Ergänzend eigene
- * Übungen (ohne Bild) für Faszienrolle, Sprunggelenk, Brustwirbelsäule/Schultern, Nacken und Becken,
- * da RepDB dafür keine passenden Übungen hat.
+ * Übungen für Faszienrolle, Sprunggelenk, Nacken und Becken, da RepDB dafür keine passenden hat – deren Fotos
+ * (Start- und Endposition) stammen aus Free Exercise DB (github.com/yuhonas/free-exercise-db, Unlicense).
+ * Übungen ohne Bild werden nicht ausgewählt.
  */
 import type { Movement } from '../../core/db';
 
@@ -35,7 +36,7 @@ export type Equipment = 'keins' | 'matte' | 'faszienrolle';
 export interface MobilityExercise {
   id: string;
   name: string;
-  source: 'repdb' | 'custom';
+  source: 'repdb' | 'fedb' | 'custom';
   category: MobilityCategory;
   equipment: Equipment;
   regions: Region[];
@@ -50,6 +51,8 @@ export interface MobilityExercise {
   /** Bewegungen, bei denen die Übung bei aktiver Verletzung ausgeschlossen wird. */
   avoid?: Movement[];
   image?: string;                // public/mobility/<image>.webp
+  /** Zweites Bild (Endposition), bei Übungen aus Free Exercise DB. */
+  image2?: string;
 }
 
 /** Haltezeit/Wiederholungen je Level (0 Standard, 1 und 2 nach Fortschritt in den Selbsttests). */
@@ -102,13 +105,13 @@ const ALL: MobilityExercise[] = [
   { id: 'squat-hold', name: 'Kniebeuge-Halt', source: 'repdb', category: 'mobilisation', equipment: 'keins',
     regions: ['hüfte'], goals: ['hüfte'], difficulty: 0, sides: false, holdSec: 30,
     instructions: 'In einer bequemen Kniebeuge-Tiefe halten, Rücken lang, Gewicht auf dem ganzen Fuß.', image: 'squat-hold' },
-  { id: 'faszienrolle-oberschenkel-vorne', name: 'Faszienrolle Oberschenkel vorne', source: 'custom', category: 'mobilisation', equipment: 'faszienrolle',
+  { id: 'faszienrolle-oberschenkel-vorne', name: 'Faszienrolle Oberschenkel vorne', source: 'fedb', category: 'mobilisation', equipment: 'faszienrolle',
     regions: ['hüfte'], goals: ['hüfte'], difficulty: 1, sides: true, reps: 10,
     instructions: 'Bauchlage, Rolle unter dem vorderen Oberschenkel. Langsam von Hüfte bis knapp über dem Knie rollen.',
-    avoid: ['laufen'] },
-  { id: 'faszienrolle-gesaess', name: 'Faszienrolle Gesäß', source: 'custom', category: 'mobilisation', equipment: 'faszienrolle',
+    avoid: ['laufen'], image: 'faszienrolle-oberschenkel-vorne', image2: 'faszienrolle-oberschenkel-vorne-2' },
+  { id: 'faszienrolle-gesaess', name: 'Faszienrolle Gesäß', source: 'fedb', category: 'mobilisation', equipment: 'faszienrolle',
     regions: ['hüfte'], goals: ['hüfte', 'hohlkreuz'], difficulty: 1, sides: true, reps: 10,
-    instructions: 'Sitzend auf der Rolle, ein Fuß über das gegenüberliegende Knie legen, zur belasteten Seite neigen und leicht rollen.' },
+    instructions: 'Sitzend auf der Rolle, ein Fuß über das gegenüberliegende Knie legen, zur belasteten Seite neigen und leicht rollen.', image: 'faszienrolle-gesaess', image2: 'faszienrolle-gesaess-2' },
 
   /* ---------- Rückseite / Hamstrings ---------- */
   { id: 'seated-forward-fold', name: 'Sitzende Vorbeuge', source: 'repdb', category: 'dehnung', equipment: 'matte',
@@ -168,11 +171,11 @@ const ALL: MobilityExercise[] = [
   { id: 'open-book', name: 'Buch öffnen (Open Book)', source: 'custom', category: 'mobilisation', equipment: 'matte',
     regions: ['bws_schultern'], goals: ['bws_schultern', 'hohlkreuz'], difficulty: 1, sides: true, reps: 10,
     instructions: 'Seitenlage, Knie angewinkelt übereinander. Oberen Arm wie ein Buch aufklappen und dem Blick folgen, bis die Schulter den Boden berührt, dann zurück.' },
-  { id: 'faszienrolle-bws', name: 'Faszienrolle Brustwirbelsäule', source: 'custom', category: 'mobilisation', equipment: 'faszienrolle',
+  { id: 'faszienrolle-bws', name: 'Faszienrolle Brustwirbelsäule', source: 'fedb', category: 'mobilisation', equipment: 'faszienrolle',
     regions: ['bws_schultern'], goals: ['bws_schultern', 'hohlkreuz'], difficulty: 1, sides: false, reps: 8,
     cue: 'Nur im Bereich der Brustwirbelsäule rollen, nicht über den unteren Rücken.',
     instructions: 'Rückenlage, Rolle quer unter der Brustwirbelsäule, Hände stützen den Kopf. Langsam vor- und zurückrollen, dabei leicht über die Rolle strecken.',
-    avoid: ['oberkoerper'] },
+    avoid: ['oberkoerper'], image: 'faszienrolle-bws', image2: 'faszienrolle-bws-2' },
 
   /* ---------- Sprunggelenk ---------- */
   { id: 'standing-calf-stretch', name: 'Stehende Wadendehnung', source: 'repdb', category: 'dehnung', equipment: 'keins',
@@ -184,12 +187,12 @@ const ALL: MobilityExercise[] = [
     cue: 'Ferse bleibt die ganze Zeit am Boden.',
     instructions: 'Im Ausfallschritt vor einer Wand, vorderer Fuß nah an der Wand. Knie wiederholt zur Wand führen, ohne die Ferse abzuheben; Abstand zur Wand je nach Beweglichkeit anpassen.',
     avoid: ['laufen'] },
-  { id: 'ankle-circles', name: 'Sprunggelenk kreisen', source: 'custom', category: 'mobilisation', equipment: 'keins',
+  { id: 'ankle-circles', name: 'Sprunggelenk kreisen', source: 'fedb', category: 'mobilisation', equipment: 'keins',
     regions: ['sprunggelenk'], goals: ['sprunggelenk'], difficulty: 0, sides: true, reps: 10,
-    instructions: 'Sitzend, ein Fuß vom Boden abheben und den Fuß großzügig in beide Richtungen kreisen lassen.' },
-  { id: 'faszienrolle-wade', name: 'Faszienrolle Wade', source: 'custom', category: 'mobilisation', equipment: 'faszienrolle',
+    instructions: 'Stehend, an Wand oder Stuhl festhalten. Einen Fuß knapp vom Boden abheben und mit der großen Zehe große Kreise malen, dann Richtung wechseln.', image: 'ankle-circles', image2: 'ankle-circles-2' },
+  { id: 'faszienrolle-wade', name: 'Faszienrolle Wade', source: 'fedb', category: 'mobilisation', equipment: 'faszienrolle',
     regions: ['sprunggelenk'], goals: ['sprunggelenk'], difficulty: 1, sides: true, reps: 10,
-    instructions: 'Sitzend, Rolle unter der Wade, Hände stützen hinter dem Körper. Von der Kniekehle bis knapp über der Ferse rollen, dabei den Fuß leicht beugen und strecken.' },
+    instructions: 'Sitzend, Rolle unter der Wade, Hände stützen hinter dem Körper. Von der Kniekehle bis knapp über der Ferse rollen, dabei den Fuß leicht beugen und strecken.', image: 'faszienrolle-wade', image2: 'faszienrolle-wade-2' },
 
   /* ---------- Nacken / Haltung ---------- */
   { id: 'neck-side-stretch', name: 'Seitliche Nackendehnung', source: 'repdb', category: 'dehnung', equipment: 'keins',
@@ -255,10 +258,10 @@ const ALL: MobilityExercise[] = [
   { id: 'cobra-stretch', name: 'Kobra-Dehnung', source: 'repdb', category: 'dehnung', equipment: 'matte',
     regions: ['rumpf'], goals: [], difficulty: 0, sides: false, holdSec: 20,
     instructions: 'Bauchlage, Hände unter den Schultern aufstützen, Oberkörper leicht aufrichten, Becken bleibt am Boden.', image: 'cobra-stretch' },
-  { id: 'becken-aufrichten', name: 'Becken aufrichten im Stand', source: 'custom', category: 'aktivierung', equipment: 'keins',
+  { id: 'becken-aufrichten', name: 'Becken aufrichten im Stand', source: 'fedb', category: 'aktivierung', equipment: 'keins',
     regions: ['rumpf'], goals: ['hohlkreuz'], difficulty: 0, sides: false, reps: 10,
     cue: 'Bewusst zwischen Hohlkreuz und aufgerichtetem Becken wechseln, den Unterschied spüren.',
-    instructions: 'Im Stand das Becken abwechselnd leicht nach vorn (Hohlkreuz) und nach hinten kippen (Gesäß anspannen, Bauch aktiv), dann in der aufgerichteten Position halten.' },
+    instructions: 'Im Stand das Becken abwechselnd leicht nach vorn (Hohlkreuz) und nach hinten kippen (Gesäß anspannen, Bauch aktiv), dann in der aufgerichteten Position halten.', image: 'becken-aufrichten', image2: 'becken-aufrichten-2' },
   { id: 'childs-pose', name: 'Stellung des Kindes', source: 'repdb', category: 'dehnung', equipment: 'matte',
     regions: ['rumpf', 'bws_schultern'], goals: [], difficulty: 0, sides: false, holdSec: 30,
     instructions: 'Kniend, Gesäß sinkt Richtung Fersen, Arme lang nach vorn, Stirn sinkt zum Boden. Entspannt atmen.', image: 'childs-pose' },
@@ -266,7 +269,47 @@ const ALL: MobilityExercise[] = [
   /* ---------- Handgelenk (kurze Ergänzung, kein eigenes Ziel) ---------- */
   { id: 'kneeling-wrist-stretch', name: 'Kniende Handgelenkdehnung', source: 'repdb', category: 'dehnung', equipment: 'matte',
     regions: ['bws_schultern'], goals: [], difficulty: 0, sides: true, holdSec: 15,
-    instructions: 'Kniend, Hand mit der Innenfläche nach oben auf den Boden legen, Finger zum Körper, sanft zurücklehnen.', image: 'kneeling-wrist-stretch' }
+    instructions: 'Kniend, Hand mit der Innenfläche nach oben auf den Boden legen, Finger zum Körper, sanft zurücklehnen.', image: 'kneeling-wrist-stretch' },
+  /* ---------- Ergänzungen aus Free Exercise DB (Fotos Start/Ende) ---------- */
+  { id: 'faszienrolle-hamstrings', name: 'Faszienrolle Oberschenkel hinten', source: 'fedb', category: 'mobilisation', equipment: 'faszienrolle',
+    regions: ['rueckseite'], goals: ['rueckseite'], difficulty: 0, sides: true, reps: 10,
+    instructions: 'Sitzend, Rolle unter den hinteren Oberschenkeln, Hände stützen hinter dem Körper. Hüfte anheben, Gewicht auf ein Bein verlagern und langsam von unterhalb des Gesäßes bis über die Kniekehle rollen. An festen Stellen 10–30 s verweilen.',
+    image: 'faszienrolle-hamstrings', image2: 'faszienrolle-hamstrings-2' },
+  { id: 'faszienrolle-latissimus', name: 'Faszienrolle seitlicher Rücken', source: 'fedb', category: 'mobilisation', equipment: 'faszienrolle',
+    regions: ['bws_schultern'], goals: ['bws_schultern'], difficulty: 0, sides: true, holdSec: 30,
+    instructions: 'Seitlich liegen, Rolle knapp unter der Achsel, Arm nach oben ausgestreckt. Oberkörper vom Boden lösen, Gewicht auf die Rolle geben und leicht vor- und zurückrollen bzw. an festen Stellen halten.',
+    image: 'faszienrolle-latissimus', image2: 'faszienrolle-latissimus-2' },
+  { id: 'faszienrolle-oberschenkel-aussen', name: 'Faszienrolle Oberschenkel außen', source: 'fedb', category: 'mobilisation', equipment: 'faszienrolle',
+    regions: ['hüfte'], goals: ['hüfte'], difficulty: 1, sides: true, reps: 8,
+    cue: 'Nur so viel Gewicht, dass du entspannt bleiben kannst – das obere Bein vorne aufstellen nimmt Druck raus.',
+    instructions: 'Seitlich liegen, Rolle unter der Außenseite des Oberschenkels zwischen Hüfte und Knie, auf den Unterarm stützen. Langsam von der Hüfte bis knapp über das Knie rollen, an festen Stellen kurz halten.',
+    image: 'faszienrolle-oberschenkel-aussen', image2: 'faszienrolle-oberschenkel-aussen-2' },
+  { id: 'faszienrolle-adduktoren', name: 'Faszienrolle Oberschenkel innen', source: 'fedb', category: 'mobilisation', equipment: 'faszienrolle',
+    regions: ['hüfte'], goals: ['hüfte'], difficulty: 0, sides: true, reps: 10,
+    instructions: 'Bauchlage auf den Unterarmen, ein Bein seitlich angewinkelt, Rolle an der Innenseite des Oberschenkels. Zwischen Knie und Leiste hin- und herrollen, an festen Stellen 10–30 s halten.',
+    image: 'faszienrolle-adduktoren', image2: 'faszienrolle-adduktoren-2' },
+  { id: 'faszienrolle-wade-aussen', name: 'Faszienrolle Unterschenkel außen', source: 'fedb', category: 'mobilisation', equipment: 'faszienrolle',
+    regions: ['sprunggelenk'], goals: ['sprunggelenk'], difficulty: 1, sides: true, reps: 10,
+    instructions: 'Seitlich liegen, auf den Unterarm gestützt, Rolle unter der Außenseite des Unterschenkels. Hüfte anheben und von unterhalb des Knies bis über den Knöchel rollen.',
+    image: 'faszienrolle-wade-aussen', image2: 'faszienrolle-wade-aussen-2' },
+  { id: 'wadendehnung-sitzend', name: 'Wadendehnung im Sitzen', source: 'fedb', category: 'dehnung', equipment: 'matte',
+    regions: ['sprunggelenk', 'rueckseite'], goals: ['sprunggelenk'], difficulty: 0, sides: true, holdSec: 30,
+    instructions: 'Aufrecht sitzen, ein Bein aufgestellt, das andere gestreckt. Fußspitze des gestreckten Beins mit der Hand (oder einem Handtuch) zu dir ziehen, Rücken lang lassen.',
+    image: 'wadendehnung-sitzend', image2: 'wadendehnung-sitzend-2' },
+  { id: 'kinn-zur-brust', name: 'Kinn zur Brust', source: 'fedb', category: 'dehnung', equipment: 'keins',
+    regions: ['nacken'], goals: ['nacken'], difficulty: 0, sides: false, holdSec: 25,
+    cue: 'Nur mit dem Gewicht der Hände ziehen, nicht drücken.',
+    instructions: 'Aufrecht sitzen, Hände am Hinterkopf verschränken, Ellbogen nach vorn. Den Kopf langsam Richtung Brust sinken lassen und halten.',
+    image: 'kinn-zur-brust', image2: 'kinn-zur-brust-2' },
+  { id: 'beckenkippen-bruecke', name: 'Beckenkippen in die Brücke', source: 'fedb', category: 'aktivierung', equipment: 'matte',
+    regions: ['rumpf'], goals: ['hohlkreuz'], difficulty: 1, sides: false, reps: 8,
+    cue: 'Erst nur das Becken kippen (Steißbein hoch, unterer Rücken an den Boden), dann Wirbel für Wirbel hochrollen.',
+    instructions: 'Rückenlage, Füße aufgestellt, Fersen unter den Knien. Bauch anspannen, Steißbein anheben, dann die Wirbelsäule bis auf den Nacken abheben. Langsam Wirbel für Wirbel wieder ablegen.',
+    image: 'beckenkippen-bruecke', image2: 'beckenkippen-bruecke-2' },
+  { id: 'schulterkreisen', name: 'Schulterkreisen', source: 'fedb', category: 'mobilisation', equipment: 'keins',
+    regions: ['nacken', 'bws_schultern'], goals: ['nacken'], difficulty: 0, sides: false, reps: 10,
+    instructions: 'Arme locker hängen lassen. Schultern langsam nach vorn, oben, hinten und unten kreisen, dann Richtung wechseln.',
+    image: 'schulterkreisen', image2: 'schulterkreisen-2' }
 ];
 
 export const byId = (id: string) => LIBRARY.find(e => e.id === id);
