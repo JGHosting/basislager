@@ -1,6 +1,6 @@
 # Basislager — Projekt-Kontext / Übergabe
 
-Kompakte, vollständige Übergabe für einen neuen Chat. Stand: 2026-10-23 23:30 Uhr (PR #1–#9 auf `main` und deployed, Merge-Commit `9219ca8`).
+Kompakte, vollständige Übergabe für einen neuen Chat. Stand: 2026-10-24 ca. 0 Uhr (PR #1–#10 auf `main` und deployed, Merge-Commit `fb17024`).
 
 ## Was ist das
 Persönliche Trainings- & Ernährungs-PWA fürs iPhone (deutsche UI), nur für Jakob. Kein Server, keine laufenden Kosten, offline nutzbar.
@@ -57,6 +57,12 @@ Idee nach felsr.com/verpflegung (nur Logik nachgebaut, kein fremder Code). Nutze
 - `insertIntakes` (Garmin): 1-min-Schritte „Essen: X“ (+ „trinken“ ab 25 °C), in Wiederholungsblöcken an nähere Blockgrenze, gleiche Zeit zusammengefasst. `workoutText(s, p, fuel?)`, `garmin.ts` lädt `loadFuelEnv(true)`.
 - UI: `src/ui/planner/FuelPanel.svelte` (in `SessionCard`, Knopf „Verpflegung“), `src/ui/components/FuelSettings.svelte` (Mehr → Training), `src/ui/nutrition/FuelLogPrompt.svelte` (Ernährung, nach erledigter Einheit Ja/Anpassen/Nein → `addItems` als Snack, foodId `fuel:<id>`).
 - Offen: iPhone-Test (Standortfreigabe, Nachfrage in Ernährung), Anzeige der Essens-Schritte auf der Uhr. Bekannt: Schritt vor einem Block verlängert Workout um 1 min.
+
+## Rennen: Verpflegung + Einheiten pro Woche (PR #10, gemergt + deployed, wartet auf iPhone-Test)
+- Rennen-Session (`key …:race`, `minutes: 0`) hat jetzt `race: { legs, estimated }` aus `raceLegs(g, p)` (goals.ts: Zielzeit, sonst Distanz × Tempo bzw. km/27 km/h + hm/15 Rad, Schwimmen 22 min/km, Trail ×1,15 + hm/10; Triathlon Schwimmen/Rad/Laufen). Zählt nicht in Wochensummen. Karte zeigt „≈ Dauer“. Rennen gehen weiterhin nicht auf die Uhr.
+- `buildFuelPlan` plant pro Abschnitt (`legs`), Intake hat `leg`; Schwimmen im Rennen 0 g/h; Rennen < 75 min 0; `FuelOverride.minutes` (Dauer im Panel änderbar, skaliert Abschnitte); `FuelPlan.isoBottles`.
+- `Goal.maxPerWeek` (kein Schema-Update, nur Feld). goals.ts: `SESSION_RANGE`, `ambitious` (Lauf-Pace < 4:30 bis 10 km, < 5:00 darüber), `recommendedSessions` (Lauf ≤6 km 3 sonst 4, +1 ehrgeizig; Trail ≤25 3 sonst 4; Rad ≤80 3 sonst 4; Schwimmen ≤2 3 sonst 4; Tri 6/7/8/9), `plannedSessions` (min(Empfehlung, Max), `short`). plan.ts: Wettkampfwochen als Slot-Listen in Prioritätsreihenfolge (`pick`), Umfang nach Gewichten; knapp → vol × max(0,8, n/rec), ehrgeizig → ×1,1; Wettkampfwoche reduziert wie zuvor. Zusatzsportarten unverändert (Nutzerwunsch).
+- GoalSheet: Abschnitt „Training pro Woche“ (Chips bis Empfehlung, „X oder mehr“, Hinweis „knapp“).
 
 ## Weitere offene Punkte
 - iPhone-Test durch Jakob: Signalton im Lautlos-Modus (PR #7, `<audio>`-Weg), Verletzungsfilter mit seiner Sprunggelenk-Verletzung (PR #8), Feedback-Flow, Verlauf-Tab, Aufwärmen auf der Garmin-Uhr. Bestätigt: Timer startet erst per „Start“ (nach Update).
