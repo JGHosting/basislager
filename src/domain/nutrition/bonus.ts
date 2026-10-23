@@ -14,8 +14,12 @@ export async function getBonusSettings(): Promise<BonusSettings> {
 }
 export const setBonusSettings = (s: BonusSettings) => setSetting('trainingBonus', { ...s });
 
-/** Nur Ausdauer zählt (Laufen, Rad, Schwimmen, Rudern, Langlauf …) – nicht Kraft, Yoga, Gehen, Ski alpin usw. */
-const ENDURANCE = /Run|Ride|Swim|Rowing|NordicSki|BackcountrySki|RollerSki|Elliptical|Kayaking|Canoeing|StandUpPaddling|InlineSkate|Handcycle|Velomobile/;
+/** Abnehmmodus: an = Kalorientracker normal; aus = kein Ziel, nur Mehrverbrauch durch Training. */
+export const getDietMode = async () => (await getSetting<boolean>('dietMode')) ?? true;
+export const setDietMode = (on: boolean) => setSetting('dietMode', on);
+
+/** Nur Ausdauer zählt (Laufen, Rad, Schwimmen, Rudern, Langlauf, Wandern/Bergsteigen …) – nicht Kraft, Yoga, Gehen, Klettern, Ski alpin usw. */
+const ENDURANCE = /Run|Ride|Swim|Rowing|Hike|Mountaineering|Snowshoe|NordicSki|BackcountrySki|RollerSki|Elliptical|Kayaking|Canoeing|StandUpPaddling|InlineSkate|Handcycle|Velomobile/;
 export const isEndurance = (sportType: string) => ENDURANCE.test(sportType);
 
 /** Aktive Kalorien einer Einheit (aus der Liste, sonst aus geladenen Details). null = unbekannt. */
@@ -27,16 +31,21 @@ export function bonusFor(kcal: number, s: Pick<BonusSettings, 'maxBonus' | 'fact
   return Math.max(0, Math.round(s.maxBonus * (1 - Math.exp(-raw / s.maxBonus))));
 }
 
-export interface DayBudget { base: number; bonus: number; total: number; workoutKcal: number; workouts: number }
+export interface TrainingBonus { bonus: number; workoutKcal: number; workouts: number; enabled: boolean }
+export interface DayBudget extends TrainingBonus { base: number; total: number }
+
+/** Trainingsbonus eines Tages (Summe aller Ausdauereinheiten, dann Kurve). */
+export async function trainingBonus(date: string): Promise<TrainingBonus> {
+  const s = await getBonusSettings();
+  const acts = (await db.activities.where('date').equals(date).toArray()).filter(a => isEndurance(a.sportType));
+  let kcal = 0, n = 0;
+  for (const a of acts) { const k = activeKcal(a); if (k != null && k > 0) { kcal += k; n++; } }
+  return { bonus: s.enabled ? bonusFor(kcal, s) : 0, workoutKcal: Math.round(kcal), workouts: n, enabled: s.enabled };
+}
 
 /** Tagesbudget = eigenes Basisziel + Trainingsbonus. null, wenn kein Basisziel gesetzt ist. */
 export async function dayBudget(date: string, base: number | null): Promise<DayBudget | null> {
   if (base == null) return null;
-  const s = await getBonusSettings();
-  if (!s.enabled) return { base, bonus: 0, total: base, workoutKcal: 0, workouts: 0 };
-  const acts = (await db.activities.where('date').equals(date).toArray()).filter(a => isEndurance(a.sportType));
-  let kcal = 0, n = 0;
-  for (const a of acts) { const k = activeKcal(a); if (k != null && k > 0) { kcal += k; n++; } }
-  const bonus = bonusFor(kcal, s);
-  return { base, bonus, total: base + bonus, workoutKcal: Math.round(kcal), workouts: n };
+  const t = await trainingBonus(date);
+  return { ...t, base, total: base + t.bonus };
 }

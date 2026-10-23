@@ -14,6 +14,8 @@
   import WarmupSettings from '../components/WarmupSettings.svelte';
   import FuelSettings from '../components/FuelSettings.svelte';
   import Statistik from './Statistik.svelte';
+  import { getDietMode, setDietMode } from '../../domain/nutrition/bonus';
+  const dietQ = liveQuery(() => getDietMode());
 
   type Section = 'statistik' | 'training' | 'koerper' | 'verbindungen' | 'daten' | 'ueber' | null;
   let section = $state<Section>(null);
@@ -69,6 +71,14 @@
   {:else if section === 'koerper'}
     <h3 class="section">Gewicht</h3>
     <WeightSettings />
+    <h3 class="section">Abnehmmodus</h3>
+    <section class="card">
+      <div class="seg2" role="radiogroup" aria-label="Abnehmmodus">
+        <button role="radio" aria-checked={$dietQ !== false} class:on={$dietQ !== false} onclick={() => setDietMode(true)}>Ja</button>
+        <button role="radio" aria-checked={$dietQ === false} class:on={$dietQ === false} onclick={() => setDietMode(false)}>Nein</button>
+      </div>
+      <p class="small muted">{$dietQ === false ? 'Kein Kalorienziel – in Ernährung steht nur, wie viel du durch Training zusätzlich verbraucht hast.' : 'Kalorientracker mit Tagesziel und Trainingsbonus.'}</p>
+    </section>
     <h3 class="section">Verletzung</h3>
     <section class="card">
       <p class="small">Aktive Verletzung, Rückkehr-Stufen und betroffene Bewegungen verwalten.</p>
@@ -163,6 +173,9 @@
   .list span { color: var(--muted); }
   .list b { font-weight: 600; text-align: right; font-variant-numeric: tabular-nums; }
   .hint { margin: 8px 4px; }
+  .seg2 { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; background: var(--bg); border-radius: 12px; padding: 4px; margin-bottom: 10px; }
+  .seg2 button { border: none; background: none; font: inherit; font-size: 15px; font-weight: 600; color: var(--muted); padding: 9px 0; border-radius: 9px; cursor: pointer; }
+  .seg2 button.on { background: var(--accent); color: #fff; }
   .footer { text-align: center; margin-top: 28px; }
   .lic p { font-size: 13px; line-height: 1.5; color: var(--muted); margin: 0 0 10px; }
   .lic b { color: var(--text); }

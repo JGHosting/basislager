@@ -7,7 +7,7 @@
   import { MEALS, scale, fmtG, unitLabel } from '../../domain/nutrition/calc';
   import { openFood } from '../app.svelte';
   import KcalBar from '../nutrition/KcalBar.svelte';
-  import { dayBudget, getBonusSettings, setBonusSettings, BONUS_DEFAULTS, type DayBudget } from '../../domain/nutrition/bonus';
+  import { dayBudget, trainingBonus, getDietMode, getBonusSettings, setBonusSettings, BONUS_DEFAULTS, type DayBudget, type TrainingBonus } from '../../domain/nutrition/bonus';
   import MacroLine from '../nutrition/MacroLine.svelte';
   import FuelLogPrompt from '../nutrition/FuelLogPrompt.svelte';
   import type { Meal } from '../../core/db';
@@ -30,6 +30,27 @@
     return () => sub.unsubscribe();
   });
   const bonusQ = liveQuery(() => getBonusSettings());
+  const dietQ = liveQuery(() => getDietMode());
+  let tb = $state.raw<TrainingBonus | null>(null);
+  $effect(() => {
+    const d = date;
+    const sub = liveQuery(async () => ({ d, b: await trainingBonus(d) })).subscribe(v => { if (v.d === date) tb = v.b; });
+    return () => sub.unsubscribe();
+  });
+  let bonusEdit = $state(false);
+  function startBonusEdit() {
+    bOn = $bonusQ?.enabled ?? true; bMax = String($bonusQ?.maxBonus ?? BONUS_DEFAULTS.maxBonus);
+    bFac = String($bonusQ?.factor ?? BONUS_DEFAULTS.factor).replace('.', ',');
+    bonusEdit = true; goalErr = '';
+  }
+  async function saveBonus(): Promise<boolean> {
+    const mx = Math.round(Number(bMax.replace(',', '.'))), fc = Number(bFac.replace(',', '.'));
+    if (!(mx >= 0 && mx <= 3000)) { goalErr = 'Max. Trainingsbonus bitte zwischen 0 und 3000 kcal.'; return false; }
+    if (!(fc >= 0 && fc <= 1)) { goalErr = 'Anrechnungsfaktor bitte zwischen 0 und 1.'; return false; }
+    await setBonusSettings({ enabled: bOn, maxBonus: mx, factor: fc });
+    bonusEdit = false; goalErr = '';
+    return true;
+  }
   let bOn = $state(true), bMax = $state(''), bFac = $state('');
   const macroQ = liveQuery(() => getMacroGoals());
   const weightQ = liveQuery(async () => (await db.morning.orderBy('date').reverse().filter(m => m.weight != null).first())?.weight ?? null);
@@ -51,11 +72,8 @@
     if (!(n >= 800 && n <= 8000)) { goalErr = 'Bitte ein Ziel zwischen 800 und 8000 kcal.'; return; }
     await setKcalGoal(n);
     if (goalEdit) {
-      const mx = Math.round(Number(bMax.replace(',', '.'))), fc = Number(bFac.replace(',', '.'));
-      if (!(mx >= 0 && mx <= 3000)) { goalErr = 'Max. Trainingsbonus bitte zwischen 0 und 3000 kcal.'; return; }
-      if (!(fc >= 0 && fc <= 1)) { goalErr = 'Anrechnungsfaktor bitte zwischen 0 und 1.'; return; }
+      if (!(await saveBonus())) return;
       await setMacroGoals({ protein: parseG(mP), carbs: parseG(mC), fat: parseG(mF) });
-      await setBonusSettings({ enabled: bOn, maxBonus: mx, factor: fc });
     }
     goalEdit = false; goalErr = '';
   }
@@ -71,7 +89,38 @@
   </div>
 </header>
 
-{#if dayData && dayData.date === date}
+{#snippet bonusForm()}
+          <p class="mlabel">Trainingsbonus</p>
+          <label class="tog"><input type="checkbox" bind:checked={bOn} /> Ausdauereinheiten erhöhen das Tagesbudget</label>
+          {#if bOn}
+            <div class="mgrid two">
+              <label>Max. Bonus (kcal)<input bind:value={bMax} inputmode="numeric" placeholder="600" /></label>
+              <label>Anrechnung (0–1)<input bind:value={bFac} inputmode="decimal" placeholder="0,5" /></label>
+            </div>
+          {/if}
+          <p class="muted small">Nur ein Teil der Trainingskalorien wird angerechnet, da Geräte den Verbrauch überschätzen und der Körper kompensiert. Es zählen nur Ausdauereinheiten (Laufen, Rad, Schwimmen, Rudern, Wandern …), der Bonus flacht ab und endet beim Maximalwert.</p>
+{/snippet}
+
+{#if $dietQ === false}
+  <section class="card summary">
+    <h2>Mehrverbrauch durch Training</h2>
+    {#if bonusEdit}
+      {@render bonusForm()}
+      {#if goalErr}<p class="error small">{goalErr}</p>{/if}
+      <button class="btn primary wide" onclick={saveBonus}>Speichern</button>
+      <button class="link" onclick={() => (bonusEdit = false)}>Abbrechen</button>
+    {:else if tb}
+      {#if !tb.enabled}
+        <p class="muted small">Trainingsbonus ist ausgeschaltet.</p>
+      {:else}
+        <div class="big"><span><b>+{kcal(tb.bonus)}</b> kcal</span></div>
+        <p class="muted small bonus">{tb.workouts ? `${kcal(tb.workoutKcal)} kcal aus ${tb.workouts} ${tb.workouts === 1 ? 'Ausdauereinheit' : 'Ausdauereinheiten'}, davon angerechnet` : 'Noch keine Ausdauereinheit mit Kalorienangabe an diesem Tag.'}</p>
+      {/if}
+      <p class="muted small">Abnehmmodus ist aus – kein Kalorienziel, Essen wird nicht getrackt. Umschalten unter Mehr → Körper.</p>
+      <button class="link" onclick={startBonusEdit}>Bonus-Einstellungen</button>
+    {/if}
+  </section>
+{:else if dayData && dayData.date === date}
   {@const v = dayData}
   {#if !v.tracked}
     <section class="card untracked">
@@ -97,15 +146,7 @@
             <label>Fett<input bind:value={mF} inputmode="numeric" placeholder="–" /></label>
           </div>
           {#if $weightQ}<p class="muted small">Orientierung Protein bei Training: 1,6–2,0 g pro kg → {Math.round($weightQ * 1.6)}–{Math.round($weightQ * 2)} g. <button type="button" class="link inl" onclick={() => (mP = String(Math.round($weightQ * 1.8)))}>{Math.round($weightQ * 1.8)} g übernehmen</button></p>{/if}
-          <p class="mlabel">Trainingsbonus</p>
-          <label class="tog"><input type="checkbox" bind:checked={bOn} /> Ausdauereinheiten erhöhen das Tagesbudget</label>
-          {#if bOn}
-            <div class="mgrid two">
-              <label>Max. Bonus (kcal)<input bind:value={bMax} inputmode="numeric" placeholder="600" /></label>
-              <label>Anrechnung (0–1)<input bind:value={bFac} inputmode="decimal" placeholder="0,5" /></label>
-            </div>
-          {/if}
-          <p class="muted small">Nur ein Teil der Trainingskalorien wird angerechnet, da Geräte den Verbrauch überschätzen und der Körper kompensiert. Es zählen nur Ausdauereinheiten (Laufen, Rad, Schwimmen, Rudern …), der Bonus flacht ab und endet beim Maximalwert.</p>
+          {@render bonusForm()}
           <button class="btn primary wide" onclick={saveGoal}>Speichern</button>
         {/if}
         {#if goalErr}<p class="error small">{goalErr}</p>{/if}
@@ -154,7 +195,7 @@
   {/if}
 {/if}
 
-{#if $history}
+{#if $history && $dietQ !== false}
   <h3 class="section">Letzte Tage</h3>
   <section class="card hist">
     {#each $history as h (h.date)}
