@@ -2,8 +2,8 @@
   import { liveQuery } from 'dexie';
   import { db } from '../../core/db';
   import { today, fmtDay, addDays } from '../../core/dates';
-  import { GOALS, REGIONS, type GoalId } from '../../domain/mobility/library';
-  import { getMobilitySettings, saveMobilitySettings, setPauseMode, type Intrusiveness } from '../../domain/mobility/settings';
+  import { GOALS, type GoalId } from '../../domain/mobility/library';
+  import { getMobilitySettings, saveMobilitySettings, setPauseMode, type Intrusiveness, type MobilitySettings } from '../../domain/mobility/settings';
   import { todayLog, completion, currentStreak, DONE_THRESHOLD, excludedCount, rebuildToday, sigOf } from '../../domain/mobility/repo';
   import { TESTS, lastTest, testDue } from '../../domain/mobility/tests';
   import { activeInjury, STAGES } from '../../domain/injury/injury';
@@ -19,27 +19,28 @@
   const pct = $derived($row ? Math.round(completion($row) * 100) : 0);
   const isDone = $derived(pct / 100 >= DONE_THRESHOLD);
 
-  // Ziele/Gewichte/Länge geändert, aber heutige Routine noch mit altem Stand?
+  // Entwurf: Ziele, Gewichte, Länge und Aufdringlichkeit werden erst mit "Routine aktualisieren" übernommen
+  type Draft = Pick<MobilitySettings, 'goals' | 'minutes' | 'intrusiveness'>;
+  const pick = (x: MobilitySettings): Draft => ({ goals: x.goals.map(g => ({ ...g })), minutes: x.minutes, intrusiveness: x.intrusiveness });
+  let draft = $state<Draft | null>(null);
+  $effect(() => { if (!draft && $settings) draft = pick($settings); });
+  const dirty = $derived(!!draft && !!$settings && JSON.stringify(draft) !== JSON.stringify(pick($settings)));
+  // Routine wurde noch mit älteren Einstellungen geplant
   const outdated = $derived(!!$row && $row.minutes > 0 && !!$settings && $row.sig !== sigOf($settings));
   let updated = $state(false);
   async function refresh() {
+    if (draft) await saveMobilitySettings($state.snapshot(draft));
     await rebuildToday();
+    draft = null;
     updated = true; setTimeout(() => (updated = false), 2500);
   }
 
-  function weightOf(s: Awaited<ReturnType<typeof getMobilitySettings>>, id: string) { return s.goals.find(g => g.id === id)?.weight ?? null; }
-  async function toggleGoal(id: GoalId) {
-    const s = await getMobilitySettings();
-    const on = s.goals.some(g => g.id === id);
-    const goals = on ? s.goals.filter(g => g.id !== id) : [...s.goals, { id, weight: 2 as const }];
-    await saveMobilitySettings({ goals });
+  function weightOf(id: string) { return draft?.goals.find(g => g.id === id)?.weight ?? null; }
+  function toggleGoal(id: GoalId) {
+    if (!draft) return;
+    draft.goals = draft.goals.some(g => g.id === id) ? draft.goals.filter(g => g.id !== id) : [...draft.goals, { id, weight: 2 }];
   }
-  async function setWeight(id: string, weight: 1 | 2 | 3) {
-    const s = await getMobilitySettings();
-    await saveMobilitySettings({ goals: s.goals.map(g => (g.id === id ? { ...g, weight } : g)) });
-  }
-  async function setMinutes(minutes: 5 | 10 | 15) { await saveMobilitySettings({ minutes }); }
-  async function setIntrusiveness(intrusiveness: Intrusiveness) { await saveMobilitySettings({ intrusiveness }); }
+  function setWeight(id: string, weight: 1 | 2 | 3) { if (draft) draft.goals = draft.goals.map(g => (g.id === id ? { ...g, weight } : g)); }
   async function togglePauseManual(on: boolean) { await setPauseMode(on, false); }
 
   const INTRUSIVENESS: { id: Intrusiveness; label: string }[] = [
@@ -73,18 +74,14 @@
   {/if}
 </section>
 
-<h3 class="section">Ziele</h3>
+<h3 class="section">Ziele & Einstellungen</h3>
 <section class="card">
-  <div class="chips">
-    {#each GOALS as g}
-      {#if $settings}
-        {@const w = weightOf($settings, g.id)}
-        <button class="chip" class:on={w != null} onclick={() => toggleGoal(g.id)}>{g.label}</button>
-      {/if}
-    {/each}
-  </div>
-  {#if $settings}
-    {#each $settings.goals.filter(g => GOALS.some(x => x.id === g.id)) as g}
+  {#if draft}
+    <p class="label first">Ziele</p>
+    <div class="chips">
+      {#each GOALS as g}<button class="chip" class:on={weightOf(g.id) != null} onclick={() => toggleGoal(g.id)}>{g.label}</button>{/each}
+    </div>
+    {#each draft.goals as g}
       {@const def = GOALS.find(x => x.id === g.id)}
       <div class="weight-row">
         <span>{def?.label}</span>
@@ -93,9 +90,17 @@
         </div>
       </div>
     {/each}
+    <p class="label">Länge der Routine</p>
+    <div class="seg n">
+      {#each [5, 10, 15] as m}<button class:on={draft.minutes === m} onclick={() => (draft!.minutes = m as 5 | 10 | 15)}>{m} Min.</button>{/each}
+    </div>
+    <p class="label">Aufdringlichkeit</p>
+    <div class="seg n4">
+      {#each INTRUSIVENESS as o}<button class:on={draft.intrusiveness === o.id} onclick={() => (draft!.intrusiveness = o.id)}>{o.label}</button>{/each}
+    </div>
   {/if}
-  <button class="btn wide refresh" class:primary={outdated} class:ghost={!outdated} onclick={refresh}>{updated ? 'Routine aktualisiert ✓' : 'Routine aktualisieren'}</button>
-  {#if outdated && !updated}<p class="muted small hint">Änderungen sind noch nicht in der heutigen Routine – tippe auf „Routine aktualisieren“. Bereits abgehakte Übungen bleiben.</p>{/if}
+  <button class="btn wide refresh" class:primary={dirty || outdated} class:ghost={!dirty && !outdated} onclick={refresh}>{updated ? 'Routine aktualisiert ✓' : 'Routine aktualisieren'}</button>
+  {#if (dirty || outdated) && !updated}<p class="muted small hint">Änderungen sind noch nicht übernommen – „Routine aktualisieren“ speichert sie und plant die heutige Routine neu. Abgehakte Übungen bleiben.</p>{/if}
 </section>
 
 <h3 class="section">Selbsttest</h3>
@@ -109,26 +114,11 @@
   <p class="muted small hint">{TESTS.length} kurze Tests, alle {$settings?.testIntervalWeeks ?? 3} Wochen. Das Ergebnis steuert, welche Regionen mehr Übungen bekommen.</p>
 </section>
 
-<h3 class="section">Einstellungen</h3>
-<section class="card">
-  <p class="label">Länge der Routine</p>
-  <div class="seg n">
-    {#each [5, 10, 15] as m}<button class:on={$settings?.minutes === m} onclick={() => setMinutes(m as 5 | 10 | 15)}>{m} Min.</button>{/each}
-  </div>
-  <p class="label">Aufdringlichkeit</p>
-  <div class="seg n4">
-    {#each INTRUSIVENESS as o}<button class:on={$settings?.intrusiveness === o.id} onclick={() => setIntrusiveness(o.id)}>{o.label}</button>{/each}
-  </div>
-  <button class="rowbtn" onclick={() => togglePauseManual(!$settings?.pauseMode)}>
-    <span>Pausenmodus {$settings?.pauseAuto ? '(automatisch, Verletzung)' : ''}</span>
-    <b>{$settings?.pauseMode ? 'Ein' : 'Aus'}</b>
+<section class="card pause">
+  <button class="btn wide {$settings?.pauseMode ? 'primary' : 'ghost'}" onclick={() => togglePauseManual(!$settings?.pauseMode)}>
+    {$settings?.pauseMode ? 'Pausenmodus beenden' : 'Pausenmodus einschalten'}
   </button>
-  <p class="muted small hint">Im Pausenmodus gibt es keine Erinnerungen, die Streak bleibt erhalten.</p>
-</section>
-
-<h3 class="section">Abgedeckte Regionen</h3>
-<section class="card list">
-  {#each REGIONS as r}<div><span>{r.label}</span></div>{/each}
+  <p class="muted small hint">{$settings?.pauseMode ? ($settings.pauseAuto ? 'Automatisch aktiv wegen Verletzungsstufe „Pause“. ' : 'Aktiv. ') : ''}Im Pausenmodus (Ruhetag, krank) gibt es keine Erinnerungen, die Streak bleibt erhalten.</p>
 </section>
 
 <style>
@@ -153,14 +143,9 @@
   .seg.n4 { grid-template-columns: repeat(4, 1fr); margin: 6px 0 14px; }
   .seg button { border: none; background: none; font: inherit; font-size: 14px; font-weight: 600; color: var(--muted); padding: 8px 2px; border-radius: 8px; cursor: pointer; }
   .seg button.on { background: var(--accent); color: #fff; }
-  .refresh { margin-top: 12px; }
+  .refresh { margin-top: 16px; }
+  .pause { margin-top: 22px; }
   .hint { margin: 10px 0 0; }
   .label { margin: 14px 0 0; font-size: 14px; color: var(--muted); }
   .label:first-child { margin-top: 0; }
-  .rowbtn { display: flex; justify-content: space-between; width: 100%; background: none; border: none; border-top: 1px solid var(--line);
-            padding: 14px 0; color: var(--text); font-size: 15px; min-height: 48px; cursor: pointer; margin-top: 4px; }
-  .rowbtn b { color: var(--accent); }
-  .list { padding: 6px 20px; }
-  .list div { padding: 10px 0; border-top: 1px solid var(--line); font-size: 15px; }
-  .list div:first-child { border-top: none; }
 </style>
