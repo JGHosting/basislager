@@ -8,6 +8,7 @@ import { hrProfile } from '../load/load';
 import { normalizeSports, type SportsSetting } from './sports';
 import { physioIds } from '../injury/rehab';
 import { getWarmupSettings } from './warmup';
+import type { CurveCache } from './besttimes';
 
 const plain = <T,>(v: T): T => JSON.parse(JSON.stringify(v));
 
@@ -27,9 +28,10 @@ export async function loadContext(): Promise<PlanContext> {
   const sports = normalizeSports(await getSetting<SportsSetting>('sports'), runs);
   const hr = hrProfile(activities, morning.filter(m => m.restingHr != null).map(m => m.restingHr!), { max: hrMax, rest: hrRest }, today());
   const warmupSettings = await getWarmupSettings();
+  const curves = (await getSetting<CurveCache>('bestCurves')) ?? null;
   return {
     today: today(), activities, strength, split: splitId ? (await db.splits.get(splitId)) ?? null : null,
-    goal, injury: activeInjury(injuries), events, edits: new Map(edits.map(e => [e.key, e])), runsPerWeek: runs ?? 3, strengthPerWeek: kraftN ?? 3, sports, vacations, hr, physio: physioIds(activities, injuries), warmupSettings
+    goal, injury: activeInjury(injuries), events, edits: new Map(edits.map(e => [e.key, e])), runsPerWeek: runs ?? 3, strengthPerWeek: kraftN ?? 3, sports, vacations, hr, physio: physioIds(activities, injuries), warmupSettings, curves
   };
 }
 

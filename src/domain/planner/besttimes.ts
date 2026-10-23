@@ -17,7 +17,11 @@ export const BEST_DISTANCES = [
 ] as const;
 
 export interface Effort { secs: number; date?: string; activityId?: string; source: 'kurve' | 'aktivitaet' }
-export interface CurveCache { at: number; all: Record<string, Effort>; year: Record<string, Effort> }
+export interface CurveCache {
+  at: number; all: Record<string, Effort>; year: Record<string, Effort>;
+  /** Letzte 84 Tage (für die aktuelle Form im Trainingsplan). */
+  recent?: Record<string, Effort>; recentAt?: number;
+}
 export interface BestRow { m: number; label: string; all: Effort | null; year: Effort | null; predicted: { secs: number; from: string } | null }
 
 const RUN = /^(Run|VirtualRun|TrailRun)$/;
@@ -83,6 +87,13 @@ export async function refreshCurves(force = false): Promise<CurveCache | null> {
   const find = (k: string) => list.find(x => x.id === k || x.label === k) ?? null;
   const all = find('all') ?? list[0]; const year = find('1y') ?? list[1];
   const cache: CurveCache = { at: Date.now(), all: all ? parseCurve(all, dates) : {}, year: year ? parseCurve(year, dates) : {} };
+  // Aktuelle Form: Kurve der letzten 84 Tage, eigener Abruf – schlägt er fehl, bleiben die Bestzeiten unberührt
+  try {
+    const r = await icu.paceCurves(c, ['84d']);
+    const rc = r?.list?.find(x => x.id === '84d' || x.label === '84d') ?? r?.list?.[0];
+    for (const [id, a] of Object.entries(r?.activities ?? {})) { const d = (a as { start_date_local?: string }).start_date_local; if (d && !dates.has(id)) dates.set(id, d.slice(0, 10)); }
+    if (rc) { cache.recent = parseCurve(rc, dates); cache.recentAt = Date.now(); }
+  } catch { /* Ersatz: 1-Jahres-Kurve mit Datum im Fenster + ganze Läufe */ }
   await setSetting('bestCurves', cache);
   return cache;
 }

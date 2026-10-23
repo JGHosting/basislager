@@ -16,6 +16,7 @@ import { nextSplitDay, groupLabel } from '../strength/strength';
 import { STAGES, STAGE_VOLUME, MOVEMENTS, isOutage } from '../injury/injury';
 import { TRI, goalLabel, fmtPace, raceLegs, plannedSessions, ambitious, type RaceLeg } from './goals';
 import { estimatePaces, type Paces } from './paces';
+import type { CurveCache } from './besttimes';
 import { activityLoad, loadSeries, type HrProfile } from '../load/load';
 import { sportName } from '../../ui/format';
 import { VACATION_LEG, vacationSportLabel } from '../vacation/vacation';
@@ -62,6 +63,8 @@ export interface PlanContext {
   /** Krafteinheiten pro Woche (1–6, Standard 3). */
   strengthPerWeek?: number;
   hr?: HrProfile;
+  /** Pace-Kurven von intervals.icu (für die aktuelle Laufform). */
+  curves?: CurveCache | null;
   /** Aufwärm-Standard je Kategorie (Mehr → Training → Aufwärmen). */
   warmupSettings?: WarmupSettings;
 }
@@ -329,7 +332,7 @@ function enduranceWeek(ws: string, ctx: PlanContext, phase: Phase, p: Paces, exi
 /* ---------- Woche erzeugen ---------- */
 export function buildWeek(ws: string, ctx: PlanContext): PlanWeek {
   const g = ctx.goal && !ctx.goal.archived && ws >= weekStart(ctx.goal.planStart) && ws <= weekStart(ctx.goal.date) ? ctx.goal : null;
-  const p = estimatePaces(ctx.activities, ctx.goal && !ctx.goal.archived ? ctx.goal : null, ctx.today);
+  const p = estimatePaces(ctx.activities, ctx.goal && !ctx.goal.archived ? ctx.goal : null, ctx.today, { ws, curves: ctx.curves, hrMax: ctx.hr?.max });
   const ahead = Math.max(0, Math.round((Date.parse(ws) - Date.parse(weekStart(ctx.today))) / 604800000));
   const sessions: PlanSession[] = [];
   let phase: Phase = 'basis', weekNo: number | undefined, total: number | undefined;
