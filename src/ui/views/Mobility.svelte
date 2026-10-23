@@ -8,6 +8,9 @@
   import { TESTS, lastTest, testDue } from '../../domain/mobility/tests';
   import { activeInjury, STAGES } from '../../domain/injury/injury';
   import { app, startMobilityNow, openSelfTest } from '../app.svelte';
+  import MobilityHistory from '../mobility/MobilityHistory.svelte';
+
+  let tab = $state<'heute' | 'verlauf'>('heute');
 
   const row = liveQuery(() => todayLog());
   const injury = liveQuery(async () => activeInjury(await db.injuries.toArray()));
@@ -49,6 +52,15 @@
 </script>
 
 <header class="page-head"><div><p class="eyebrow">{fmtDay(today(), { weekday: 'long', day: 'numeric', month: 'long' })}</p><h1>Mobility</h1></div></header>
+
+<div class="seg tabs">
+  <button class:on={tab === 'heute'} onclick={() => (tab = 'heute')}>Heute</button>
+  <button class:on={tab === 'verlauf'} onclick={() => (tab = 'verlauf')}>Verlauf</button>
+</div>
+
+{#if tab === 'verlauf'}
+  <MobilityHistory />
+{:else}
 
 <section class="card routine">
   <div class="row">
@@ -111,7 +123,7 @@
     <p class="muted">Noch kein Test durchgeführt.</p>
   {/if}
   <button class="btn {$dueTest ? 'primary' : 'ghost'} wide" onclick={openSelfTest}>{$dueTest ? 'Test jetzt machen' : 'Test erneut machen'}</button>
-  <p class="muted small hint">{TESTS.length} kurze Tests, alle {$settings?.testIntervalWeeks ?? 3} Wochen. Das Ergebnis steuert, welche Regionen mehr Übungen bekommen.</p>
+  <p class="muted small hint">{TESTS.length} kurze Tests, alle {$settings?.testIntervalWeeks ?? 3} Wochen. Das Ergebnis steuert, welche Regionen mehr Übungen bekommen; deutliche Fortschritte schalten schwerere Varianten früher frei.</p>
 </section>
 
 <section class="card pause">
@@ -120,6 +132,7 @@
   </button>
   <p class="muted small hint">{$settings?.pauseMode ? ($settings.pauseAuto ? 'Automatisch aktiv wegen Verletzungsstufe „Pause“. ' : 'Aktiv. ') : ''}Im Pausenmodus (Ruhetag, krank) gibt es keine Erinnerungen, die Streak bleibt erhalten.</p>
 </section>
+{/if}
 
 <style>
   .inj { color: var(--yellow); margin: 8px 0 10px; line-height: 1.4; }
@@ -144,6 +157,7 @@
   .seg button { border: none; background: none; font: inherit; font-size: 14px; font-weight: 600; color: var(--muted); padding: 8px 2px; border-radius: 8px; cursor: pointer; }
   .seg button.on { background: var(--accent); color: #fff; }
   .refresh { margin-top: 16px; }
+  .seg.tabs { grid-template-columns: 1fr 1fr; margin: 0 0 14px; background: var(--card); }
   .pause { margin-top: 22px; }
   .hint { margin: 10px 0 0; }
   .label { margin: 14px 0 0; font-size: 14px; color: var(--muted); }
