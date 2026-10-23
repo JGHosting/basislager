@@ -35,6 +35,8 @@ export interface PlanSession {
   warmupMode?: WarmupMode;
   /** Nur Wettkampf: Abschnitte mit geschätzter Dauer (für die Verpflegung; zählt nicht in Wochensummen). */
   race?: { legs: RaceLeg[]; estimated: boolean };
+  /** Ausgefallen durch dich (manuell) oder verpasst – zählt für den Ausgleich im Wettkampfplan. */
+  skipped?: 'manuell' | 'verpasst';
 }
 export type Phase = 'basis' | 'grundlage' | 'aufbau' | 'spitze' | 'taper' | 'wettkampfwoche' | 'erholung' | 'urlaub';
 export const PHASE_LABEL: Record<Phase, string> = {
@@ -45,6 +47,8 @@ export interface PlanWeek {
   sessions: PlanSession[]; events: FixedEvent[]; paces: Paces; minutes: number; runMinutes: number;
   /** Außerplanmäßige Aktivitäten dieser Woche und was daraufhin angepasst wurde. */
   extra: { text: string; load: number }[]; adjusted: boolean;
+  /** Wettkampfplan: nicht ausgeglichene Minuten je Sportart (werden in der Folgewoche teilweise nachgeholt). */
+  carry?: Partial<Record<'lauf' | 'rad' | 'schwimmen', number>>;
 }
 export interface PlanContext {
   today: string; activities: Activity[]; strength: StrengthSession[]; split: SplitTemplate | null;
@@ -467,16 +471,27 @@ export function buildWeek(ws: string, ctx: PlanContext): PlanWeek {
   if (ctx.injury) out = applyInjury(out, ctx.injury, ws, ctx.vacations ?? []);
   out = applyEdits(out, ctx.edits);
   const used = new Set<string>();
-  out = applyDone(out, ctx.activities.filter(a => !ctx.physio?.has(a.id)), ctx.today, used);
+  out = applyDone(out, ctx.activities.filter(a => !ctx.physio?.has(a.id)), ctx.today, used, ws, ctx.hr?.max ?? 190);
+  if (ws === weekStart(ctx.today)) out = applyMissed(out, ctx.today, ws, ctx.edits);
   out = applyStrengthActual(out, ctx, ws, phase === 'wettkampfwoche');
   const inter = applyInteractions(out, ctx, ws, used);
   out = inter.list;
+  // Ausgleich nur im Wettkampfplan (nicht im Trainingsalltag), nicht bei Verletzung, Taper, Wettkampf- und Erholungswochen
+  let carry: PlanWeek['carry'];
+  const compensate = !!g && !ctx.injury && !['taper', 'wettkampfwoche', 'erholung', 'urlaub'].includes(phase);
+  if (g && !ctx.injury && ws === weekStart(ctx.today)) {
+    const c = applyCompensation(out, ctx.today, compensate ? null : {});
+    out = c.list; carry = c.carry;
+  } else if (compensate && ws === addDays(weekStart(ctx.today), 7)) {
+    const prev = buildWeek(addDays(ws, -7), ctx);
+    if (prev.carry) out = applyCarry(out, prev.carry);
+  }
   out = applyWarmup(out, ctx);
   out.sort((a, b) => a.date.localeCompare(b.date) || order(a) - order(b));
   const minutes = out.filter(s => s.status !== 'ausgelassen').reduce((t, s) => t + s.minutes, 0);
   const runMinutes = out.filter(s => (s.sport === 'lauf' || s.sport === 'trail') && s.status !== 'ausgelassen').reduce((t, s) => t + s.minutes, 0);
   const events: FixedEvent[] = [];   // Fixtermine sind in den Urlaub übergegangen
-  return { weekStart: ws, phase, goal: g, weekNo, totalWeeks: total, sessions: out, events, paces: p, minutes, runMinutes, extra: inter.extra, adjusted: inter.adjusted };
+  return { weekStart: ws, phase, goal: g, weekNo, totalWeeks: total, sessions: out, events, paces: p, minutes, runMinutes, extra: inter.extra, adjusted: inter.adjusted, carry };
 }
 const order = (s: PlanSession) => (s.sport === 'kraft' ? 1 : s.key.endsWith('brick') ? 3 : 2);
 
@@ -635,19 +650,130 @@ function applyWarmup(list: PlanSession[], ctx: PlanContext): PlanSession[] {
 function applyEdits(list: PlanSession[], edits: Map<string, PlanEdit>): PlanSession[] {
   return list.map(s => {
     const e = edits.get(s.key); if (!e) return s;
-    return { ...s, date: e.movedTo ?? s.date, moved: !!e.movedTo && e.movedTo !== s.origDate, status: e.status ?? s.status };
+    return { ...s, date: e.movedTo ?? s.date, moved: !!e.movedTo && e.movedTo !== s.origDate, status: e.status ?? s.status, skipped: e.status === 'ausgelassen' ? 'manuell' as const : s.skipped };
   });
 }
 const FAMILY: Record<PlanSport, RegExp> = { kraft: /Weight|Workout/, lauf: /Run/, trail: /Run/, rad: /Ride/, schwimmen: /Swim/, gehen: /Hike|Walk/, wettkampf: /./ };
-function applyDone(list: PlanSession[], acts: Activity[], today: string, used: Set<string>): PlanSession[] {
-  return list.map(s => {
+function applyDone(list: PlanSession[], acts: Activity[], today: string, used: Set<string>, ws: string, hrMax = 190): PlanSession[] {
+  // 1) Gleicher Tag, gleiche Sportart
+  const out = list.map(s => {
     if (s.status === 'ausgelassen' || s.date > today) return s;
     const a = acts.find(x => x.date === s.date && !used.has(x.id) && FAMILY[s.sport].test(x.sportType));
     if (!a) return s;
     if (s.status === 'erledigt') { used.add(a.id); return { ...s, activityId: a.id }; }
     used.add(a.id);
-    return { ...s, status: 'erledigt', autoDone: true, activityId: a.id };
+    return { ...s, status: 'erledigt' as const, autoDone: true, activityId: a.id };
   });
+  // 2) Anderer Tag derselben Woche: Aktivität der passendsten offenen Ausdauereinheit zuordnen
+  //    (gleiche Sportart, ähnliche Dauer; lange Aktivität → bevorzugt die lange Einheit). Die Einheit wandert auf den Trainingstag.
+  const end = addDays(ws, 6);
+  const rest = acts.filter(a => a.date >= ws && a.date <= end && a.date <= today && !used.has(a.id)).sort((x, y) => (y.duration ?? 0) - (x.duration ?? 0));
+  for (const a of rest) {
+    const min = (a.duration ?? a.elapsed ?? 0) / 60;
+    if (min < 15) continue;
+    let best: { i: number; score: number } | null = null;
+    out.forEach((s, i) => {
+      if (s.status !== 'offen' || !endurance(s) || s.date === a.date || s.date < ws || s.date > end || !FAMILY[s.sport].test(a.sportType)) return;
+      const ratio = min / Math.max(1, s.minutes);
+      if (ratio < 0.5 || ratio > 2.5) return;
+      // Harte Einheit nur mit erkennbar hartem Training (Ø-Puls ≥ 78 % vom Max); ohne Puls nur nachträglich (verpasst → später gemacht)
+      if (s.intensity === 'hart' && (a.avgHr ? a.avgHr / hrMax < 0.78 : s.date > a.date)) return;
+      // Lange Einheit vorab nur mit ähnlich langer Aktivität
+      if (/long/.test(s.key) && s.date > a.date && ratio < 0.75) return;
+      const score = Math.abs(Math.log(ratio)) + Math.abs(Date.parse(s.date) - Date.parse(a.date)) / 86400000 * 0.25;
+      if (!best || score < best.score) best = { i, score };
+    });
+    if (!best) continue;
+    const s = out[(best as { i: number }).i];
+    used.add(a.id);
+    out[(best as { i: number }).i] = { ...s, date: a.date, moved: a.date !== s.origDate, status: 'erledigt', autoDone: true, activityId: a.id,
+      notes: [...s.notes, `Statt ${fmtWeekday(s.date)} am ${fmtWeekday(a.date)} gemacht.`] };
+  }
+  return out;
+}
+
+const fmtWeekday = (iso: string) => ['Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag', 'Sonntag'][(new Date(iso + 'T12:00:00').getDay() + 6) % 7];
+const isKey = (s: PlanSession) => endurance(s) && !/brick/.test(s.key) && (/long|-q2?$/.test(s.key) || s.intensity === 'hart');
+const isHard = (s: PlanSession) => s.sport === 'wettkampf' || (endurance(s) && (/long/.test(s.key) || s.intensity === 'hart'));
+
+/**
+ * 3) Verpasst (Tag vorbei, nicht erledigt): wichtige Einheiten (lang, Qualität) auf den nächsten passenden Tag
+ *    dieser Woche schieben – kein harter Tag direkt davor/danach; ein lockerer Ausdauertermin dort entfällt dafür.
+ *    Passt nichts mehr oder ist die Einheit locker, entfällt sie. Manuell bearbeitete Einheiten bleiben unangetastet.
+ */
+function applyMissed(list: PlanSession[], today: string, ws: string, edits: Map<string, PlanEdit>): PlanSession[] {
+  const out = list.map(s => ({ ...s, notes: [...s.notes] }));
+  const end = addDays(ws, 6);
+  const missed = out.filter(s => s.status === 'offen' && endurance(s) && s.date < today && s.date >= ws && !edits.get(s.key)?.status)
+    .sort((x, y) => Number(isKey(y)) - Number(isKey(x)) || (/long/.test(y.key) ? 1 : 0) - (/long/.test(x.key) ? 1 : 0));
+  for (const s of missed) {
+    const was = fmtWeekday(s.date);
+    if (!isKey(s)) { s.status = 'ausgelassen'; s.skipped = 'verpasst'; s.notes.push(`Am ${was} nicht gemacht – entfällt.`); continue; }
+    let target: string | null = null;
+    for (let d = today; d <= end && !target; d = addDays(d, 1)) {
+      const near = out.filter(o => o !== s && o.status !== 'ausgelassen' && [addDays(d, -1), d, addDays(d, 1)].includes(o.date));
+      if (near.some(isHard)) continue;
+      if (out.some(o => o !== s && o.date === d && endurance(o) && o.status === 'erledigt')) continue;
+      target = d;
+    }
+    if (!target) { s.status = 'ausgelassen'; s.skipped = 'verpasst'; s.notes.push(`Am ${was} nicht gemacht – passt diese Woche nicht mehr rein.`); continue; }
+    for (const o of out) if (o !== s && o.date === target && endurance(o) && o.status === 'offen') { o.status = 'ausgelassen'; o.notes.push(`Entfällt für ${s.title} (von ${was} verschoben).`); }
+    s.date = target; s.moved = true; s.notes.push(`Am ${was} verpasst – auf ${target === today ? 'heute' : fmtWeekday(target)} verschoben.`);
+  }
+  return out;
+}
+
+/* ---------- Ausgleich ausgefallener Einheiten (nur Wettkampfplan) ---------- */
+/**
+ * Bewusst moderat (Nachholen in voller Länge erhöht das Verletzungsrisiko):
+ * Die Hälfte der ausgefallenen Minuten (lange Einheit 60 %) kommt auf die übrigen offenen Einheiten derselben Sportart
+ * dieser Woche (keine harten), je höchstens +20 %. Was nicht passt, geht in die nächste Woche (dort höchstens +10 % der Sportart).
+ * Intensität wird nicht nachgeholt. noRoom = {} → nichts in dieser Woche verteilen, alles vortragen.
+ */
+const rnd5 = (m: number) => Math.round(m / 5) * 5;
+const famOf = (s: PlanSession): 'lauf' | 'rad' | 'schwimmen' | null => s.sport === 'lauf' || s.sport === 'trail' ? 'lauf' : s.sport === 'rad' ? 'rad' : s.sport === 'schwimmen' ? 'schwimmen' : null;
+function applyCompensation(list: PlanSession[], today: string, noRoom: object | null): { list: PlanSession[]; carry: PlanWeek['carry'] } {
+  const out = list.map(s => ({ ...s, notes: [...s.notes] }));
+  const pool: Record<string, number> = {};
+  for (const s of out) {
+    const f = famOf(s);
+    if (!f || s.status !== 'ausgelassen' || !s.skipped || s.key.endsWith('brick')) continue;
+    pool[f] = (pool[f] ?? 0) + s.minutes * (/long/.test(s.key) ? 0.6 : 0.5);
+  }
+  const carry: NonNullable<PlanWeek['carry']> = {};
+  for (const [f, total] of Object.entries(pool)) {
+    let rest = total;
+    if (!noRoom) {
+      const open = out.filter(s => famOf(s) === f && s.status === 'offen' && s.date >= today && s.intensity !== 'hart' && s.sport !== 'wettkampf')
+        .sort((a, b) => Number(a.intensity !== 'locker') - Number(b.intensity !== 'locker'));
+      for (const s of open) {
+        if (rest < 5) break;
+        const add = rnd5(Math.min(rest, s.minutes * 0.2));
+        if (add < 5) continue;
+        s.minutes += add; rest -= add;
+        s.notes.push(`+${add} min Ausgleich für eine ausgefallene Einheit.`);
+      }
+    }
+    if (rest >= 5) carry[f as 'lauf'] = Math.round(rest);
+  }
+  return { list: out, carry: Object.keys(carry).length ? carry : undefined };
+}
+function applyCarry(list: PlanSession[], carry: NonNullable<PlanWeek['carry']>): PlanSession[] {
+  const out = list.map(s => ({ ...s, notes: [...s.notes] }));
+  for (const [f, minutes] of Object.entries(carry)) {
+    const all = out.filter(s => famOf(s) === f && s.status === 'offen' && s.sport !== 'wettkampf');
+    const week = all.reduce((t, s) => t + s.minutes, 0);
+    const sess = all.filter(s => s.intensity !== 'hart');
+    let rest = Math.min(minutes ?? 0, week * 0.1);
+    for (const s of sess.sort((a, b) => Number(a.intensity !== 'locker') - Number(b.intensity !== 'locker'))) {
+      if (rest < 5) break;
+      const add = rnd5(Math.min(rest, s.minutes * 0.15));
+      if (add < 5) continue;
+      s.minutes += add; rest -= add;
+      s.notes.push(`+${add} min Ausgleich für ausgefallenes Training letzte Woche.`);
+    }
+  }
+  return out;
 }
 
 /* ---------- Kraft: tatsächlich trainierte Muskelgruppen ---------- */
