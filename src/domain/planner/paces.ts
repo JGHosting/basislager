@@ -1,7 +1,8 @@
 /**
  * Trainings-Paces fürs Laufen (min/km) nach Jack Daniels (VDOT).
  *
- * 1) Aktuelle Form (VDOT) aus deinen Läufen der letzten 12 Wochen:
+ * 1) Aktuelle Form (VDOT) aus deinen Läufen der letzten 12 Wochen (nach einer Pause: die 12 Wochen davor,
+ *    abgeschwächt je nach Pausenlänge – auch Pausen mitten im Fenster, z. B. Verletzung):
  *    – beste Abschnitte (Pace-Kurve von intervals.icu bzw. ganze Läufe) → VDOT
  *    – zusätzlich lockere Läufe (Puls ≤ 78 % HFmax) als Untergrenze, damit Tempoläufe das lockere Tempo nicht verfälschen
  * 2) Locker und lang kommen immer aus der aktuellen Form.
@@ -24,6 +25,8 @@ export interface Paces {
   vdot: number; quality: number;
   /** Ziel: benötigte Form und – falls nicht erreichbar – realistische Zeit (s) über die Zieldistanz. */
   goalVdot?: number; reachable?: { secs: number; km: number };
+  /** Aktuelle Laufpause in Wochen (≥ 2) – Form ist entsprechend abgeschwächt. */
+  pauseWeeks?: number;
 }
 export interface PaceOptions { ws?: string; curves?: CurveCache | null; hrMax?: number | null }
 
@@ -51,38 +54,65 @@ const FREE_STEP = 0.0025, FREE_MAX = 0.03;
 const DEFAULT_VDOT = 39;            // ≈ locker 6:15, Schwelle 5:15
 const TRI_RUN_PENALTY = 1.07;       // Laufen nach dem Rad ≈ 7 % langsamer als ein reiner Lauf
 
-/** Beste Abschnitte der letzten 12 Wochen (Kurve „84d“, sonst 1-Jahres-Kurve mit Datum im Fenster, plus ganze Läufe). */
-function recentEfforts(acts: Activity[], curves: CurveCache | null | undefined, since: string): Effort[] {
-  const out: Effort[] = [];
-  const recent = curves?.recent && curves.recentAt && Date.now() - curves.recentAt < 7 * 86400000 ? curves.recent : null;
-  const fromCurve = recent ?? Object.fromEntries(Object.entries(curves?.year ?? {}).filter(([, e]) => e.date && e.date >= since));
-  for (const [m, e] of Object.entries(fromCurve)) out.push({ ...e, m: Number(m) } as Effort & { m: number });
-  for (const [m, e] of Object.entries(effortsFromActivities(acts, since))) out.push({ ...e, m: Number(m) } as Effort & { m: number });
+const RUNNING = /^(Run|VirtualRun|TrailRun)$/;
+const GAP_DAYS = 10;                // ab so vielen Tagen ohne Lauf zählt es als Pause
+
+/**
+ * Formverlust durch Pausen (Verletzung, keine Läufe). Grob nach Daniels:
+ * die erste Woche kostet nichts, danach ≈ 1,8 % pro Woche, höchstens 20 %.
+ */
+export const detrain = (weeksOff: number) => (weeksOff <= 1 ? 1 : Math.max(0.8, 1 - 0.018 * (weeksOff - 1)));
+
+/** Pausen (≥ 10 Tage ohne Lauf) zwischen den Läufen und seit dem letzten Lauf. */
+function pauses(acts: Activity[], today: string): { from: string; days: number }[] {
+  const dates = [...new Set(acts.filter(a => RUNNING.test(a.sportType) && a.date <= today).map(a => a.date))].sort();
+  const out: { from: string; days: number }[] = [];
+  const days = (a: string, b: string) => Math.round((Date.parse(b) - Date.parse(a)) / 86400000);
+  for (let i = 1; i < dates.length; i++) { const d = days(dates[i - 1], dates[i]); if (d >= GAP_DAYS) out.push({ from: dates[i - 1], days: d }); }
+  if (dates.length) { const d = days(dates[dates.length - 1], today); if (d >= GAP_DAYS) out.push({ from: dates[dates.length - 1], days: d }); }
+  return out;
+}
+/** Abschwächungsfaktor für eine Leistung an Datum d: alle Pausen danach zusammengezählt. */
+const decayFor = (gaps: { from: string; days: number }[], d: string | undefined) =>
+  detrain(gaps.filter(g => !d || g.from >= d).reduce((s, g) => s + g.days, 0) / 7);
+
+type DatedEffort = Effort & { m: number };
+/** Beste Abschnitte im Fenster (Kurve „84d“ und 1-Jahres-Kurve mit Datum im Fenster, plus ganze Läufe). */
+function windowEfforts(acts: Activity[], curves: CurveCache | null | undefined, since: string): DatedEffort[] {
+  const out: DatedEffort[] = [];
+  const fresh = curves?.recentAt && Date.now() - curves.recentAt < 7 * 86400000;
+  const add = (src: Record<string, Effort> | undefined, needDate: boolean) => {
+    for (const [m, e] of Object.entries(src ?? {})) if (e.date ? e.date >= since : !needDate) out.push({ ...e, m: Number(m) });
+  };
+  if (fresh) add(curves!.recent, false);
+  add(curves?.year, true);
+  add(effortsFromActivities(acts, since), true);
   return out;
 }
 
-/** Form aus den schnellsten Abschnitten. 1 km nur, wenn nichts Längeres da ist (und dann 3 % vorsichtiger). */
-function effortVdot(efforts: Effort[]): number | null {
-  const withM = efforts as (Effort & { m: number })[];
-  const long = withM.filter(e => e.m >= 3000), pool = long.length ? long : withM;
+/** Form aus den schnellsten Abschnitten (je nach Pausen danach abgeschwächt). 1 km nur ohne Längeres (×0,97). */
+function effortVdot(efforts: DatedEffort[], gaps: { from: string; days: number }[]): number | null {
+  const long = efforts.filter(e => e.m >= 3000), pool = long.length ? long : efforts;
   let best: number | null = null;
   for (const e of pool) {
-    const v = vdotOf(e.m, e.secs) * (e.m < 3000 ? 0.97 : 1);
-    if (v > 20 && v < 85 && (best == null || v > best)) best = v;
+    const raw = vdotOf(e.m, e.secs);
+    if (!(raw > 20 && raw < 85)) continue;
+    const v = raw * (e.m < 3000 ? 0.97 : 1) * decayFor(gaps, e.date);
+    if (best == null || v > best) best = v;
   }
   return best;
 }
 
-/** Form-Untergrenze aus lockeren Läufen (Median-Pace ≈ lockeres Tempo). */
-function easyVdot(acts: Activity[], since: string, hrMax: number | null | undefined): number | null {
-  const runs = acts.filter(a => a.sportType === 'Run' && a.date >= since && (a.distance ?? 0) > 3000 && (a.duration ?? 0) > 900);
-  const calm = hrMax ? runs.filter(a => a.avgHr != null && a.avgHr <= hrMax * 0.78) : [];
+/** Form-Untergrenze aus lockeren Läufen (Median ≈ lockeres Tempo), je Lauf mit Pausen danach abgeschwächt. */
+function easyVdot(acts: Activity[], since: string, hrMax: number | null | undefined, gaps: { from: string; days: number }[]): number | null {
+  const runs = acts.filter(a => a.sportType === 'Run' && a.date >= since && (a.distance ?? 0) > 3000 && (a.duration ?? 0) > 900)
+    .map(a => ({ a, p: a.duration! / 60 / (a.distance! / 1000) })).filter(x => x.p > 3 && x.p < 9);
+  const calm = hrMax ? runs.filter(x => x.a.avgHr != null && x.a.avgHr <= hrMax * 0.78) : [];
   const use = calm.length >= 3 ? calm : runs;
-  const paces = use.map(a => a.duration! / 60 / (a.distance! / 1000)).filter(p => p > 3 && p < 9).sort((x, y) => x - y);
-  if (paces.length < 3) return null;
-  // Ohne Pulsfilter die langsamere Hälfte nehmen (Tempoläufe raus)
-  const p = calm.length >= 3 ? paces[Math.floor(paces.length / 2)] : paces[Math.floor(paces.length * 0.65)];
-  return vo2(1000 / p) / F.easyRun;
+  if (use.length < 3) return null;
+  // Ohne Pulsfilter eher die langsameren Läufe nehmen (Tempoläufe raus)
+  const vs = use.map(x => (vo2(1000 / x.p) / F.easyRun) * decayFor(gaps, x.a.date)).sort((x, y) => y - x);
+  return vs[Math.floor(vs.length * (calm.length >= 3 ? 0.5 : 0.65))];
 }
 
 /** Zielform aus Laufziel bzw. Triathlon-Laufzeit. */
@@ -100,9 +130,14 @@ function goalTarget(goal: Goal | null): { vdot: number; km: number; race: number
 const weeksBetween = (a: string, b: string) => Math.round((Date.parse(b) - Date.parse(a)) / 604800000);
 
 export function estimatePaces(activities: Activity[], goal: Goal | null, today: string, o: PaceOptions = {}): Paces {
-  const since = addDays(today, -84);
-  const eff = effortVdot(recentEfforts(activities, o.curves, since));
-  const easy = easyVdot(activities, since, o.hrMax);
+  // Fenster: 12 Wochen bis zum letzten Lauf (höchstens 1 Jahr zurück) – nach einer Pause zählen die Läufe davor, abgeschwächt
+  const lastRun = activities.filter(a => RUNNING.test(a.sportType) && a.date <= today && a.date >= addDays(today, -365)).reduce((m, a) => (a.date > m ? a.date : m), '');
+  const since = addDays(lastRun || today, -84);
+  const gaps = pauses(activities, today);
+  const eff = effortVdot(windowEfforts(activities, o.curves, since), gaps);
+  const easy = easyVdot(activities, since, o.hrMax, gaps);
+  const cur = gaps.find(g => g.from === lastRun);
+  const pauseWeeks = cur ? Math.round(cur.days / 7) : 0;
   const v0 = Math.max(eff ?? 0, easy ?? 0) || DEFAULT_VDOT;
   const source: Paces['source'] = eff != null && (easy == null || eff >= easy) ? 'form' : easy != null ? 'verlauf' : 'standard';
 
@@ -128,6 +163,6 @@ export function estimatePaces(activities: Activity[], goal: Goal | null, today: 
   return {
     easy: paceAt(v0, F.easy), long: paceAt(v0, F.long), threshold, interval: paceAt(quality, F.interval),
     ...(tgt ? { race: tgt.race, goalVdot: tgt.vdot } : {}), reachable,
-    source, vdot: v0, quality
+    source, vdot: v0, quality, ...(pauseWeeks >= 2 ? { pauseWeeks } : {})
   };
 }

@@ -109,7 +109,8 @@
     {#if w.extra.length}
       <p class="extra">Außerplanmäßig: {w.extra.map(e => `${e.text} (Belastung ${e.load})`).join(', ')}{w.adjusted ? ' → restliche Einheiten angepasst' : ''}</p>
     {/if}
-    <p class="sum muted small">Diese Woche ≈ {dur(w.minutes)} gesamt{w.runMinutes ? ` · Laufen ${dur(w.runMinutes)}` : ''} · Paces {w.paces.source === 'form' ? 'aus deiner aktuellen Form' : w.paces.source === 'verlauf' ? 'aus deinen lockeren Läufen' : 'Standardwerte'}{w.paces.goalVdot ? ', Qualität Richtung Zielzeit' : w.paces.quality > w.paces.vdot ? ', Qualität leicht gesteigert' : ''}: locker {fmtPace(w.paces.easy)}, Schwelle {fmtPace(w.paces.threshold)}{w.paces.race ? `, Wettkampf ${fmtPace(w.paces.race)}` : ''} min/km</p>
+    <p class="sum muted small">Diese Woche ≈ {dur(w.minutes)} gesamt{w.runMinutes ? ` · Laufen ${dur(w.runMinutes)}` : ''} · Paces {w.paces.source === 'form' ? 'aus deiner aktuellen Form' : w.paces.source === 'verlauf' ? 'aus deinen lockeren Läufen' : 'Standardwerte'}{w.paces.goalVdot ? ', Qualität Richtung Zielzeit' : w.paces.quality > w.paces.vdot ? ', Qualität leicht gesteigert' : ''}: Schwelle {fmtPace(w.paces.threshold)}, Intervall {fmtPace(w.paces.interval)}{w.paces.race ? `, Wettkampf ${fmtPace(w.paces.race)}` : ''} min/km · locker/lang nach Puls (Zone 2)</p>
+    {#if w.paces.pauseWeeks}<p class="muted small">Nach {w.paces.pauseWeeks} Wochen ohne Lauf sind die Paces vorsichtiger angesetzt und ziehen mit den nächsten Läufen wieder an.</p>{/if}
     {#if w.paces.reachable}<p class="warn small">Zielzeit sehr ehrgeizig: Mit gedeckelter Steigerung ist bis zum Rennen eher {fmtTime(w.paces.reachable.secs)} realistisch. Die Paces steigen trotzdem Schritt für Schritt Richtung Ziel.</p>{/if}
     {/if}
   </section>
