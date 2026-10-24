@@ -1,6 +1,6 @@
 /**
  * Trainingsbonus: Ausdauereinheiten geben zusätzliche Kalorien zum Tagesbudget.
- * Summe der aktiven Workout-Kalorien (Garmin, über intervals.icu) eines Tages → abflachende Kurve mit Obergrenze:
+ * Summe der aktiven Workout-Kalorien (Garmin-Gesamtwert über intervals.icu minus Ruheverbrauch) eines Tages → abflachende Kurve mit Obergrenze:
  *   raw = factor × kcal,  bonus = max × (1 − e^(−raw / max))
  * Der Garmin-Wert selbst wird nicht verändert, die Abschwächung läuft nur über factor und die Kurve.
  */
@@ -22,8 +22,25 @@ export const setDietMode = (on: boolean) => setSetting('dietMode', on);
 const ENDURANCE = /Run|Ride|Swim|Row|Hike|Mountaineering|Snowshoe|NordicSki|BackcountrySki|RollerSki|Elliptical|Kayaking|Canoeing|StandUpPaddling|InlineSkate|Handcycle|Velomobile/;
 export const isEndurance = (sportType: string) => ENDURANCE.test(sportType);
 
-/** Aktive Kalorien einer Einheit (aus der Liste, sonst aus geladenen Details). null = unbekannt. */
-export const activeKcal = (a: Activity): number | null => a.calories ?? a.extra?.calories ?? null;
+/** Gesamtkalorien einer Einheit laut Garmin (aus der Liste, sonst aus geladenen Details). null = unbekannt. */
+export const totalKcal = (a: Activity): number | null => a.calories ?? a.extra?.calories ?? null;
+
+/** Ruheverbrauch während der Einheit: 1 kcal pro kg und Stunde (= 1 MET). Ohne Gewicht 75 kg. */
+export const restKcal = (a: Activity, weightKg: number | null): number =>
+  ((weightKg ?? 75) * ((a.duration ?? a.elapsed ?? 0) / 3600));
+
+/** Aktive Kalorien = Garmin-Gesamtkalorien − Ruheverbrauch in dieser Zeit (Garmin liefert über intervals.icu nur den Gesamtwert). */
+export function activeKcal(a: Activity, weightKg: number | null): number | null {
+  const t = totalKcal(a);
+  return t == null ? null : Math.max(0, t - restKcal(a, weightKg));
+}
+
+/** Letztes Gewicht bis einschließlich zu diesem Tag (sonst das früheste bekannte). */
+async function weightOn(date: string): Promise<number | null> {
+  const before = await db.morning.where('date').belowOrEqual(date).reverse().filter(m => m.weight != null).first();
+  if (before?.weight != null) return before.weight;
+  return (await db.morning.orderBy('date').filter(m => m.weight != null).first())?.weight ?? null;
+}
 
 export function bonusFor(kcal: number, s: Pick<BonusSettings, 'maxBonus' | 'factor'>): number {
   if (!(kcal > 0) || !(s.maxBonus > 0) || !(s.factor > 0)) return 0;
@@ -38,8 +55,9 @@ export interface DayBudget extends TrainingBonus { base: number; total: number }
 export async function trainingBonus(date: string): Promise<TrainingBonus> {
   const s = await getBonusSettings();
   const acts = (await db.activities.where('date').equals(date).toArray()).filter(a => isEndurance(a.sportType));
+  const w = acts.length ? await weightOn(date) : null;
   let kcal = 0, n = 0;
-  for (const a of acts) { const k = activeKcal(a); if (k != null && k > 0) { kcal += k; n++; } }
+  for (const a of acts) { const k = activeKcal(a, w); if (k != null && k > 0) { kcal += k; n++; } }
   return { bonus: s.enabled ? bonusFor(kcal, s) : 0, workoutKcal: Math.round(kcal), workouts: n, enabled: s.enabled };
 }
 
