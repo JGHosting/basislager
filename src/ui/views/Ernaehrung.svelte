@@ -98,7 +98,7 @@
               <label>Anrechnung (0–1)<input bind:value={bFac} inputmode="decimal" placeholder="0,5" /></label>
             </div>
           {/if}
-          <p class="muted small">Nur ein Teil der Trainingskalorien wird angerechnet, da Geräte den Verbrauch überschätzen und der Körper kompensiert. Es zählen nur Ausdauereinheiten (Laufen, Rad, Schwimmen, Rudern, Wandern …), der Bonus flacht ab und endet beim Maximalwert.</p>
+          <p class="muted small">Grundlage sind die aktiven Kalorien (Garmin-Gesamtwert minus Ruheverbrauch während der Einheit, ca. 1 kcal pro kg Körpergewicht und Stunde). Davon wird nur ein Teil angerechnet, da Geräte den Verbrauch überschätzen und der Körper kompensiert. Es zählen nur Ausdauereinheiten (Laufen, Rad, Schwimmen, Rudern, Wandern …), der Bonus flacht ab und endet beim Maximalwert.</p>
 {/snippet}
 
 {#if $dietQ === false}
@@ -114,7 +114,7 @@
         <p class="muted small">Trainingsbonus ist ausgeschaltet.</p>
       {:else}
         <div class="big"><span><b>+{kcal(tb.bonus)}</b> kcal</span></div>
-        <p class="muted small bonus">{tb.workouts ? `${kcal(tb.workoutKcal)} kcal aus ${tb.workouts} ${tb.workouts === 1 ? 'Ausdauereinheit' : 'Ausdauereinheiten'}, davon angerechnet` : 'Noch keine Ausdauereinheit mit Kalorienangabe an diesem Tag.'}</p>
+        <p class="muted small bonus">{tb.workouts ? `${kcal(tb.workoutKcal)} aktive kcal aus ${tb.workouts} ${tb.workouts === 1 ? 'Ausdauereinheit' : 'Ausdauereinheiten'}, davon angerechnet` : 'Noch keine Ausdauereinheit mit Kalorienangabe an diesem Tag.'}</p>
       {/if}
       <p class="muted small">Abnehmmodus ist aus – kein Kalorienziel, Essen wird nicht getrackt. Umschalten unter Mehr → Körper.</p>
       <button class="link" onclick={startBonusEdit}>Bonus-Einstellungen</button>
@@ -159,7 +159,7 @@
           <span class="rest" class:over={eaten > goal}>{eaten > goal ? `${kcal(eaten - goal)} kcal über dem Ziel` : `${kcal(goal - eaten)} kcal übrig`}</span>
         </div>
         <KcalBar {eaten} {goal} />
-        {#if budget && budget.bonus > 0}<p class="muted small bonus">Basis {kcal(budget.base)} + Training {kcal(budget.bonus)} = {kcal(budget.total)} kcal <span>({kcal(budget.workoutKcal)} kcal aus {budget.workouts} {budget.workouts === 1 ? 'Einheit' : 'Einheiten'})</span></p>{/if}
+        {#if budget && budget.bonus > 0}<p class="muted small bonus">Basis {kcal(budget.base)} + Training {kcal(budget.bonus)} = {kcal(budget.total)} kcal <span>({kcal(budget.workoutKcal)} aktive kcal aus {budget.workouts} {budget.workouts === 1 ? 'Einheit' : 'Einheiten'})</span></p>{/if}
         {#if v.total.kcal.known < v.total.kcal.total}<p class="warn small">{v.total.kcal.total - v.total.kcal.known} Einträge ohne Kalorienangabe sind nicht mitgezählt.</p>{/if}
         <div class="mac"><MacroLine sum={v.total} big goals={$macroQ} /></div>
         {#if !$macroQ?.protein && !$macroQ?.carbs && !$macroQ?.fat}<button class="link" onclick={startEdit}>Makroziele festlegen</button>{/if}
