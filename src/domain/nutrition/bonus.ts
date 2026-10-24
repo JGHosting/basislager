@@ -18,8 +18,8 @@ export const setBonusSettings = (s: BonusSettings) => setSetting('trainingBonus'
 export const getDietMode = async () => (await getSetting<boolean>('dietMode')) ?? true;
 export const setDietMode = (on: boolean) => setSetting('dietMode', on);
 
-/** Nur Ausdauer zählt (Laufen, Rad, Schwimmen, Rudern, Langlauf, Wandern/Bergsteigen …) – nicht Kraft, Yoga, Gehen, Klettern, Ski alpin usw. */
-const ENDURANCE = /Run|Ride|Swim|Rowing|Hike|Mountaineering|Snowshoe|NordicSki|BackcountrySki|RollerSki|Elliptical|Kayaking|Canoeing|StandUpPaddling|InlineSkate|Handcycle|Velomobile/;
+/** Nur Ausdauer zählt (Laufen, Rad, Schwimmen, Rudern (auch Gerät), Langlauf, Wandern/Bergsteigen …) – nicht Kraft, Yoga, Gehen, Klettern, Ski alpin usw. */
+const ENDURANCE = /Run|Ride|Swim|Row|Hike|Mountaineering|Snowshoe|NordicSki|BackcountrySki|RollerSki|Elliptical|Kayaking|Canoeing|StandUpPaddling|InlineSkate|Handcycle|Velomobile/;
 export const isEndurance = (sportType: string) => ENDURANCE.test(sportType);
 
 /** Aktive Kalorien einer Einheit (aus der Liste, sonst aus geladenen Details). null = unbekannt. */
