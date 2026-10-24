@@ -10,7 +10,7 @@ export interface GoalWeight { id: GoalId; weight: 1 | 2 | 3 }
 
 export interface MobilitySettings {
   minutes: 5 | 10 | 15;
-  time: string;                // "HH:mm", nur informativ (Auslöser ist weiterhin die Garmin-Morgenmeldung)
+  time: string;                // "HH:mm" – ab dann Erinnerung/Sperre (Mehr → Training → Mobility)
   goals: GoalWeight[];
   intrusiveness: Intrusiveness;
   pauseMode: boolean;

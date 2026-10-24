@@ -13,6 +13,7 @@
   import GarminSettings from '../components/GarminSettings.svelte';
   import WarmupSettings from '../components/WarmupSettings.svelte';
   import FuelSettings from '../components/FuelSettings.svelte';
+  import MobilityTimeSettings from '../components/MobilityTimeSettings.svelte';
   import Statistik from './Statistik.svelte';
   import { getDietMode, setDietMode } from '../../domain/nutrition/bonus';
   const dietQ = liveQuery(() => getDietMode());
@@ -68,6 +69,8 @@
     <WarmupSettings />
     <h3 class="section">Verpflegung</h3>
     <FuelSettings />
+    <h3 class="section">Mobility</h3>
+    <MobilityTimeSettings />
   {:else if section === 'koerper'}
     <h3 class="section">Gewicht</h3>
     <WeightSettings />
