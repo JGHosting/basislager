@@ -827,7 +827,7 @@ function applyStrengthActual(list: PlanSession[], ctx: PlanContext, ws: string, 
  * 3) Belastungssprung (7-Tage- zu 42-Tage-Belastung > 1,4): restliche harte Einheiten der Woche werden entschärft.
  */
 const HIGH_LOAD = 120, VERY_HIGH = 200;
-const LEG_HEAVY = /Ride|Run|Hike|Walk|Ski|Snowboard|Climb|Rowing|Snowshoe/;
+const LEG_HEAVY = /Ride|Run|Hike|Walk|Ski|Snowboard|Climb|Row|Snowshoe/;
 const LOAD_PER_MIN: Record<Intensity, number> = { locker: 1.0, mittel: 1.5, hart: 2.0, wettkampf: 2.0 };
 const fmtDur = (m: number) => (m >= 60 ? `${Math.floor(m / 60)} h ${String(Math.round(m % 60)).padStart(2, '0')}` : `${Math.round(m)} min`);
 const endurance = (s: PlanSession) => s.sport !== 'kraft' && s.sport !== 'wettkampf';

@@ -21,7 +21,7 @@ export interface ActivityLoad { load: number; method: 'trimp' | 'estimated'; min
 export const SPORT_FACTOR: Record<string, number> = {
   Run: 1.3, VirtualRun: 1.3, TrailRun: 1.5, Ride: 1.0, VirtualRide: 1.1, GravelRide: 1.0, MountainBikeRide: 1.2, EBikeRide: 0.5,
   Swim: 1.1, OpenWaterSwim: 1.2, WeightTraining: 0.9, Workout: 1.0, Hike: 0.8, Walk: 0.4,
-  AlpineSki: 0.7, BackcountrySki: 1.3, NordicSki: 1.3, Snowboard: 0.6, RockClimbing: 0.8, Yoga: 0.3, Rowing: 1.2, Elliptical: 1.0
+  AlpineSki: 0.7, BackcountrySki: 1.3, NordicSki: 1.3, Snowboard: 0.6, RockClimbing: 0.8, Yoga: 0.3, Rowing: 1.2, VirtualRow: 1.2, Elliptical: 1.0
 };
 const DEFAULT_FACTOR = 0.8;
 /** Sportarten, bei denen Höhenmeter die Ersatzbelastung erhöhen (pro 100 hm). */

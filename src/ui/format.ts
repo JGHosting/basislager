@@ -4,7 +4,7 @@ const SPORT: Record<string, string> = {
   GravelRide: 'Gravel', MountainBikeRide: 'MTB', EBikeRide: 'E-Bike', Swim: 'Schwimmen', OpenWaterSwim: 'Freiwasser',
   WeightTraining: 'Kraft', Workout: 'Workout', Hike: 'Wandern', Walk: 'Gehen', AlpineSki: 'Ski',
   BackcountrySki: 'Skitour', NordicSki: 'Langlauf', Snowboard: 'Snowboard', RockClimbing: 'Klettern',
-  Yoga: 'Yoga', Rowing: 'Rudern', Elliptical: 'Crosstrainer', StandUpPaddling: 'SUP'
+  Yoga: 'Yoga', Rowing: 'Rudern', VirtualRow: 'Rudergerät', Elliptical: 'Crosstrainer', StandUpPaddling: 'SUP'
 };
 export const sportName = (t: string) => SPORT[t] ?? t;
 
