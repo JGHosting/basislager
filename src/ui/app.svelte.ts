@@ -121,7 +121,9 @@ async function syncMobilityAutoPause() {
 async function checkMobilityPrompt() {
   await syncMobilityAutoPause();
   const s = await getMobilitySettings();
-  const due = !s.pauseMode && (await mobilityDueToday());
+  // Erst ab der eingestellten Tageszeit erinnern (Mehr → Training → Mobility)
+  const d = new Date(), now = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+  const due = !s.pauseMode && now >= (s.time || '00:00') && (await mobilityDueToday());
   app.mobilityDue = due && s.intrusiveness !== 'aus';
   app.mobilityLocked = due && s.intrusiveness === 'brutal' && !app.mobilityPlayer;
   if (!app.mobilityDue || app.mobilityPlayer) { app.mobilityNag = false; return; }
@@ -141,6 +143,7 @@ export function closeMobilityPlayer() {
   app.mobilityPlayer = null;
   void checkMobilityPrompt();
 }
+export const recheckMobility = () => checkMobilityPrompt();
 export function dismissMobilityNag() { app.mobilityNag = false; }
 export async function skipMobilityToday() {
   await skipToday();
