@@ -17,7 +17,7 @@ import { ensureBuiltinSplits, dedupeStrength, autoAssignStrength } from '../doma
 import { liveQuery } from 'dexie';
 import { activeInjury } from '../domain/injury/injury';
 import { getMobilitySettings, setPauseMode } from '../domain/mobility/settings';
-import { ensureTodayRoutine, mobilityDueToday, skipToday } from '../domain/mobility/repo';
+import { ensureTodayRoutine, routineToPlay, mobilityDueToday, skipToday } from '../domain/mobility/repo';
 import type { Routine } from '../domain/mobility/select';
 
 const AUTO_SYNC_AFTER_MS = 10 * 60 * 1000;
@@ -137,7 +137,7 @@ async function checkMobilityPrompt() {
 
 export async function startMobilityNow() {
   app.mobilityNag = false;
-  app.mobilityPlayer = await ensureTodayRoutine();
+  app.mobilityPlayer = await routineToPlay();
 }
 export function closeMobilityPlayer() {
   app.mobilityPlayer = null;

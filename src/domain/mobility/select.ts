@@ -17,7 +17,7 @@ export interface RoutineItem {
   exerciseId: string;
   holdSec?: number; reps?: number; sides: boolean;
 }
-export interface Routine { date: string; minutes: number; items: RoutineItem[] }
+export interface Routine { date: string; minutes: number; items: RoutineItem[]; repeat?: boolean }
 
 const SLOTS: Record<MobilitySettings['minutes'], number> = { 5: 4, 10: 8, 15: 12 };
 

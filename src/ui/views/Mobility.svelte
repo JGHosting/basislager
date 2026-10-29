@@ -21,6 +21,9 @@
 
   const pct = $derived($row ? Math.round(completion($row) * 100) : 0);
   const isDone = $derived(pct / 100 >= DONE_THRESHOLD);
+  const openCount = $derived($row ? $row.items.filter(i => !i.done).length : 0);
+  const allDone = $derived(!!$row && $row.items.length > 0 && openCount === 0);
+  const someDone = $derived(!!$row && $row.items.some(i => i.done));
 
   // Entwurf: Ziele, Gewichte, Länge und Aufdringlichkeit werden erst mit "Routine aktualisieren" übernommen
   type Draft = Pick<MobilitySettings, 'goals' | 'minutes' | 'intrusiveness'>;
@@ -82,7 +85,7 @@
     <p class="inj small">Rücksicht auf deine Verletzung ({$injury.region}, Stufe „{STAGES[$injury.stage]?.label}“): {excludedCount($injury)} Übungen pausieren, sie werden automatisch ersetzt.</p>
   {/if}
   {#if !($injury && $injury.stage === 0)}
-    <button class="btn primary wide" onclick={startMobilityNow}>{isDone ? 'Erneut durchführen' : $row ? 'Weiter' : 'Routine starten'}</button>
+    <button class="btn primary wide" onclick={startMobilityNow}>{allDone ? 'Nochmal machen' : someDone ? `Weiter (${openCount} offen)` : 'Routine starten'}</button>
   {/if}
 </section>
 
