@@ -59,13 +59,14 @@ async function storeActivities(list: IcuActivity[]): Promise<{ stored: number; s
       date: a.start_date_local.slice(0, 10),
       duration: a.moving_time ?? null,
       elapsed: a.elapsed_time ?? null,
-      distance: a.distance ?? null,
+      distance: prev?.manual?.distance ?? a.distance ?? null,
       elevationGain: a.total_elevation_gain ?? null,
       avgHr: a.average_heartrate ?? null,
       maxHr: a.max_heartrate ?? null,
       sourceLoad: a.icu_training_load ?? null,
       calories: a.calories ?? prev?.calories ?? null,
       ...(prev?.extra ? { extra: prev.extra } : {}),   // geladene Detaildaten beim Abgleich behalten
+      ...(prev?.manual ? { manual: prev.manual } : {}), // von Hand nachgetragene Werte behalten
       createdAt: prev?.createdAt ?? now,
       updatedAt: now
     });

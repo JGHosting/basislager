@@ -12,7 +12,7 @@
  *    Da alles bei jedem Öffnen aus den aktuellen Läufen neu berechnet wird, laufen die Ziele der Form nie davon.
  * 4) Wettkampftempo = Zielzeit. Liegt das Ziel deutlich über dem bis zum Rennen Erreichbaren, gibt es eine Prognose.
  */
-import type { Activity, Goal } from '../../core/db';
+import type { Activity, Goal, IndoorKind } from '../../core/db';
 import { addDays, weekStart } from '../../core/dates';
 import { TRI } from './goals';
 import { effortsFromActivities, type CurveCache, type Effort } from './besttimes';
@@ -103,6 +103,22 @@ function effortVdot(efforts: DatedEffort[], gaps: { from: string; days: number }
   return best;
 }
 
+/**
+ * Laufband-Qualitätseinheiten: eingetragenes Tempo im Hauptteil ≈ Anteil der Maximalleistung je Einheit
+ * (eher vorsichtig, damit die Form nicht überschätzt wird). Bergintervalle zählen nicht (Steigung).
+ */
+const INDOOR_FRAC: Partial<Record<IndoorKind, number>> = { intervall: 0.975, schwelle: 0.88, tempo: 0.85, wettkampf: 0.9, fahrtspiel: 0.95 };
+function indoorVdot(acts: Activity[], since: string, gaps: { from: string; days: number }[]): number | null {
+  let best: number | null = null;
+  for (const a of acts) {
+    const m = a.manual, f = m?.kind ? INDOOR_FRAC[m.kind] : undefined;
+    if (a.date < since || !m?.speed || !f || m.speed < 6 || m.speed > 30) continue;
+    const v = vo2(m.speed * 1000 / 60) / f * decayFor(gaps, a.date);
+    if (v > 20 && v < 85 && (best == null || v > best)) best = v;
+  }
+  return best;
+}
+
 /** Form-Untergrenze aus lockeren Läufen (Median ≈ lockeres Tempo), je Lauf mit Pausen danach abgeschwächt. */
 function easyVdot(acts: Activity[], since: string, hrMax: number | null | undefined, gaps: { from: string; days: number }[]): number | null {
   const runs = acts.filter(a => a.sportType === 'Run' && a.date >= since && (a.distance ?? 0) > 3000 && (a.duration ?? 0) > 900)
@@ -134,7 +150,8 @@ export function estimatePaces(activities: Activity[], goal: Goal | null, today: 
   const lastRun = activities.filter(a => RUNNING.test(a.sportType) && a.date <= today && a.date >= addDays(today, -365)).reduce((m, a) => (a.date > m ? a.date : m), '');
   const since = addDays(lastRun || today, -84);
   const gaps = pauses(activities, today);
-  const eff = effortVdot(windowEfforts(activities, o.curves, since), gaps);
+  const outdoor = effortVdot(windowEfforts(activities, o.curves, since), gaps), indoor = indoorVdot(activities, since, gaps);
+  const eff = outdoor == null ? indoor : indoor == null ? outdoor : Math.max(outdoor, indoor);
   const easy = easyVdot(activities, since, o.hrMax, gaps);
   const cur = gaps.find(g => g.from === lastRun);
   const pauseWeeks = cur ? Math.round(cur.days / 7) : 0;

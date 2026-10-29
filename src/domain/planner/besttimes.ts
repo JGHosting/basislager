@@ -33,7 +33,8 @@ export function effortsFromActivities(acts: Activity[], since?: string): Record<
   for (const d of BEST_DISTANCES) {
     let best: Effort | null = null;
     for (const a of acts) {
-      if (!ROAD.test(a.sportType) || !a.distance || !a.duration || (since && a.date < since)) continue;
+      // Laufband: Garmins Distanz ist geschätzt und meist falsch – nur von Hand eingetragene zählt
+      if (!ROAD.test(a.sportType) || (a.sportType === 'VirtualRun' && !a.manual?.distance) || !a.distance || !a.duration || (since && a.date < since)) continue;
       if (a.distance < d.m * 0.995 || a.distance > d.m * 1.15) continue;
       const secs = a.duration * d.m / a.distance;
       if (secs / (d.m / 1000) < 150) continue;                      // < 2:30 min/km → Messfehler

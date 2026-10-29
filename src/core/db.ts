@@ -27,10 +27,23 @@ export interface Activity {
   calories?: number | null;
   /** Zusatzdaten, beim ersten Öffnen der Detailansicht von intervals.icu geladen und gespeichert. */
   extra?: ActivityExtra;
+  /** Von Hand nachgetragen (Laufband/Indoor-Rad). Bleibt beim Abgleich erhalten; distance ersetzt den Garmin-Wert. */
+  manual?: ManualEntry;
   createdAt: number;
   updatedAt: number;
 }
 
+export type IndoorKind = 'intervall' | 'schwelle' | 'tempo' | 'wettkampf' | 'fahrtspiel' | 'berg';
+export interface ManualEntry {
+  /** Gesamtstrecke in Metern (falls eingegeben). */
+  distance?: number | null;
+  /** Laufband: Tempo im Hauptteil in km/h. */
+  speed?: number | null;
+  /** Art der Qualitätseinheit, zu der das Tempo gehört. */
+  kind?: IndoorKind | null;
+  /** Nachfrage beantwortet oder übersprungen. */
+  done: true;
+}
 export interface ActivityExtra {
   calories?: number | null; avgSpeed?: number | null; maxSpeed?: number | null; cadence?: number | null;
   avgWatts?: number | null; npWatts?: number | null; elevLoss?: number | null; altMin?: number | null; altMax?: number | null;
