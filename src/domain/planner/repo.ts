@@ -29,10 +29,28 @@ export async function loadContext(): Promise<PlanContext> {
   const hr = hrProfile(activities, morning.filter(m => m.restingHr != null).map(m => m.restingHr!), { max: hrMax, rest: hrRest }, today());
   const warmupSettings = await getWarmupSettings();
   const curves = (await getSetting<CurveCache>('bestCurves')) ?? null;
-  return {
+  const ctx: PlanContext = {
     today: today(), activities, strength, split: splitId ? (await db.splits.get(splitId)) ?? null : null,
     goal, injury: activeInjury(injuries), events, edits: new Map(edits.map(e => [e.key, e])), runsPerWeek: runs ?? 3, strengthPerWeek: kraftN ?? 3, sports, vacations, hr, physio: physioIds(activities, injuries), warmupSettings, curves
   };
+  ctx.strengthDrift = await ensureStrengthDrift(ctx);
+  return ctx;
+}
+
+/**
+ * Versatz des Kraftplans je Woche festhalten: Was letzte Woche verschoben/ausgefallen ist, lässt den Plan
+ * dauerhaft versetzt weiterlaufen. Beim ersten Start der Funktion beginnt die laufende Woche ohne Versatz.
+ */
+async function ensureStrengthDrift(ctx: PlanContext): Promise<Record<string, number>> {
+  const cw = weekStart(ctx.today);
+  const saved = await getSetting<Record<string, number>>('strengthDrift');
+  if (saved && saved[cw] != null) return saved;
+  const drift: Record<string, number> = { ...(saved ?? {}) };
+  ctx.strengthDrift = drift;
+  drift[cw] = saved ? buildWeek(addDays(cw, -7), ctx).strengthEnd ?? 0 : 0;
+  for (const k of Object.keys(drift)) if (k < addDays(cw, -84)) delete drift[k];
+  await setSetting('strengthDrift', drift);
+  return drift;
 }
 
 export async function planWeeks(fromWs: string, count: number): Promise<{ ctx: PlanContext; weeks: PlanWeek[] }> {
