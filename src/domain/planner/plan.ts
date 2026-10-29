@@ -886,6 +886,7 @@ function applyStrengthActual(list: PlanSession[], ctx: PlanContext, ws: string, 
   });
   if (!ctx.split || ws !== weekStart(t)) return out;
   const idx = (d: string) => Math.round((Date.parse(d) - Date.parse(ws)) / 86400000);
+  relabelSkipped(out, ctx, ws, done);
   const open = out.filter(s => s.sport === 'kraft' && s.status === 'offen' && s.date >= t && !s.key.endsWith(':ausgleich')).sort((a, b) => a.date.localeCompare(b.date));
   if (!open.length) return out;
   const start = nextSplitDay(ctx.split, done.filter(x => x.date <= t)).index;
@@ -901,6 +902,26 @@ function applyStrengthActual(list: PlanSession[], ctx: PlanContext, ws: string, 
     const k = kraft(ws, a.day, s.key.split(':')[1], a.groups, s.intensity === 'locker', a.noLegs || keepNoLegs);
     return { ...k, key: s.key, date: s.date, origDate: s.origDate, moved: s.moved, status: s.status, notes: [...new Set([...s.notes.filter(n => !/Beintraining/.test(n)), ...k.notes])] };
   });
+}
+
+/**
+ * Ausgelassene Krafteinheiten zeigen die Muskelgruppen, die an diesem Tag laut Split dran gewesen wären
+ * (nicht die ursprüngliche Planung vom Wochenbeginn). Ausgelassenes rückt den Split nicht weiter.
+ */
+function relabelSkipped(out: PlanSession[], ctx: PlanContext, ws: string, done: StrengthSession[]) {
+  const split = ctx.split!, L = split.days.length;
+  const ordered = out.filter(s => s.sport === 'kraft' && !s.key.endsWith(':ausgleich')).sort((a, b) => a.date.localeCompare(b.date));
+  let ptr = nextSplitDay(split, done.filter(x => x.date < ws)).index;
+  for (const s of ordered) {
+    if (s.status === 'erledigt') { ptr = nextSplitDay(split, done.filter(x => x.date <= s.date)).index; continue; }
+    if (s.status === 'offen') { ptr = (ptr + 1) % L; continue; }
+    const groups = [...split.days[ptr % L]];
+    if (s.groups && s.groups.length === groups.length && s.groups.every(g => groups.includes(g))) continue;
+    const i = out.indexOf(s);
+    const k = kraft(ws, idx(s.date), s.key.split(':')[1], groups, s.intensity === 'locker', false);
+    out[i] = { ...s, groups: k.groups, title: k.title };
+  }
+  function idx(d: string) { return Math.round((Date.parse(d) - Date.parse(ws)) / 86400000); }
 }
 
 /* ---------- Wechselwirkung mit außerplanmäßigem Training ---------- */
