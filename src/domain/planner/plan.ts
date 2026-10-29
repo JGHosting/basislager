@@ -182,12 +182,20 @@ function strengthGroups(ctx: PlanContext, ws: string, count: number): MuscleGrou
     start = nextSplitDay(ctx.split, ctx.strength.filter(s => s.date < weekStart(ctx.today))).index;
   } else {
     // Zukünftige Wochen: ab der zuletzt tatsächlich trainierten Einheit + noch offene Krafttage dieser Woche
-    const t = ctx.today, cws = weekStart(t);
-    const trainedToday = ctx.strength.some(x => x.date === t && !x.skipped && x.muscleGroups.length);
-    const remaining = KRAFT_DAYS[kraftCount(ctx)].filter(d => DAY(cws, d) > t || (DAY(cws, d) === t && !trainedToday)).length;
+    const t = ctx.today;
+    const remaining = openStrengthThisWeek(ctx);
     start = nextSplitDay(ctx.split, ctx.strength.filter(x => x.date <= t)).index + remaining + (thisWeekOffset - 1) * kraftCount(ctx);
   }
   return Array.from({ length: count }, (_, i) => [...ctx.split!.days[(start + i) % ctx.split!.days.length]]);
+}
+/** Noch offene Krafteinheiten der laufenden Woche (nach Verschieben, Auslassen, Erledigt) – daran schließt die nächste Woche an. */
+const openCache = new WeakMap<PlanContext, number>();
+function openStrengthThisWeek(ctx: PlanContext): number {
+  const hit = openCache.get(ctx); if (hit != null) return hit;
+  const cur = buildWeek(weekStart(ctx.today), ctx);
+  const n = cur.sessions.filter(s => s.sport === 'kraft' && s.status === 'offen' && s.date >= ctx.today).length;
+  openCache.set(ctx, n);
+  return n;
 }
 const hasLegs = (g: MuscleGroup[]) => g.includes('beine') || g.includes('ganzkoerper');
 function kraft(ws: string, day: number, slot: string, groups: MuscleGroup[], light: boolean, noLegs: boolean): PlanSession {
@@ -473,10 +481,12 @@ export function buildWeek(ws: string, ctx: PlanContext): PlanWeek {
   let out = applyVacation(sessions, ctx.vacations ?? [], !!g, ws);
   if (ctx.injury) out = applyInjury(out, ctx.injury, ws, ctx.vacations ?? []);
   out = applyEdits(out, ctx.edits);
+  out = applyStrengthShift(out, ctx.edits, ws);
   const used = new Set<string>();
   out = applyDone(out, ctx.activities.filter(a => !ctx.physio?.has(a.id)), ctx.today, used, ws, ctx.hr?.max ?? 190);
   if (ws === weekStart(ctx.today)) out = applyMissed(out, ctx.today, ws, ctx.edits);
   out = applyStrengthActual(out, ctx, ws, phase === 'wettkampfwoche');
+  out = applyStrengthMissed(out, ctx.today, ctx.edits);
   const inter = applyInteractions(out, ctx, ws, used);
   out = inter.list;
   // Ausgleich nur im Wettkampfplan (nicht im Trainingsalltag), nicht bei Verletzung, Taper, Wettkampf- und Erholungswochen
@@ -656,6 +666,48 @@ function applyEdits(list: PlanSession[], edits: Map<string, PlanEdit>): PlanSess
     return { ...s, date: e.movedTo ?? s.date, moved: !!e.movedTo && e.movedTo !== s.origDate, status: e.status ?? s.status, skipped: e.status === 'ausgelassen' ? 'manuell' as const : s.skipped };
   });
 }
+/**
+ * Krafteinheit von Hand nach hinten verschoben: Krafteinheiten, die dort schon liegen, rücken je einen Tag mit –
+ * bis zum nächsten freien Tag (der Ruhetag rückt so einen Tag nach hinten). Ausdauer bleibt, wo sie ist.
+ * Was über den Sonntag hinausrutscht, entfällt; der Split macht nächste Woche einfach weiter.
+ */
+function applyStrengthShift(list: PlanSession[], edits: Map<string, PlanEdit>, ws: string): PlanSession[] {
+  const end = addDays(ws, 6);
+  const out = list.map(s => ({ ...s, notes: [...s.notes] }));
+  const manual = (s: PlanSession) => !!edits.get(s.key)?.movedTo || !!edits.get(s.key)?.status;
+  const kraftList = out.filter(s => s.sport === 'kraft' && s.status !== 'ausgelassen');
+  const movers = kraftList.filter(s => edits.get(s.key)?.movedTo && s.date > s.origDate).sort((a, b) => a.date.localeCompare(b.date));
+  for (const m of movers) {
+    let cur = m;
+    for (let guard = 0; guard < 14; guard++) {
+      const blocker = kraftList.find(o => o !== cur && o.date === cur.date && o.status !== 'ausgelassen');
+      if (!blocker) break;
+      if (manual(blocker) || blocker.status !== 'offen') {
+        if (cur === m) break;                       // fester Termin: nicht weiter verdrängen
+        cur.date = addDays(cur.date, 1); continue;  // an festem Termin vorbei
+      }
+      blocker.date = addDays(blocker.date, 1); blocker.moved = true;
+      if (!blocker.notes.some(n => /rückt/.test(n))) blocker.notes.push(`Rückt einen Tag nach hinten (${m.title.replace('Kraft · ', '')} wurde verschoben).`);
+      if (blocker.date > end) {
+        blocker.date = end; blocker.status = 'ausgelassen'; blocker.skipped = 'verpasst';
+        blocker.notes.push('Passt diese Woche nicht mehr rein – der Split geht nächste Woche weiter.');
+        break;
+      }
+      cur = blocker;
+    }
+  }
+  return out;
+}
+
+/** Krafteinheit verpasst (Tag vorbei, nicht erledigt): entfällt; die ausgefallenen Muskelgruppen kommen als Nächstes dran. */
+function applyStrengthMissed(list: PlanSession[], today: string, edits: Map<string, PlanEdit>): PlanSession[] {
+  return list.map(s => {
+    if (s.sport !== 'kraft' || s.status !== 'offen' || s.date >= today || edits.get(s.key)?.status) return s;
+    return { ...s, status: 'ausgelassen' as const, skipped: 'verpasst' as const,
+      notes: [...s.notes, `Am ${fmtWeekday(s.date)} nicht gemacht – die Muskelgruppen kommen als Nächstes dran.`] };
+  });
+}
+
 const FAMILY: Record<PlanSport, RegExp> = { kraft: /Weight|Workout/, lauf: /Run/, trail: /Run/, rad: /Ride/, schwimmen: /Swim/, gehen: /Hike|Walk/, wettkampf: /./ };
 function applyDone(list: PlanSession[], acts: Activity[], today: string, used: Set<string>, ws: string, hrMax = 190): PlanSession[] {
   // 1) Gleicher Tag, gleiche Sportart

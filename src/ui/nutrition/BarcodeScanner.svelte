@@ -1,6 +1,7 @@
 <script lang="ts">
   /** Kamera-Scanner (ZXing). Safari kennt die native BarcodeDetector-API nicht, ZXing läuft überall. */
   import { onMount } from 'svelte';
+  import { acquireCamera, parkCamera } from './camera';
   let { ondetect, onclose }: { ondetect: (code: string) => void; onclose: () => void } = $props();
   let video: HTMLVideoElement;
   let error = $state('');
@@ -12,8 +13,9 @@
       try {
         const { BrowserMultiFormatReader } = await import('@zxing/browser');
         const reader = new BrowserMultiFormatReader();
-        const controls = await reader.decodeFromConstraints(
-          { video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 } } }, video,
+        const stream = await acquireCamera();
+        if (cancelled) { stream.getTracks().forEach((t) => t.stop()); return; }
+        const controls = await reader.decodeFromStream(stream, video,
           (result) => { if (result && !cancelled) { cancelled = true; controls.stop(); navigator.vibrate?.(40); ondetect(result.getText()); } }
         );
         stop = () => controls.stop();
@@ -24,7 +26,7 @@
           : 'Kamera konnte nicht gestartet werden. Gib den Barcode unten ein.';
       }
     })();
-    return () => { cancelled = true; stop?.(); };
+    return () => { cancelled = true; stop?.(); parkCamera(); };
   });
   let manual = $state('');
 </script>

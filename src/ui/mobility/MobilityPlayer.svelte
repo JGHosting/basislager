@@ -42,7 +42,9 @@
   });
 
   /* ---------- Halte-Timer: startet erst auf „Start“, Signalton am Ende ---------- */
-  type TState = 'idle' | 'running' | 'paused' | 'done';
+  type TState = 'idle' | 'prep' | 'running' | 'paused' | 'done';
+  const PREP_MS = 1000;   // kurz in Position bringen, bevor die Zeit läuft
+  let prepUntil = 0;
   let tstate = $state<TState>('idle');
   let remaining = $state(0);
   let endAt = 0;
@@ -55,16 +57,23 @@
   $effect(() => { void idx; void step?.exerciseId; resetTimer(); return () => clearInterval(tick); });
   function update() {
     // Zeit aus der Uhr, nicht aus Intervall-Ticks – stimmt auch nach Bildschirmsperre
-    remaining = Math.max(0, Math.ceil((endAt - Date.now()) / 1000));
+    const now = Date.now();
+    if (tstate === 'prep') { if (now < prepUntil) return; tstate = 'running'; }
+    remaining = Math.max(0, Math.ceil((endAt - now) / 1000));
     if (remaining <= 0) { clearInterval(tick); tstate = 'done'; beep(); }
   }
   function start() {
     unlockAudio();
-    endAt = Date.now() + remaining * 1000;
-    tstate = 'running';
+    prepUntil = Date.now() + PREP_MS;
+    endAt = prepUntil + remaining * 1000;
+    tstate = 'prep';
     clearInterval(tick); tick = setInterval(update, 250);
   }
-  function pause() { clearInterval(tick); update(); if (tstate === 'running') tstate = 'paused'; }
+  function pause() {
+    clearInterval(tick);
+    if (tstate === 'prep') { tstate = 'paused'; return; }
+    update(); if (tstate === 'running') tstate = 'paused';
+  }
   function restart() { resetTimer(); start(); }
 
   /* ---------- Feedback nach „Gemacht ✓“ (freiwillig, nach 4 s = „passt“) ---------- */
@@ -84,7 +93,7 @@
     if (isLast) return finish();
     idx++;
   }
-  function finish() { clearInterval(tick); finished = true; void finishToday(false); }
+  function finish() { clearInterval(tick); finished = true; if (!routine.repeat) void finishToday(false); }
   /** Bestätigt: bei der ersten Seite → zur zweiten Seite, sonst Übung als gemacht speichern, kurz Feedback, weiter. */
   function confirm() {
     if (!step) return;
@@ -119,7 +128,7 @@
   async function close(allDone: boolean) {
     // Offenes Feedback beim Schließen als „passt“ werten
     if (asking) { const id = asking; asking = null; clearTimeout(fbTimer); await rateExercise(id, 'passt'); }
-    if (allDone) await finishToday(true);
+    if (allDone && !routine.repeat) await finishToday(true);
     closeMobilityPlayer();
   }
   const mm = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
@@ -162,10 +171,12 @@
     <p class="instr">{ex.instructions}</p>
 
     {#if step.holdSec}
-      <div class="timer" class:done={tstate === 'done'} class:dim={tstate === 'idle' || tstate === 'paused'}>
+      <div class="timer" class:done={tstate === 'done'} class:dim={tstate === 'idle' || tstate === 'paused' || tstate === 'prep'}>
         <span class="time">{tstate === 'done' ? 'Zeit um ✓' : mm(remaining)}</span>
         {#if tstate === 'idle'}
           <button class="btn primary tbtn" onclick={start}>▶ Start</button>
+        {:else if tstate === 'prep'}
+          <button class="btn ghost tbtn" onclick={pause}>Gleich …</button>
         {:else if tstate === 'running'}
           <button class="btn ghost tbtn" onclick={pause}>Pause</button>
         {:else if tstate === 'paused'}

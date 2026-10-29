@@ -141,3 +141,16 @@ export async function rateExercise(exerciseId: string, fb: Feedback) {
   const s = await getMobilitySettings();
   return recordExercise(exerciseId, fb, s.level);
 }
+
+/**
+ * Routine zum Abspielen: nur die heute noch offenen Übungen. Sind alle erledigt,
+ * kommt die ganze Routine nochmal als Wiederholung (zählt nicht erneut).
+ */
+export async function routineToPlay(): Promise<Routine> {
+  const routine = await ensureTodayRoutine();
+  const row = await todayLog();
+  const done = new Set(row?.items.filter(i => i.done).map(i => i.exerciseId) ?? []);
+  const open = routine.items.filter(i => !done.has(i.exerciseId));
+  if (!open.length) return { ...routine, repeat: true };
+  return { ...routine, items: open };
+}
