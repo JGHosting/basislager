@@ -14,6 +14,7 @@
   import KcalBar from '../nutrition/KcalBar.svelte';
   import InjuryCard from '../injury/InjuryCard.svelte';
   import SessionCard from '../planner/SessionCard.svelte';
+  import IndoorPrompt from '../planner/IndoorPrompt.svelte';
   import { sessionsOn } from '../../domain/planner/repo';
   import { adaptToLight } from '../../domain/planner/plan';
   import { TRAINING_LABEL, vacationToday, vacationSportLabel } from '../../domain/vacation/vacation';
@@ -116,6 +117,7 @@
   {/if}
   {#if $calc?.injury}<InjuryCard injury={$calc.injury} />{/if}
   {#if $calc}<AmpelCard rec={$calc.recovery} injury={!!$calc.injury} />{/if}
+  <IndoorPrompt />
   {#if $todayPlan}
     <section class="card">
       <div class="card-head"><h2>Heute geplant</h2><a class="more" href="#/plan">Wochenplan →</a></div>
