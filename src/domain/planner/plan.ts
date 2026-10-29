@@ -752,7 +752,9 @@ function applyStrengthChain(list: PlanSession[], ctx: PlanContext, ws: string): 
     if (s.date > prev) prev = s.date;
   }
   // Über den Sonntag hinaus: erscheint in der Folgewoche
-  return { list: out.filter(s => !(s.sport === 'kraft' && s.date > end && !ctx.edits.get(s.key)?.movedTo)), offset };
+  // Durch das Nachrücken in den Urlaub gerutscht: entfällt (im Urlaub kein Kraft)
+  const inVacation = (d: string) => (ctx.vacations ?? []).some(v => d >= v.start && d <= v.end);
+  return { list: out.filter(s => !(s.sport === 'kraft' && ((s.date > end && !ctx.edits.get(s.key)?.movedTo) || (s.status === 'offen' && inVacation(s.date))))), offset };
 }
 const diffDays = (a: string, b: string) => Math.round((Date.parse(b) - Date.parse(a)) / 86400000);
 
