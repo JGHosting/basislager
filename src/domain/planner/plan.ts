@@ -52,6 +52,8 @@ export interface PlanWeek {
   carry?: Partial<Record<'lauf' | 'rad' | 'schwimmen', number>>;
   /** Versatz der Krafttage (Tage, 0–6), mit dem die Folgewoche startet. */
   strengthEnd?: number;
+  /** Split-Tag (Index), mit dem die Folgewoche weitermacht. */
+  strengthNext?: number;
 }
 export interface PlanContext {
   today: string; activities: Activity[]; strength: StrengthSession[]; split: SplitTemplate | null;
@@ -186,21 +188,23 @@ function strengthGroups(ctx: PlanContext, ws: string, count: number): MuscleGrou
     start = nextSplitDay(ctx.split, ctx.strength.filter(s => s.date < weekStart(ctx.today))).index;
   } else {
     // Zukünftige Wochen: ab der zuletzt tatsächlich trainierten Einheit + noch offene Krafttage dieser Woche
-    const t = ctx.today;
-    const remaining = openStrengthThisWeek(ctx);
-    start = nextSplitDay(ctx.split, ctx.strength.filter(x => x.date <= t)).index + remaining + (thisWeekOffset - 1) * kraftCount(ctx);
+    start = splitStart(ws, ctx);
   }
   return Array.from({ length: count }, (_, i) => [...ctx.split!.days[(start + i) % ctx.split!.days.length]]);
 }
 /** Noch offene Krafteinheiten der laufenden Woche (nach Verschieben, Auslassen, Erledigt) – daran schließt die nächste Woche an. */
-const weekCache = new WeakMap<PlanContext, PlanWeek>();
-function currentWeek(ctx: PlanContext): PlanWeek {
-  let w = weekCache.get(ctx);
-  if (!w) { w = buildWeek(weekStart(ctx.today), ctx); weekCache.set(ctx, w); }
+const weekCache = new WeakMap<PlanContext, Map<string, PlanWeek>>();
+/** Gebaute Woche (je Kontext zwischengespeichert) – Folgewochen bauen aufeinander auf. */
+function cachedWeek(ctx: PlanContext, ws: string): PlanWeek {
+  let m = weekCache.get(ctx);
+  if (!m) { m = new Map(); weekCache.set(ctx, m); }
+  let w = m.get(ws);
+  if (!w) { w = buildWeek(ws, ctx); m.set(ws, w); }
   return w;
 }
-function openStrengthThisWeek(ctx: PlanContext): number {
-  return currentWeek(ctx).sessions.filter(s => s.sport === 'kraft' && s.status === 'offen' && s.date >= ctx.today).length;
+/** Split-Tag, mit dem eine zukünftige Woche beginnt: dort, wo die Vorwoche aufhört (Ausgelassenes rückt den Split nicht weiter). */
+function splitStart(ws: string, ctx: PlanContext): number {
+  return cachedWeek(ctx, addDays(ws, -7)).strengthNext ?? 0;
 }
 const hasLegs = (g: MuscleGroup[]) => g.includes('beine') || g.includes('ganzkoerper');
 /** Ziel, das für diese Woche gilt. */
@@ -216,7 +220,7 @@ function baseKraftDays(ws: string, ctx: PlanContext): number[] {
 function weekDrift(ws: string, ctx: PlanContext): number {
   const cw = weekStart(ctx.today);
   if (ws <= cw) return ctx.strengthDrift?.[ws] ?? 0;
-  return currentWeek(ctx).strengthEnd ?? 0;
+  return cachedWeek(ctx, addDays(ws, -7)).strengthEnd ?? 0;
 }
 /** Krafttage mit Versatz: was über den Sonntag rutscht, landet in der Folgewoche; Ruhetage rücken mit. */
 function kraftDays(ws: string, ctx: PlanContext): number[] {
@@ -532,7 +536,16 @@ export function buildWeek(ws: string, ctx: PlanContext): PlanWeek {
   const runMinutes = out.filter(s => (s.sport === 'lauf' || s.sport === 'trail') && s.status !== 'ausgelassen').reduce((t, s) => t + s.minutes, 0);
   const events: FixedEvent[] = [];   // Fixtermine sind in den Urlaub übergegangen
   return { weekStart: ws, phase, goal: g, weekNo, totalWeeks: total, sessions: out, events, paces: p, minutes, runMinutes, extra: inter.extra, adjusted: inter.adjusted, carry,
-    strengthEnd: (((weekDrift(ws, ctx) + chain.offset) % 7) + 7) % 7 };
+    strengthEnd: (((weekDrift(ws, ctx) + chain.offset) % 7) + 7) % 7, strengthNext: nextAfterWeek(out, ws, ctx) };
+}
+/** Split-Tag nach den noch offenen Krafteinheiten dieser Woche. */
+function nextAfterWeek(list: PlanSession[], ws: string, ctx: PlanContext): number | undefined {
+  if (!ctx.split) return undefined;
+  const t = ctx.today, cw = weekStart(t);
+  if (ws < cw) return undefined;
+  const base = ws === cw ? nextSplitDay(ctx.split, ctx.strength.filter(x => x.date <= t)).index : splitStart(ws, ctx);
+  const open = list.filter(s => s.sport === 'kraft' && s.status === 'offen' && s.date >= t && !s.key.endsWith(':ausgleich')).length;
+  return (base + open) % ctx.split.days.length;
 }
 const order = (s: PlanSession) => (s.sport === 'kraft' ? 1 : s.key.endsWith('brick') ? 3 : 2);
 
@@ -884,12 +897,13 @@ function applyStrengthActual(list: PlanSession[], ctx: PlanContext, ws: string, 
     return { ...s, groups: [...real.muscleGroups], title: `Kraft · ${real.muscleGroups.map(groupLabel).join(' + ')}`,
       status: s.status === 'ausgelassen' ? s.status : 'erledigt' as const };
   });
-  if (!ctx.split || ws !== weekStart(t)) return out;
+  const cw = weekStart(t);
+  if (!ctx.split || ws < cw) return out;
   const idx = (d: string) => Math.round((Date.parse(d) - Date.parse(ws)) / 86400000);
-  relabelSkipped(out, ctx, ws, done);
+  const start = ws === cw ? nextSplitDay(ctx.split, done.filter(x => x.date <= t)).index : splitStart(ws, ctx);
+  relabelSkipped(out, ctx, ws, ws === cw ? nextSplitDay(ctx.split, done.filter(x => x.date < ws)).index : start, done);
   const open = out.filter(s => s.sport === 'kraft' && s.status === 'offen' && s.date >= t && !s.key.endsWith(':ausgleich')).sort((a, b) => a.date.localeCompare(b.date));
   if (!open.length) return out;
-  const start = nextSplitDay(ctx.split, done.filter(x => x.date <= t)).index;
   const groups = open.map((_, i) => [...ctx.split!.days[(start + i) % ctx.split!.days.length]]);
   const doneLegs = out.filter(s => s.sport === 'kraft' && s.status === 'erledigt' && s.groups && hasLegs(s.groups)).map(s => idx(s.date));
   const plan = assignKraft(open.map(s => idx(s.date)), groups, doneLegs);
@@ -908,10 +922,10 @@ function applyStrengthActual(list: PlanSession[], ctx: PlanContext, ws: string, 
  * Ausgelassene Krafteinheiten zeigen die Muskelgruppen, die an diesem Tag laut Split dran gewesen wären
  * (nicht die ursprüngliche Planung vom Wochenbeginn). Ausgelassenes rückt den Split nicht weiter.
  */
-function relabelSkipped(out: PlanSession[], ctx: PlanContext, ws: string, done: StrengthSession[]) {
+function relabelSkipped(out: PlanSession[], ctx: PlanContext, ws: string, first: number, done: StrengthSession[]) {
   const split = ctx.split!, L = split.days.length;
   const ordered = out.filter(s => s.sport === 'kraft' && !s.key.endsWith(':ausgleich')).sort((a, b) => a.date.localeCompare(b.date));
-  let ptr = nextSplitDay(split, done.filter(x => x.date < ws)).index;
+  let ptr = first;
   for (const s of ordered) {
     if (s.status === 'erledigt') { ptr = nextSplitDay(split, done.filter(x => x.date <= s.date)).index; continue; }
     if (s.status === 'offen') { ptr = (ptr + 1) % L; continue; }
